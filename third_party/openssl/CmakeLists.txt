@@ -8,13 +8,20 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
+pkg_search_module(CRYPTO libcrypto REQUIRED)
+include_directories(${CRYPTO_INCLUDE_DIRS})
 
 add_library(duckdb_openssl STATIC
         openssl_wrapper.cpp)
 
 set_property(TARGET duckdb_openssl PROPERTY C_STANDARD 99)
 
-install(TARGETS duckdb_openssl
-        EXPORT "${DUCKDB_EXPORT_SET}"
-        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+#install(TARGETS duckdb_openssl
+#        EXPORT "${DUCKDB_EXPORT_SET}"
+#        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+#        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+
+target_link_libraries(
+        duckdb_openssl
+        OpenSSL::SSL
+        OpenSSL::Crypto)

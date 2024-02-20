@@ -62,11 +62,6 @@ void openSSLWrapper::AESGCMStateSSL::InitializeDecryption(duckdb::const_data_ptr
 
 	// set mode to 1 to indicate decryption
 	mode = 1;
-	// TODO:
-//	auto context = reinterpret_cast<openSSL_gcm_context *>(gcm_context);
-//	if (openSSL_gcm_starts(context, openssl_GCM_DECRYPT, iv, iv_len) != 0) {
-//		throw runtime_error("Unable to initialize AES decryption");
-//	}
 
 	int len;
 	int plaintext_len;
