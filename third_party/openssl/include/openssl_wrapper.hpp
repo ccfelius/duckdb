@@ -52,6 +52,7 @@ public:
 		evp_cipher_ctx_st *gcm_context;
 		// 0 = encrypt, 1 = decrypt
 		bool mode;
+		const std::string public_key;
 	};
 };
 

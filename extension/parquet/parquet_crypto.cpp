@@ -96,7 +96,7 @@ static void GenerateNonce(const data_ptr_t nonce) {
 // TODO: generate nonce for openSSL
 //static void GenerateNonce(const data_ptr_t nonce) {
 //	duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
-//}
+// }
 
 //! Encryption wrapper for a transport protocol
 class EncryptionTransport : public TTransport {
@@ -150,7 +150,6 @@ public:
 		// Finalize the last encrypted data and write tag
 		data_t tag[ParquetCrypto::TAG_BYTES];
 		auto write_size = aes.Finalize(aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE, tag, ParquetCrypto::TAG_BYTES);
-		// auto write_size = aesssl.Finalize(aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE, tag, ParquetCrypto::TAG_BYTES);
 		trans.write(aes_buffer, write_size);
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
@@ -230,11 +229,17 @@ public:
 		}
 
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
+
+#ifdef DEBUG
+		auto result = aes.Finalize(read_buffer, AESGCMState::BLOCK_SIZE, computed_tag, ParquetCrypto::TAG_BYTES);
+#endif
+
 		if (aes.Finalize(read_buffer, AESGCMState::BLOCK_SIZE, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in AES context");
+			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in AES context out");
 		}
 
 		data_t read_tag[ParquetCrypto::TAG_BYTES];
+
 		transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
 		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
 			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
@@ -291,7 +296,10 @@ private:
 	TTransport &trans;
 
 	//! AES context and buffers
-	AESGCMState aes;
+//	AESGCMState aes;
+
+	//! AES context and buffers
+	AESGCMStateSSL aes;
 
 	//! We read/decrypt big blocks at a time
 	data_t read_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMState::BLOCK_SIZE];

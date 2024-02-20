@@ -63,14 +63,24 @@ if(NOT CLANG_TIDY)
       ../../third_party/zstd/compress/zstd_opt.cpp)
 endif()
 
+if(MINGW)
+  set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
+
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
 build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
 
+if(MINGW)
+  set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
+
 install(
   TARGETS parquet_extension
   EXPORT "${DUCKDB_EXPORT_SET}"
   LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
   ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+
+target_link_libraries(parquet_extension duckdb_openssl ${OPENSSL_LIBRARIES})

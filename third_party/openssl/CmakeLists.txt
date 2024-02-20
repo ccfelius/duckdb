@@ -16,12 +16,12 @@ add_library(duckdb_openssl STATIC
 
 set_property(TARGET duckdb_openssl PROPERTY C_STANDARD 99)
 
-#install(TARGETS duckdb_openssl
-#        EXPORT "${DUCKDB_EXPORT_SET}"
-#        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-#        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+install(TARGETS duckdb_openssl
+        EXPORT "${DUCKDB_EXPORT_SET}"
+        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
-target_link_libraries(
-        duckdb_openssl
-        OpenSSL::SSL
-        OpenSSL::Crypto)
+#target_link_libraries(
+#        duckdb_openssl
+#        OpenSSL::SSL
+#        OpenSSL::Crypto)
