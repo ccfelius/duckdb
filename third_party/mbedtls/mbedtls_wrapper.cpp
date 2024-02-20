@@ -227,6 +227,10 @@ size_t MbedTlsWrapper::AESGCMState::Process(duckdb::const_data_ptr_t in, duckdb:
                                             duckdb::idx_t out_len) {
 	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
 	size_t result;
+//	int mbedtls_gcm_update( mbedtls_gcm_context *ctx,
+//	                       const unsigned char *input, size_t input_length,
+//	                       unsigned char *output, size_t output_size,
+//	                       size_t *output_length )
 	if (mbedtls_gcm_update(context, in, in_len, out, out_len, &result) != 0) {
 		throw runtime_error("Unable to process using AES");
 	}

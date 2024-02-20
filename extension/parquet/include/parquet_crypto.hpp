@@ -82,6 +82,7 @@ public:
 
 public:
 	static void AddKey(ClientContext &context, const FunctionParameters &parameters);
+	static void TestARM64();
 };
 
 } // namespace duckdb

@@ -1,0 +1,20 @@
+if(POLICY CMP0063)
+    cmake_policy(SET CMP0063 NEW)
+endif()
+
+include_directories(include)
+
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+
+find_package(OpenSSL REQUIRED)
+include_directories(${OPENSSL_INCLUDE_DIR})
+
+add_library(duckdb_openssl STATIC
+        openssl_wrapper.cpp)
+
+set_property(TARGET duckdb_openssl PROPERTY C_STANDARD 99)
+
+install(TARGETS duckdb_openssl
+        EXPORT "${DUCKDB_EXPORT_SET}"
+        LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+        ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

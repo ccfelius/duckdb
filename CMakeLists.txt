@@ -23,6 +23,7 @@ endif()
 project(DuckDB)
 
 find_package(Threads REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -513,6 +514,7 @@ include_directories(third_party/re2)
 include_directories(third_party/miniz)
 include_directories(third_party/utf8proc/include)
 include_directories(third_party/miniparquet)
+include_directories(third_party/cryptopp)
 include_directories(third_party/concurrentqueue)
 include_directories(third_party/pcg)
 include_directories(third_party/tdigest)

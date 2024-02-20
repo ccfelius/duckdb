@@ -1,12 +1,22 @@
 #include "parquet_crypto.hpp"
 
 #include "mbedtls_wrapper.hpp"
+#include "openssl_wrapper.hpp"
 #include "thrift_tools.hpp"
+#include "aes.h"
+#include "aes_armv4.h"
+#include <stdio.h>
+#include <openssl/bio.h>
+#include <openssl/evp.h>
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #endif
+
+//#define NONCE_BYTES 28 // For OPENSSL AES GCM
+#define TEST_KEY "0123456789012345678901234567890"
+#define TEST_NONCE "012345678901234567890"
 
 namespace duckdb {
 
@@ -81,15 +91,22 @@ const string &ParquetEncryptionConfig::GetFooterKey() const {
 
 using duckdb_apache::thrift::transport::TTransport;
 using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMState;
+using AESGCMStateSSL = duckdb_openssl::openSSLWrapper::AESGCMStateSSL;
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
 
 static void GenerateNonce(const data_ptr_t nonce) {
 	duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 }
 
+// TODO: generate nonce for openSSL
+//static void GenerateNonce(const data_ptr_t nonce) {
+//	duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
+//}
+
 //! Encryption wrapper for a transport protocol
 class EncryptionTransport : public TTransport {
 public:
+
 	EncryptionTransport(TProtocol &prot_p, const string &key)
 	    : prot(prot_p), trans(*prot.getTransport()), aes(key),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
@@ -124,11 +141,14 @@ public:
 		// Encrypt and write data
 		data_t aes_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE];
 		auto current = allocator.GetTail();
+		// Loop through the whole chunk
 		while (current != nullptr) {
 			for (idx_t pos = 0; pos < current->current_position; pos += ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 				auto next = MinValue<idx_t>(current->current_position - pos, ParquetCrypto::CRYPTO_BLOCK_SIZE);
+				// somewhere here change the loop?
 				auto write_size =
 				    aes.Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
+				// 				    aesssl.Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
 				trans.write(aes_buffer, write_size);
 			}
 			current = current->prev;
@@ -137,6 +157,7 @@ public:
 		// Finalize the last encrypted data and write tag
 		data_t tag[ParquetCrypto::TAG_BYTES];
 		auto write_size = aes.Finalize(aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE, tag, ParquetCrypto::TAG_BYTES);
+		// auto write_size = aesssl.Finalize(aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE, tag, ParquetCrypto::TAG_BYTES);
 		trans.write(aes_buffer, write_size);
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
@@ -147,7 +168,8 @@ private:
 	void Initialize() {
 		// Generate nonce and initialize AES
 		GenerateNonce(nonce);
-		aes.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
+		//aes.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
+		aesssl.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
 	}
 
 private:
@@ -157,6 +179,9 @@ private:
 
 	//! AES context
 	AESGCMState aes;
+
+	//! AES Openssl Context;
+	AESGCMStateSSL aessl;
 
 	//! Nonce created by Initialize()
 	data_t nonce[ParquetCrypto::NONCE_BYTES];

@@ -9,7 +9,9 @@ include_directories(
   ../../third_party/snappy
   ../../third_party/zstd/include
   ../../third_party/mbedtls
-  ../../third_party/mbedtls/include)
+  ../../third_party/mbedtls/include
+        ../../third_party/openssl
+        ../../third_party/openssl/include)
 
 set(PARQUET_EXTENSION_FILES
     column_reader.cpp
@@ -61,6 +63,8 @@ if(NOT CLANG_TIDY)
       ../../third_party/zstd/compress/zstd_opt.cpp)
 endif()
 
+find_package(OpenSSL REQUIRED)
+include_directories(${OPENSSL_INCLUDE_DIR})
 build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
