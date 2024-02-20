@@ -24,8 +24,8 @@ public:
 	class AESGCMStateSSL {
 
 	public:
-		DUCKDB_API AESGCMState(const std::string &key);
-		DUCKDB_API ~AESGCMState();
+		DUCKDB_API AESGCMStateSSL(const std::string &key);
+		DUCKDB_API ~AESGCMStateSSL();
 
 	public:
 		DUCKDB_API static bool ValidKey(const std::string &key);
@@ -50,6 +50,8 @@ public:
 		            unsigned char *plaintext);
 	private:
 		evp_cipher_ctx_st *gcm_context;
+		// 0 = encrypt, 1 = decrypt
+		bool mode;
 	};
 };
 

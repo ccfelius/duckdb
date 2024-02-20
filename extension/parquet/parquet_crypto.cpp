@@ -1,13 +1,7 @@
 #include "parquet_crypto.hpp"
-
 #include "mbedtls_wrapper.hpp"
 #include "openssl_wrapper.hpp"
 #include "thrift_tools.hpp"
-#include "aes.h"
-#include "aes_armv4.h"
-#include <stdio.h>
-#include <openssl/bio.h>
-#include <openssl/evp.h>
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
@@ -17,6 +11,7 @@
 //#define NONCE_BYTES 28 // For OPENSSL AES GCM
 #define TEST_KEY "0123456789012345678901234567890"
 #define TEST_NONCE "012345678901234567890"
+#define OSSL 1;
 
 namespace duckdb {
 
@@ -145,10 +140,8 @@ public:
 		while (current != nullptr) {
 			for (idx_t pos = 0; pos < current->current_position; pos += ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 				auto next = MinValue<idx_t>(current->current_position - pos, ParquetCrypto::CRYPTO_BLOCK_SIZE);
-				// somewhere here change the loop?
 				auto write_size =
 				    aes.Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
-				// 				    aesssl.Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
 				trans.write(aes_buffer, write_size);
 			}
 			current = current->prev;
@@ -168,9 +161,21 @@ private:
 	void Initialize() {
 		// Generate nonce and initialize AES
 		GenerateNonce(nonce);
-		//aes.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
-		aesssl.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
+		aes.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
+		// aesssl.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
 	}
+
+//	void SetContext(){
+//
+//		if (OSSL){
+//			AESGCMState aes;
+//		}
+//		else {
+//			AESGCMStateSSL aes;
+//		}
+//
+//		return aes;
+//	}
 
 private:
 	//! Protocol and corresponding transport that we're wrapping
@@ -178,10 +183,10 @@ private:
 	TTransport &trans;
 
 	//! AES context
-	AESGCMState aes;
+//	AESGCMState aes;
 
 	//! AES Openssl Context;
-	AESGCMStateSSL aessl;
+	 AESGCMStateSSL aes;
 
 	//! Nonce created by Initialize()
 	data_t nonce[ParquetCrypto::NONCE_BYTES];
