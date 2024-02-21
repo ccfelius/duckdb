@@ -53,9 +53,11 @@ public:
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		               duckdb::idx_t out_len);
 		DUCKDB_API size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len);
+		DUCKDB_API const std::string GetLib();
 
 	public:
 		static constexpr size_t BLOCK_SIZE = 16;
+		const std::string lib = "mbedtls";
 
 	private:
 		void *gcm_context;

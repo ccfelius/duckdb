@@ -28,31 +28,22 @@ public:
 		DUCKDB_API ~AESGCMStateSSL();
 
 	public:
+		DUCKDB_API const EVP_CIPHER* GetCipher(const std::string &key);
 		DUCKDB_API static bool ValidKey(const std::string &key);
 		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
 		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		                          duckdb::idx_t out_len);
 		DUCKDB_API size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len);
+		DUCKDB_API const std::string GetLib();
+
 	public:
 		static constexpr size_t BLOCK_SIZE = 16;
-		int gcm_encrypt(unsigned char *plaintext, int plaintext_len,
-		            unsigned char *aad, int aad_len,
-		            unsigned char *key,
-		            unsigned char *iv, int iv_len,
-		            unsigned char *ciphertext,
-		            unsigned char *tag);
-		int gcm_decrypt(unsigned char *ciphertext, int ciphertext_len,
-		            unsigned char *aad, int aad_len,
-		            unsigned char *tag,
-		            unsigned char *key,
-		            unsigned char *iv, int iv_len,
-		            unsigned char *plaintext);
 	private:
 		evp_cipher_ctx_st *gcm_context;
 		// 0 = encrypt, 1 = decrypt
 		bool mode;
-		const std::string public_key;
+		const std::string lib = "openSSL";
 	};
 };
 

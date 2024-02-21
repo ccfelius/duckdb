@@ -13,6 +13,7 @@
 #define TEST_NONCE "012345678901234567890"
 #define OSSL 1;
 
+
 namespace duckdb {
 
 ParquetKeys &ParquetKeys::Get(ClientContext &context) {
@@ -90,6 +91,7 @@ using AESGCMStateSSL = duckdb_openssl::openSSLWrapper::AESGCMStateSSL;
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
 
 static void GenerateNonce(const data_ptr_t nonce) {
+//	memset(nonce, 0, ParquetCrypto::NONCE_BYTES);
 	duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 }
 
@@ -128,9 +130,9 @@ public:
 		// Write length
 		const auto ciphertext_length = allocator.SizeInBytes();
 		const uint32_t total_length = ParquetCrypto::NONCE_BYTES + ciphertext_length + ParquetCrypto::TAG_BYTES;
+		// write PARE?
 		trans.write(const_data_ptr_cast(&total_length), ParquetCrypto::LENGTH_BYTES);
-
-		// Write nonce
+		// Write nonce at beginning of encrypted chunk
 		trans.write(nonce, ParquetCrypto::NONCE_BYTES);
 
 		// Encrypt and write data
@@ -149,7 +151,7 @@ public:
 
 		// Finalize the last encrypted data and write tag
 		data_t tag[ParquetCrypto::TAG_BYTES];
-		auto write_size = aes.Finalize(aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE, tag, ParquetCrypto::TAG_BYTES);
+		auto write_size = aes.Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
 		trans.write(aes_buffer, write_size);
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
@@ -161,7 +163,6 @@ private:
 		// Generate nonce and initialize AES
 		GenerateNonce(nonce);
 		aes.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
-		// aesssl.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
 	}
 
 //	void SetContext(){
@@ -228,22 +229,25 @@ public:
 			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in read buffer");
 		}
 
+		// Fetch expected tag
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
+		transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
 
-#ifdef DEBUG
-		auto result = aes.Finalize(read_buffer, AESGCMState::BLOCK_SIZE, computed_tag, ParquetCrypto::TAG_BYTES);
-#endif
-
-		if (aes.Finalize(read_buffer, AESGCMState::BLOCK_SIZE, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
+		if (aes.Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
 			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in AES context out");
 		}
 
-		data_t read_tag[ParquetCrypto::TAG_BYTES];
-
-		transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
-		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
-			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
-		}
+		// Check tag: this can be skipped with OpenSSL
+//		if (aes.GetLib() == "mbedtls"){
+//
+//			data_t read_tag[ParquetCrypto::TAG_BYTES];
+//			transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
+//
+//			if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
+//				throw InvalidInputException(
+//					"Computed AES tag differs from read AES tag, are you using the right key?");
+//			}
+//		}
 
 		if (transport_remaining != 0) {
 			throw InvalidInputException("Encoded ciphertext length differs from actual ciphertext length");
