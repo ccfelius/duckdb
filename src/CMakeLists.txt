@@ -86,7 +86,7 @@ else()
       duckdb_skiplistlib
       duckdb_mbedtls)
 
-  add_library(duckdb SHARED ${ALL_OBJECT_FILES} common/crypto/encryption.cpp common/crypto/encryption.h)
+  add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
   link_threads(duckdb)
   link_extension_libraries(duckdb)
