@@ -35,7 +35,7 @@ public:
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		                          duckdb::idx_t out_len);
 		DUCKDB_API size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len);
-		DUCKDB_API const std::string GetLib();
+		DUCKDB_API static void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len);
 
 	public:
 		static constexpr size_t BLOCK_SIZE = 16;
@@ -43,7 +43,8 @@ public:
 		evp_cipher_ctx_st *gcm_context;
 		// 0 = encrypt, 1 = decrypt
 		bool mode;
-		const std::string lib = "openSSL";
+		// set cipher (depends on key length, default = 256)
+		const EVP_CIPHER* cipher = EVP_aes_256_gcm();
 	};
 };
 

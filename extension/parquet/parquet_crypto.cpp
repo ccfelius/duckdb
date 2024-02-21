@@ -91,9 +91,10 @@ using AESGCMStateSSL = duckdb_openssl::openSSLWrapper::AESGCMStateSSL;
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
 
 static void GenerateNonce(const data_ptr_t nonce) {
-//	memset(nonce, 0, ParquetCrypto::NONCE_BYTES);
-	duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
+	duckdb_openssl::openSSLWrapper::AESGCMStateSSL::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
+	//duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 }
+
 
 // TODO: generate nonce for openSSL
 //static void GenerateNonce(const data_ptr_t nonce) {
@@ -229,7 +230,6 @@ public:
 			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in read buffer");
 		}
 
-		// Fetch expected tag
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
 		transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
 
@@ -238,15 +238,11 @@ public:
 		}
 
 		// Check tag: this can be skipped with OpenSSL
-//		if (aes.GetLib() == "mbedtls"){
-//
-//			data_t read_tag[ParquetCrypto::TAG_BYTES];
-//			transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
-//
-//			if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
-//				throw InvalidInputException(
-//					"Computed AES tag differs from read AES tag, are you using the right key?");
-//			}
+
+//		data_t read_tag[ParquetCrypto::TAG_BYTES];
+//		transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
+//		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
+//			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
 //		}
 
 		if (transport_remaining != 0) {
