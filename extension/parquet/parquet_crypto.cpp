@@ -95,11 +95,10 @@ static void GenerateNonce(const data_ptr_t nonce) {
 	//duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 }
 
-
-// TODO: generate nonce for openSSL
-//static void GenerateNonce(const data_ptr_t nonce) {
-//	duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
-// }
+//static void SetModeAES() {
+//	duckdb_openssl::openSSLWrapper::AESGCMStateSSL::SetModeAES(true);
+//	//duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
+//}
 
 //! Encryption wrapper for a transport protocol
 class EncryptionTransport : public TTransport {
@@ -131,6 +130,7 @@ public:
 		// Write length
 		const auto ciphertext_length = allocator.SizeInBytes();
 		const uint32_t total_length = ParquetCrypto::NONCE_BYTES + ciphertext_length + ParquetCrypto::TAG_BYTES;
+
 		// write PARE?
 		trans.write(const_data_ptr_cast(&total_length), ParquetCrypto::LENGTH_BYTES);
 		// Write nonce at beginning of encrypted chunk
@@ -150,11 +150,15 @@ public:
 			current = current->prev;
 		}
 
-		// Finalize the last encrypted data and write tag
+		// Finalize the last encrypted data
+		// Tag only used for GCM. For CTR this remains an empty 16-byte buffer
 		data_t tag[ParquetCrypto::TAG_BYTES];
 		auto write_size = aes.Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
 		trans.write(aes_buffer, write_size);
-		trans.write(tag, ParquetCrypto::TAG_BYTES);
+
+		if (aes.GetModeAES()) {
+			trans.write(tag, ParquetCrypto::TAG_BYTES);
+		}
 
 		return ParquetCrypto::LENGTH_BYTES + total_length;
 	}
@@ -163,6 +167,7 @@ private:
 	void Initialize() {
 		// Generate nonce and initialize AES
 		GenerateNonce(nonce);
+		// TODO: Set Appropriate AES algorithm (ctr, gcm and key size)
 		aes.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
 	}
 
@@ -230,15 +235,19 @@ public:
 			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in read buffer");
 		}
 
+		// for AES_CTR this is unnecessary. However, to be able to use
+		// Finalize we keep it like this for now.
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
-		transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
+
+		if (aes.GetModeAES()) {
+			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
+		}
 
 		if (aes.Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
 			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in AES context out");
 		}
 
-		// Check tag: this can be skipped with OpenSSL
-
+		// Check tag manually; only used for mbedtls
 //		data_t read_tag[ParquetCrypto::TAG_BYTES];
 //		transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
 //		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
@@ -397,7 +406,7 @@ uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffe
 void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &parameters) {
 	const auto &key_name = StringValue::Get(parameters.values[0]);
 	const auto &key = StringValue::Get(parameters.values[1]);
-	if (!AESGCMState::ValidKey(key)) {
+	if (!AESGCMStateSSL::ValidKey(key)) {
 		throw InvalidInputException(
 		    "Invalid AES key. Must have a length of 128, 192, or 256 bits (16, 24, or 32 bytes)");
 	}

@@ -1,36 +1,26 @@
 #include "parquet_reader.hpp"
 
-#include "boolean_column_reader.hpp"
-#include "callback_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "column_reader.hpp"
-#include "duckdb.hpp"
 #include "list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
-#include "parquet_statistics.hpp"
-#include "parquet_timestamp.hpp"
 #include "row_number_column_reader.hpp"
-#include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
-#include "templated_column_reader.hpp"
 #include "thrift_tools.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
 
-#include <cassert>
 #include <chrono>
 #include <cstring>
 #include <sstream>

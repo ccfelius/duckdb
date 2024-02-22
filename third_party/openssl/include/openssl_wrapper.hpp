@@ -30,6 +30,8 @@ public:
 	public:
 		DUCKDB_API const EVP_CIPHER* GetCipher(const std::string &key);
 		DUCKDB_API static bool ValidKey(const std::string &key);
+		DUCKDB_API void SetModeAES(bool &aes_mode);
+		DUCKDB_API bool GetModeAES();
 		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
 		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
@@ -40,11 +42,16 @@ public:
 	public:
 		static constexpr size_t BLOCK_SIZE = 16;
 	private:
-		evp_cipher_ctx_st *gcm_context;
+		evp_cipher_ctx_st *context;
 		// 0 = encrypt, 1 = decrypt
 		bool mode;
 		// set cipher (depends on key length, default = 256)
 		const EVP_CIPHER* cipher = EVP_aes_256_gcm();
+		// true = gcm, false = ctr
+		bool gcm = true;
+		// remember key for this session
+		// for now unused
+		const std::string key;
 	};
 };
 
