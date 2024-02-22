@@ -46,7 +46,7 @@ public:
 		// 0 = encrypt, 1 = decrypt
 		bool mode;
 		// set cipher (depends on key length, default = 256)
-		const EVP_CIPHER* cipher = EVP_aes_256_gcm();
+		const EVP_CIPHER* cipher = EVP_aes_128_gcm();
 		// true = gcm, false = ctr
 		bool gcm = true;
 		// remember key for this session

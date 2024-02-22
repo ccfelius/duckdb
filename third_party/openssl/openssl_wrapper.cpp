@@ -1,6 +1,6 @@
-#define TEST_KEY "01234567891123450123456789112345" // 256
+//#define TEST_KEY "01234567891123450123456789112345" // 256
 // #define TEST_KEY "012345678911234501234567" // 196
-// #define TEST_KEY "0123456789112345" //
+ #define TEST_KEY "0123456789112345" // 128
 
 #include "include/openssl_wrapper.hpp"
 #include <openssl/evp.h>
