@@ -84,24 +84,41 @@ const EVP_CIPHER* openSSLWrapper::AESGCMStateSSL::GetCipher(const std::string &k
 	}
 
 	switch (key.size()) {
-		case 16:
-			return EVP_aes_128_gcm();
-		case 24:
-			return EVP_aes_192_gcm();
-		case 32:
-			return EVP_aes_256_gcm();
-		default:
-			throw InternalException("Wrong Key Size");
-		}
+	case 16:
+		return EVP_aes_128_gcm();
+	case 24:
+		return EVP_aes_192_gcm();
+	case 32:
+		return EVP_aes_256_gcm();
+	default:
+		throw InternalException("Wrong Key Size");
 	}
+}
 
 void openSSLWrapper::AESGCMStateSSL::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
 
 	// set encryption mode
 	mode = false;
 
+	//
+	if (!gcm){
+		// Parquet CTR IVs are comprised of a 12-byte nonce and a 4-byte initial
+		// counter field.
+		// The first 31 bits of the initial counter field are set to 0, the last bit
+		// is set to 1.
+		uint8_t new_iv[16];
+		memset(new_iv, 0, 16);
+		//duckdb::move(iv, iv + iv_len, new_iv);
+		std::copy(iv, iv + iv_len, new_iv);
+		new_iv[15] = 1;
+
+		if(1 != EVP_EncryptInit_ex(context, cipher, NULL, (const unsigned char *)TEST_KEY, new_iv)) {
+			throw InternalException("AES failed with EncryptInit");
+		}
+	}
+
 	if(1 != EVP_EncryptInit_ex(context, cipher, NULL, (const unsigned char *)TEST_KEY, iv)) {
-		    throw InternalException("AES CTR failed with EncryptInit");
+		    throw InternalException("AES failed with EncryptInit");
 	}
 
 }
@@ -113,10 +130,11 @@ void openSSLWrapper::AESGCMStateSSL::InitializeDecryption(duckdb::const_data_ptr
 	mode = true;
 
 	if(1 != EVP_DecryptInit_ex(context, cipher, NULL, (const unsigned char *)TEST_KEY, iv)) {
-		    throw std::runtime_error("EVP_EncryptInit_ex failed");
+		    throw InternalException("AES failed with DecryptInit");
 	}
 
 }
+
 
 size_t openSSLWrapper::AESGCMStateSSL::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
                                             duckdb::idx_t out_len) {
@@ -125,19 +143,19 @@ size_t openSSLWrapper::AESGCMStateSSL::Process(duckdb::const_data_ptr_t in, duck
 
 		if (1 != EVP_EncryptUpdate(context, (unsigned char *)(out), (int *)&out_len, (const unsigned char *)in,
 		                           (int)in_len)) {
-			throw InternalException("AES GCM failed with encrypt update gcm");
+			throw InternalException("AES  failed with encrypt update");
 		}
 
 	} else {
 
 		if (1 != EVP_DecryptUpdate(context, (unsigned char *)(out), (int *)&out_len, (const unsigned char *)in,
 			                       (int)in_len)) {
-			throw InternalException("AES GCM failed with decrypt update");
+			throw InternalException("AES failed with decrypt update");
 		}
 	}
 
 	if (out_len != in_len) {
-		throw InternalException("AES GCM failed, in and out lengths differ");
+		throw InternalException("AES failed, in and out lengths differ");
 	}
 
 	return out_len;

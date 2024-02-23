@@ -130,11 +130,17 @@ public:
 		// Write length
 		const auto ciphertext_length = allocator.SizeInBytes();
 		const uint32_t total_length = ParquetCrypto::NONCE_BYTES + ciphertext_length + ParquetCrypto::TAG_BYTES;
+		uint64_t nonce_len = ParquetCrypto::NONCE_BYTES;
 
 		// write PARE?
 		trans.write(const_data_ptr_cast(&total_length), ParquetCrypto::LENGTH_BYTES);
+
+		if (!aes.GetModeAES()){
+			nonce_len += 4;
+		}
+
 		// Write nonce at beginning of encrypted chunk
-		trans.write(nonce, ParquetCrypto::NONCE_BYTES);
+		trans.write(nonce, nonce_len);
 
 		// Encrypt and write data
 		data_t aes_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE];
@@ -165,23 +171,26 @@ public:
 
 private:
 	void Initialize() {
+		uint64_t nonce_len = ParquetCrypto::NONCE_BYTES;
 		// Generate nonce and initialize AES
 		GenerateNonce(nonce);
-		// TODO: Set Appropriate AES algorithm (ctr, gcm and key size)
-		aes.InitializeEncryption(nonce, ParquetCrypto::NONCE_BYTES);
-	}
 
-//	void SetContext(){
-//
-//		if (OSSL){
-//			AESGCMState aes;
-//		}
-//		else {
-//			AESGCMStateSSL aes;
-//		}
-//
-//		return aes;
-//	}
+		if (!aes.GetModeAES()){
+			// Parquet CTR IVs are comprised of 16-bytes
+			// It contains a 12-byte nonce and a 4-byte initial counter field.
+			// The first 31 bits of the initial counter field are set to 0,
+			// the last bit is set to 1.
+			uint8_t iv[16];
+			memset(iv, 0, 16);
+			std::copy(nonce, nonce + 12, iv);
+			iv[15] = 1;
+
+			nonce_len += 4;
+		}
+
+		// TODO: Set Appropriate AES algorithm (ctr, gcm and key size)
+		aes.InitializeEncryption(nonce, nonce_len);
+	}
 
 private:
 	//! Protocol and corresponding transport that we're wrapping

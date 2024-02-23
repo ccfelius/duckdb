@@ -46,9 +46,9 @@ public:
 		// 0 = encrypt, 1 = decrypt
 		bool mode;
 		// set cipher (depends on key length, default = 256)
-		const EVP_CIPHER* cipher = EVP_aes_128_gcm();
+		const EVP_CIPHER* cipher = EVP_aes_128_ctr();
 		// true = gcm, false = ctr
-		bool gcm = true;
+		bool gcm = false;
 		// remember key for this session
 		// for now unused
 		const std::string key;

@@ -356,7 +356,8 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 		// encrypted parquet files start with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);
 		// we only support this one for now, not "AES_GCM_CTR_V1"
-		file_meta_data.encryption_algorithm.__isset.AES_GCM_V1 = true;
+//		file_meta_data.encryption_algorithm.__isset.AES_GCM_V1 = true;
+		file_meta_data.encryption_algorithm.__isset.AES_GCM_CTR_V1 = true;
 	} else {
 		// parquet files start with the string "PAR1"
 		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
@@ -500,12 +501,15 @@ void ParquetWriter::Finalize() {
 	if (encryption_config) {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
-		duckdb_parquet::format::AesGcmV1 aes_gcm_v1;
+//		duckdb_parquet::format::AesGcmV1 aes_gcm_v1;
+		duckdb_parquet::format::AesGcmCtrV1 aes_gcm_ctr_v1;
 		duckdb_parquet::format::EncryptionAlgorithm alg;
-		alg.__set_AES_GCM_V1(aes_gcm_v1);
+		alg.__set_AES_GCM_CTR_V1(aes_gcm_ctr_v1);
+		// alg.__set_AES_GCM_V1(aes_gcm_v1);
 		crypto_metadata.__set_encryption_algorithm(alg);
 		crypto_metadata.write(protocol.get());
 	}
+
 	Write(file_meta_data);
 
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);

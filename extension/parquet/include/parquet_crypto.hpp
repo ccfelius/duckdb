@@ -64,7 +64,7 @@ public:
 	//! Encrypted modules
 	static constexpr uint32_t LENGTH_BYTES = 4;
 	static constexpr uint32_t NONCE_BYTES = 12;
-	static constexpr uint32_t TAG_BYTES = 16;
+	static constexpr uint32_t TAG_BYTES = 0;
 
 	//! Block size we encrypt/decrypt
 	static constexpr uint32_t CRYPTO_BLOCK_SIZE = 4096;

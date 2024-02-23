@@ -93,10 +93,10 @@ LoadMetadata(Allocator &allocator, FileHandle &file_handle,
 	if (footer_encrypted) {
 		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 		crypto_metadata->read(file_proto.get());
-		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
-			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
-			                            file_handle.path);
-		}
+//		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+//			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
+//			                            file_handle.path);
+//		}
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey());
 	} else {
 		metadata->read(file_proto.get());
@@ -416,10 +416,11 @@ void ParquetReader::InitializeSchema() {
 	auto file_meta_data = GetFileMetadata();
 
 	if (file_meta_data->__isset.encryption_algorithm) {
-		if (file_meta_data->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
-			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
-			                            file_name);
-		}
+		// throw error if wrong encryption algorithm is set
+//		if (file_meta_data->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+//			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
+//			                            file_name);
+//		}
 	}
 	// check if we like this schema
 	if (file_meta_data->schema.size() < 2) {
