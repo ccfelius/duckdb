@@ -46,6 +46,8 @@ public:
 public:
 	static shared_ptr<ParquetEncryptionConfig> Create(ClientContext &context, const Value &arg);
 	const string &GetFooterKey() const;
+//	const int &GetAESMode() const;
+//	void SetAESMode(int mode);
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -57,6 +59,11 @@ private:
 	string footer_key;
 	//! Mapping from column name to key name
 	unordered_map<string, string> column_keys;
+	// AES Mode
+//	static int aes_mode;
+	// IV bytes (iv = nonce = 12 bytes for GCM)
+	// IV bytes = 16 for CTR Mode
+//	uint32_t iv_bytes = 16;
 };
 
 class ParquetCrypto {
@@ -64,7 +71,9 @@ public:
 	//! Encrypted modules
 	static constexpr uint32_t LENGTH_BYTES = 4;
 	static constexpr uint32_t NONCE_BYTES = 12;
-	static constexpr uint32_t TAG_BYTES = 0;
+	static constexpr uint32_t TAG_BYTES = 16;
+	static constexpr uint32_t GCM_MODE = 0;
+	static constexpr uint32_t CTR_MODE = 1;
 
 	//! Block size we encrypt/decrypt
 	static constexpr uint32_t CRYPTO_BLOCK_SIZE = 4096;

@@ -45,12 +45,12 @@ public:
 		evp_cipher_ctx_st *context;
 		// 0 = encrypt, 1 = decrypt
 		bool mode;
+		// TODO: make cipher and bool gcm dynamic
 		// set cipher (depends on key length, default = 256)
 		const EVP_CIPHER* cipher = EVP_aes_128_ctr();
 		// true = gcm, false = ctr
 		bool gcm = false;
-		// remember key for this session
-		// for now unused
+		// TODO: remember key for this session
 		const std::string key;
 	};
 };

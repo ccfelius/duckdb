@@ -100,23 +100,6 @@ void openSSLWrapper::AESGCMStateSSL::InitializeEncryption(duckdb::const_data_ptr
 	// set encryption mode
 	mode = false;
 
-	//
-	if (!gcm){
-		// Parquet CTR IVs are comprised of a 12-byte nonce and a 4-byte initial
-		// counter field.
-		// The first 31 bits of the initial counter field are set to 0, the last bit
-		// is set to 1.
-		uint8_t new_iv[16];
-		memset(new_iv, 0, 16);
-		//duckdb::move(iv, iv + iv_len, new_iv);
-		std::copy(iv, iv + iv_len, new_iv);
-		new_iv[15] = 1;
-
-		if(1 != EVP_EncryptInit_ex(context, cipher, NULL, (const unsigned char *)TEST_KEY, new_iv)) {
-			throw InternalException("AES failed with EncryptInit");
-		}
-	}
-
 	if(1 != EVP_EncryptInit_ex(context, cipher, NULL, (const unsigned char *)TEST_KEY, iv)) {
 		    throw InternalException("AES failed with EncryptInit");
 	}
@@ -176,11 +159,9 @@ size_t openSSLWrapper::AESGCMStateSSL::Finalize(duckdb::data_ptr_t out, duckdb::
 
 		text_len += out_len;
 
-		if (gcm) {
-			// The generated tag is written at the end of a chunk in GCM mode
-			if (1 != EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_GET_TAG, tag_len, tag)) {
-				throw InternalException("AES GCM failed, with getting tag");
-			}
+		// The generated tag is written at the end of a chunk in GCM mode
+		if (1 != EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_GET_TAG, tag_len, tag)) {
+			throw InternalException("AES GCM failed with populating tag");
 		}
 
 		return text_len;
@@ -190,8 +171,8 @@ size_t openSSLWrapper::AESGCMStateSSL::Finalize(duckdb::data_ptr_t out, duckdb::
 	else {
 		// Finalize Decryption
 
-		if (gcm) {
-			// Set expected tag value
+		if (tag_len > 0) {
+			// Set expected tag value for GCM
 			if (!EVP_CIPHER_CTX_ctrl(context, EVP_CTRL_GCM_SET_TAG, tag_len, tag)) {
 				throw InternalException("AES GCM failed, finalizing tag value");
 			}

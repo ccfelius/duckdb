@@ -8,11 +8,6 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #endif
 
-//#define NONCE_BYTES 28 // For OPENSSL AES GCM
-#define TEST_KEY "0123456789012345678901234567890"
-#define TEST_NONCE "012345678901234567890"
-#define OSSL 1;
-
 
 namespace duckdb {
 
@@ -86,7 +81,7 @@ const string &ParquetEncryptionConfig::GetFooterKey() const {
 }
 
 using duckdb_apache::thrift::transport::TTransport;
-using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMState;
+//using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMState;
 using AESGCMStateSSL = duckdb_openssl::openSSLWrapper::AESGCMStateSSL;
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
 
@@ -94,11 +89,6 @@ static void GenerateNonce(const data_ptr_t nonce) {
 	duckdb_openssl::openSSLWrapper::AESGCMStateSSL::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 	//duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
 }
-
-//static void SetModeAES() {
-//	duckdb_openssl::openSSLWrapper::AESGCMStateSSL::SetModeAES(true);
-//	//duckdb_mbedtls::MbedTlsWrapper::GenerateRandomData(nonce, ParquetCrypto::NONCE_BYTES);
-//}
 
 //! Encryption wrapper for a transport protocol
 class EncryptionTransport : public TTransport {
@@ -129,18 +119,11 @@ public:
 	uint32_t Finalize() {
 		// Write length
 		const auto ciphertext_length = allocator.SizeInBytes();
-		const uint32_t total_length = ParquetCrypto::NONCE_BYTES + ciphertext_length + ParquetCrypto::TAG_BYTES;
-		uint64_t nonce_len = ParquetCrypto::NONCE_BYTES;
+		const uint32_t total_length = nonce_bytes + ciphertext_length + tag_bytes;
 
-		// write PARE?
 		trans.write(const_data_ptr_cast(&total_length), ParquetCrypto::LENGTH_BYTES);
-
-		if (!aes.GetModeAES()){
-			nonce_len += 4;
-		}
-
 		// Write nonce at beginning of encrypted chunk
-		trans.write(nonce, nonce_len);
+		trans.write(nonce, nonce_bytes);
 
 		// Encrypt and write data
 		data_t aes_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE];
@@ -157,39 +140,43 @@ public:
 		}
 
 		// Finalize the last encrypted data
-		// Tag only used for GCM. For CTR this remains an empty 16-byte buffer
+		// Tag only used for GCM
 		data_t tag[ParquetCrypto::TAG_BYTES];
-		auto write_size = aes.Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
+		auto write_size = aes.Finalize(aes_buffer, 0, tag, tag_bytes);
 		trans.write(aes_buffer, write_size);
-
-		if (aes.GetModeAES()) {
-			trans.write(tag, ParquetCrypto::TAG_BYTES);
-		}
+		// nothing is written here for CTR mode
+		trans.write(tag, tag_bytes);
 
 		return ParquetCrypto::LENGTH_BYTES + total_length;
 	}
 
 private:
 	void Initialize() {
-		uint64_t nonce_len = ParquetCrypto::NONCE_BYTES;
+
 		// Generate nonce and initialize AES
 		GenerateNonce(nonce);
 
-		if (!aes.GetModeAES()){
-			// Parquet CTR IVs are comprised of 16-bytes
-			// It contains a 12-byte nonce and a 4-byte initial counter field.
-			// The first 31 bits of the initial counter field are set to 0,
+		// TODO: Set Appropriate AES algorithm (ctr, gcm)
+		// TODO: Set key size here)
+		if (!aes.GetModeAES()) {
+			// For CTR: IVs are comprised of a 12-byte nonce
+			// and a 4-byte initial counter field.
+			// The first 31 bits of the initial counter field are set to 0
 			// the last bit is set to 1.
 			uint8_t iv[16];
 			memset(iv, 0, 16);
-			std::copy(nonce, nonce + 12, iv);
 			iv[15] = 1;
+			duckdb::move(nonce, nonce + 12, iv);
 
-			nonce_len += 4;
+			// set nonce_bytes to 16 for CTR
+			nonce_bytes = ParquetCrypto::TAG_BYTES;
+			tag_bytes = 0;
+		} else {
+		    nonce_bytes = ParquetCrypto::NONCE_BYTES;
+			tag_bytes = ParquetCrypto::TAG_BYTES;
 		}
 
-		// TODO: Set Appropriate AES algorithm (ctr, gcm and key size)
-		aes.InitializeEncryption(nonce, nonce_len);
+		aes.InitializeEncryption(nonce, nonce_bytes);
 	}
 
 private:
@@ -202,6 +189,11 @@ private:
 
 	//! AES Openssl Context;
 	 AESGCMStateSSL aes;
+
+	 //! Nonce length and tag differs
+	 //! Between GCM and CTR mode
+	 uint32_t tag_bytes;
+	 uint32_t nonce_bytes;
 
 	//! Nonce created by Initialize()
 	data_t nonce[ParquetCrypto::NONCE_BYTES];
@@ -221,7 +213,7 @@ public:
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
 
-		if (len > transport_remaining - ParquetCrypto::TAG_BYTES + read_buffer_size - read_buffer_offset) {
+		if (len > transport_remaining - tag_bytes + read_buffer_size - read_buffer_offset) {
 			throw InvalidInputException("Too many bytes requested from crypto buffer");
 		}
 
@@ -244,17 +236,16 @@ public:
 			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in read buffer");
 		}
 
-		// for AES_CTR this is unnecessary. However, to be able to use
-		// Finalize we keep it like this for now.
+		// For GCM Mode a tag needs to be read at the end of an encrypted chunk
+		// For CTR mode we just pass an empty tag
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
+		transport_remaining -= trans.read(computed_tag, tag_bytes);
 
-		if (aes.GetModeAES()) {
-			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
-		}
-
-		if (aes.Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
+		if (aes.Finalize(read_buffer, 0, computed_tag, tag_bytes) != 0) {
 			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in AES context out");
 		}
+
+		return ParquetCrypto::LENGTH_BYTES + total_bytes;
 
 		// Check tag manually; only used for mbedtls
 //		data_t read_tag[ParquetCrypto::TAG_BYTES];
@@ -262,23 +253,20 @@ public:
 //		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
 //			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
 //		}
-
-		if (transport_remaining != 0) {
-			throw InvalidInputException("Encoded ciphertext length differs from actual ciphertext length");
-		}
-
-		return ParquetCrypto::LENGTH_BYTES + total_bytes;
 	}
 
 	AllocatedData ReadAll() {
-		D_ASSERT(transport_remaining == total_bytes - ParquetCrypto::NONCE_BYTES);
-		auto result = Allocator::DefaultAllocator().Allocate(transport_remaining - ParquetCrypto::TAG_BYTES);
-		read_virt(result.get(), transport_remaining - ParquetCrypto::TAG_BYTES);
+
+		D_ASSERT(transport_remaining == total_bytes - nonce_bytes);
+		auto result = Allocator::DefaultAllocator().Allocate(transport_remaining);
+		read_virt(result.get(), transport_remaining - tag_bytes);
+
 		Finalize();
 		return result;
 	}
 
 private:
+
 	void Initialize() {
 		// Read encoded length (don't add to read_bytes)
 		data_t length_buf[ParquetCrypto::LENGTH_BYTES];
@@ -286,24 +274,35 @@ private:
 		total_bytes = Load<uint32_t>(length_buf);
 		transport_remaining = total_bytes;
 
+		// Set IV/Nonce size
+		if (!aes.GetModeAES()) {
+			// If CTR, iv = 16 Bytes
+			nonce_bytes = ParquetCrypto::TAG_BYTES;
+			tag_bytes = 0;
+		} else {
+			// If GCM, nonce = 12 Bytes
+			nonce_bytes = ParquetCrypto::NONCE_BYTES;
+			tag_bytes = ParquetCrypto::TAG_BYTES;
+		}
+
 		// Read nonce and initialize AES
-		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
-		aes.InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES);
+		transport_remaining -= trans.read(nonce, nonce_bytes);
+		aes.InitializeDecryption(nonce, nonce_bytes);
 	}
 
 	void ReadBlock() {
 		// Read from transport into read_buffer at one AES block size offset (up to the tag)
-		read_buffer_size = MinValue(ParquetCrypto::CRYPTO_BLOCK_SIZE, transport_remaining - ParquetCrypto::TAG_BYTES);
-		transport_remaining -= trans.read(read_buffer + AESGCMState::BLOCK_SIZE, read_buffer_size);
+		read_buffer_size = MinValue(ParquetCrypto::CRYPTO_BLOCK_SIZE, transport_remaining - tag_bytes);
+		transport_remaining -= trans.read(read_buffer + AESGCMStateSSL::BLOCK_SIZE, read_buffer_size);
 
 		// Decrypt from read_buffer + block size into read_buffer start (decryption can trail behind in same buffer)
 #ifdef DEBUG
-		auto size = aes.Process(read_buffer + AESGCMState::BLOCK_SIZE, read_buffer_size, read_buffer,
-		                        ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMState::BLOCK_SIZE);
+		auto size = aes.Process(read_buffer + AESGCMStateSSL::BLOCK_SIZE, read_buffer_size, read_buffer,
+		                        ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMStateSSL::BLOCK_SIZE);
 		D_ASSERT(size == read_buffer_size);
 #else
-		aes.Process(read_buffer + AESGCMState::BLOCK_SIZE, read_buffer_size, read_buffer,
-		            ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMState::BLOCK_SIZE);
+		aes.Process(read_buffer + AESGCMStateSSL::BLOCK_SIZE, read_buffer_size, read_buffer,
+		            ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMStateSSL::BLOCK_SIZE);
 #endif
 		read_buffer_offset = 0;
 	}
@@ -320,13 +319,19 @@ private:
 	AESGCMStateSSL aes;
 
 	//! We read/decrypt big blocks at a time
-	data_t read_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMState::BLOCK_SIZE];
+	data_t read_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE + AESGCMStateSSL::BLOCK_SIZE];
 	uint32_t read_buffer_size;
 	uint32_t read_buffer_offset;
+
+	//! tag_bytes and nonce_bytes differ
+	//! Between GCM and CTR mode
+	uint32_t tag_bytes;
+	uint32_t nonce_bytes;
 
 	//! Remaining bytes to read, set by Initialize(), decremented by ReadBlock()
 	uint32_t total_bytes;
 	uint32_t transport_remaining;
+
 	//! Nonce read by Initialize()
 	data_t nonce[ParquetCrypto::NONCE_BYTES];
 };
@@ -367,6 +372,7 @@ uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key)
 	// Read the object
 	object.read(simple_prot.get());
 
+	// we do nothing with what's returned here?
 	return ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + all.GetSize() + ParquetCrypto::TAG_BYTES;
 }
 
