@@ -109,6 +109,7 @@ private:
 
 	unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
+	// add somewhere here algorithm (gcm of ctr)
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
 

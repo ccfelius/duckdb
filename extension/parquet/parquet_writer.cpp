@@ -496,6 +496,8 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	FlushRowGroup(prepared_row_group);
 }
 
+// Put in here GCM or CTR
+// Look at how Arrow did it
 void ParquetWriter::Finalize() {
 	auto start_offset = writer->GetTotalWritten();
 
@@ -503,9 +505,9 @@ void ParquetWriter::Finalize() {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
 		duckdb_parquet::format::EncryptionAlgorithm alg;
-		// change later, this is super verwarrend
-		auto aes_mode = 1;
-		// if GetAESMode = 0 -> GCM, else CTR
+		// change later, this is super confusing
+		auto aes_mode = 0;
+		// if GetAESMode = 0 -> CTR else GCM
 		if (!aes_mode) {
 			// CTR mode
 			duckdb_parquet::format::AesGcmCtrV1 aes_gcm_ctr_v1;

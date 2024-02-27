@@ -159,18 +159,18 @@ private:
 		// TODO: Set Appropriate AES algorithm (ctr, gcm)
 		// TODO: Set key size here)
 		if (!aes.GetModeAES()) {
+			// set nonce_bytes to 16 for CTR
+			nonce_bytes = ParquetCrypto::TAG_BYTES;
+			tag_bytes = 0;
 			// For CTR: IVs are comprised of a 12-byte nonce
 			// and a 4-byte initial counter field.
 			// The first 31 bits of the initial counter field are set to 0
 			// the last bit is set to 1.
 			uint8_t iv[16];
-			memset(iv, 0, 16);
-			iv[15] = 1;
+			memset(iv, 0, nonce_bytes);
+			iv[nonce_bytes - 1] = 1;
 			duckdb::move(nonce, nonce + 12, iv);
 
-			// set nonce_bytes to 16 for CTR
-			nonce_bytes = ParquetCrypto::TAG_BYTES;
-			tag_bytes = 0;
 		} else {
 		    nonce_bytes = ParquetCrypto::NONCE_BYTES;
 			tag_bytes = ParquetCrypto::TAG_BYTES;
