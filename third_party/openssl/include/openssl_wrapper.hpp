@@ -1,7 +1,3 @@
-//
-// Created by Lotte Felius on 16/02/2024.
-//
-
 #ifndef DUCKDB_OPENSSL_WRAPPER_H
 #define DUCKDB_OPENSSL_WRAPPER_H
 
@@ -13,7 +9,6 @@
 #include <openssl/err.h>
 #include <openssl/aes.h>
 #include <openssl/rand.h>
-
 #include <string>
 
 namespace duckdb_openssl {
@@ -40,7 +35,9 @@ public:
 		DUCKDB_API static void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len);
 
 	public:
+		// AES encrypts blocks of 128 bits, i.e. 16 bytes
 		static constexpr size_t BLOCK_SIZE = 16;
+
 	private:
 		evp_cipher_ctx_st *context;
 		// 0 = encrypt, 1 = decrypt

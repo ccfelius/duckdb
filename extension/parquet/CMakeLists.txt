@@ -9,9 +9,16 @@ include_directories(
   ../../third_party/snappy
   ../../third_party/zstd/include
   ../../third_party/mbedtls
-  ../../third_party/mbedtls/include
-        ../../third_party/openssl
-        ../../third_party/openssl/include)
+  ../../third_party/mbedtls/include)
+
+find_package(OPENSSL)
+
+if(OPENSSL_FOUND)
+  include_directories(
+          ${OPENSSL_INCLUDE_DIR}
+          ../../third_party/openssl
+          ../../third_party/openssl/include)
+endif()
 
 set(PARQUET_EXTENSION_FILES
     column_reader.cpp
@@ -67,8 +74,8 @@ if(MINGW)
   set(OPENSSL_USE_STATIC_LIBS TRUE)
 endif()
 
-find_package(OpenSSL REQUIRED)
-include_directories(${OPENSSL_INCLUDE_DIR})
+#find_package(OpenSSL REQUIRED)
+#include_directories(${OPENSSL_INCLUDE_DIR})
 build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})

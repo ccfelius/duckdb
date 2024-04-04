@@ -8,6 +8,10 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #endif
 
+#ifndef OPENSSL_FOUND
+#include
+#endif
+
 
 namespace duckdb {
 
