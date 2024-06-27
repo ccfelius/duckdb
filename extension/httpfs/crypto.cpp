@@ -31,7 +31,8 @@ void hex256(hash_bytes &in, hash_str &out) {
 	}
 }
 
-const EVP_CIPHER *GetCipher(const string &key) {
+
+const EVP_CIPHER *GetCipherGCM(const string &key) {
 	// For now, we only support GCM ciphers
 	// TODO: add support for CTR
 	switch (key.size()) {
@@ -46,43 +47,67 @@ const EVP_CIPHER *GetCipher(const string &key) {
 	}
 }
 
-AESGCMStateSSL::AESGCMStateSSL() : gcm_context(EVP_CIPHER_CTX_new()) {
+const EVP_CIPHER *GetCipherCTR(const string &key) {
+	// For now, we only support GCM ciphers
+	// TODO: add support for CTR
+	switch (key.size()) {
+	case 16:
+		return EVP_aes_128_ctr();
+	case 24:
+		return EVP_aes_192_ctr();
+	case 32:
+		return EVP_aes_256_ctr();
+	default:
+		throw InternalException("Invalid AES key length");
+	}
+}
+
+const EVP_CIPHER *GetCipher(const string &key, bool encryption_mode){
+	// 1 for GCM, 0 for CTR
+	if (encryption_mode){
+		return GetCipherGCM(key);
+	}
+	return GetCipherCTR(key);
+}
+
+AESStateSSL::AESStateSSL() : gcm_context(EVP_CIPHER_CTX_new()) {
 	if (!(gcm_context)) {
 		throw InternalException("AES GCM failed with initializing context");
 	}
 }
 
-AESGCMStateSSL::~AESGCMStateSSL() {
+AESStateSSL::~AESStateSSL() {
 	// Clean up
 	EVP_CIPHER_CTX_free(gcm_context);
 }
 
-bool AESGCMStateSSL::IsOpenSSL() {
+bool AESStateSSL::IsOpenSSL() {
 	return ssl;
 }
 
-void AESGCMStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
+void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
 	// generate random bytes for nonce
 	RAND_bytes(data, len);
 }
 
-void AESGCMStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
+void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
 	mode = ENCRYPT;
 
-	if (1 != EVP_EncryptInit_ex(gcm_context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
+	// for now hardcode the cipher
+	if (1 != EVP_EncryptInit_ex(gcm_context, GetCipher(*key, 1), NULL, const_data_ptr_cast(key->data()), iv)) {
 		throw InternalException("EncryptInit failed");
 	}
 }
 
-void AESGCMStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
+void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
 	mode = DECRYPT;
 
-	if (1 != EVP_DecryptInit_ex(gcm_context, GetCipher(*key), NULL, const_data_ptr_cast(key->data()), iv)) {
+	if (1 != EVP_DecryptInit_ex(gcm_context, GetCipher(*key, 1), NULL, const_data_ptr_cast(key->data()), iv)) {
 		throw InternalException("DecryptInit failed");
 	}
 }
 
-size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 
 	switch (mode) {
 	case ENCRYPT:
@@ -108,7 +133,7 @@ size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out
 	return out_len;
 }
 
-size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
+size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
 	auto text_len = out_len;
 
 	switch (mode) {
@@ -124,6 +149,7 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
 		return text_len;
 	case DECRYPT:
 		// Set expected tag value
+		// For ctr tag_len and tag is nullptr and 0
 		if (!EVP_CIPHER_CTX_ctrl(gcm_context, EVP_CTRL_GCM_SET_TAG, tag_len, tag)) {
 			throw InternalException("Finalizing tag failed");
 		}

@@ -220,6 +220,9 @@ public:
 			CompressVector();
 			D_ASSERT(vector_idx == 0);
 		}
+		// TODO before flushing; encrypt segment
+		// note that also tag needs to be written
+		// Maybe just also implement CTR to avoid tag storage overhead
 		FlushSegment();
 		current_segment.reset();
 	}

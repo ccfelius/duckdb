@@ -21,11 +21,11 @@ void hmac256(std::string message, hash_bytes secret, hash_bytes &out);
 
 void hex256(hash_bytes &in, hash_str &out);
 
-class DUCKDB_API AESGCMStateSSL : public duckdb::EncryptionState {
+class DUCKDB_API AESStateSSL : public duckdb::EncryptionState {
 
 public:
-	explicit AESGCMStateSSL();
-	~AESGCMStateSSL() override;
+	explicit AESStateSSL();
+	~AESStateSSL() override;
 
 public:
 	bool IsOpenSSL() override;
@@ -41,13 +41,13 @@ private:
 	Mode mode;
 };
 
-class DUCKDB_API AESGCMStateSSLFactory : public EncryptionUtil {
+class DUCKDB_API AESStateSSLFactory : public EncryptionUtil {
 public:
 	shared_ptr<EncryptionState> CreateEncryptionState() const override {
-		return make_shared_ptr<AESGCMStateSSL>();
+		return make_shared_ptr<AESStateSSL>();
 	}
 
-	~AESGCMStateSSLFactory() override {
+	~AESStateSSLFactory() override {
 	} //
 };
 
