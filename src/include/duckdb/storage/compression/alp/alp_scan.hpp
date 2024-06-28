@@ -8,6 +8,10 @@
 
 #pragma once
 
+#define TEST_KEY "0123456789112345" // 128
+#define TEST_NONCE "1123456789111111" // 128
+#define ENCRYPT 1
+
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 
 #include "duckdb/common/limits.hpp"
@@ -16,6 +20,8 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/encryption_state.hpp"
+#include "mbedtls_wrapper.hpp"
 
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -76,12 +82,14 @@ public:
 		segment_data = handle.Ptr() + segment.GetBlockOffset();
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
+		ssl_factory = *(new AESStateSSLFactory());
 	}
 
 	BufferHandle handle;
 	data_ptr_t metadata_ptr;
 	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
+	AESStateSSLFactory ssl_factory;
 	AlpVectorState<T> vector_state;
 
 	ColumnSegment &segment;
@@ -123,6 +131,16 @@ public:
 		total_value_count += vector_size;
 	}
 
+	// Encrypted Data is as the original Data
+	void DecryptVector (void* values_encoded, uint64_t bp_size){
+			// Encrypt with CTR to avoid storing the tag
+			auto encryption_state = ssl_factory.CreateEncryptionState();
+			encryption_state->InitializeDecryption(reinterpret_cast<const_data_ptr_t>(TEST_NONCE), 12,
+		                                           reinterpret_cast<const string *>(TEST_KEY));
+			encryption_state->Process((const_data_ptr_t)values_encoded, bp_size, (data_ptr_t)state.values_encoded, bp_size);
+			encryption_state->FinalizeCTR((data_ptr_t)state.values_encoded, bp_size, nullptr, 0);
+	}
+
 	template <bool SKIP = false>
 	void LoadVector(T *value_buffer) {
 		vector_state.Reset();
@@ -135,6 +153,9 @@ public:
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
+
+		//DECRYPT HERE
+		// using vec ptr, vec size
 
 		// Load the vector data
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);

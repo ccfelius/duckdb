@@ -146,6 +146,8 @@ public:
 	// Stores the vector and its metadata
 	void FlushVector() {
 		// here it stores all the data
+
+		// from the start of store we need to encrypt the data
 		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -165,6 +167,7 @@ public:
 			// here encrypt the encoded values!
 			// remember: encrypting values are same length as bp_size
 			EncryptVector((void *)state.values_encoded, state.bp_size);
+			// data ptr - all these sizes.
 		}
 
 		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
