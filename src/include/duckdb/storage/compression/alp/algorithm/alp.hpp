@@ -8,6 +8,9 @@
 
 #pragma once
 
+#define TEST_KEY "0123456789112345" // 128
+#define TEST_NONCE "1123456789111111" // 128
+
 #include "duckdb/common/bitpacking.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -16,6 +19,8 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/storage/compression/alp/alp_constants.hpp"
 #include "duckdb/storage/compression/alp/alp_utils.hpp"
+#include "crypto.hpp"
+#include "mbedtls_wrapper.hpp"
 
 #include <cmath>
 
@@ -63,6 +68,7 @@ template <class T, bool EMPTY>
 class AlpCompressionState {
 public:
 	AlpCompressionState() : vector_encoding_indices(0, 0), exceptions_count(0), bit_width(0) {
+
 	}
 
 	void Reset() {
@@ -86,6 +92,8 @@ public:
 	uint16_t exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
 	vector<AlpCombination> best_k_combinations;
 	uint8_t values_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
+	AESStateSSLFactory ssl_factory;
+
 };
 
 template <class T, bool EMPTY>
@@ -377,6 +385,15 @@ struct AlpDecompression {
 	static void Decompress(uint8_t *for_encoded, T *output, idx_t count, uint8_t vector_factor, uint8_t vector_exponent,
 	                       uint16_t exceptions_count, T *exceptions, const uint16_t *exceptions_positions,
 	                       uint64_t frame_of_reference, uint8_t bit_width) {
+
+		// First decrypt here
+		auto ssl_factory = AESStateSSLFactory();
+		auto encryption_state = ssl_factory.CreateEncryptionState();
+		encryption_state->InitializeDecryption(reinterpret_cast<const_data_ptr_t>(TEST_NONCE), 12,
+		                                       reinterpret_cast<const string *>(TEST_KEY));
+		encryption_state->Process(for_encoded, count * 8, for_encoded, count * 8);
+		encryption_state->FinalizeCTR(for_encoded, count * 8, for_encoded, count * 8);
+
 		AlpEncodingIndices encoding_indices = {vector_exponent, vector_factor};
 
 		// Bit Unpacking

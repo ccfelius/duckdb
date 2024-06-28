@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/compression/alp/alp_compress.hpp
+// duckdb/storage/compression/alp/alp_encrypt.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -27,24 +27,27 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "httpfs_extension.hpp"
+#include "crypto.hpp"
 
 #include <functional>
 
 namespace duckdb {
 
 template <class T>
-struct AlpCompressionState : public CompressionState {
+struct AlpEncryptionState : public CompressionState {
 
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	AlpCompressionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
+	AlpEncryptionState(ColumnDataCheckpointer &checkpointer, AlpAnalyzeState<T> *analyze_state)
 	    : CompressionState(analyze_state->info), checkpointer(checkpointer),
 	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ALP)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		//! Combinations found on the analyze step are needed for compression
 		state.best_k_combinations = analyze_state->state.best_k_combinations;
+		state.ssl_factory = new AESStateSSLFactory();
 	}
 
 	ColumnDataCheckpointer &checkpointer;
@@ -103,6 +106,7 @@ public:
 		current_segment = std::move(compressed_segment);
 		current_segment->function = function;
 
+		// here starts the compression?
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		handle = buffer_manager.Pin(current_segment->block);
 
@@ -113,11 +117,20 @@ public:
 		next_vector_byte_index_start = AlpConstants::HEADER_SIZE;
 	}
 
+	void EncryptVector(void* values_encoded, uint64_t bp_size){
+		// Encrypt with CTR to avoid storing the tag
+		auto encryption_state = state.ssl_factory.CreateEncryptionState();
+		encryption_state->InitializeEncryption(TEST_NONCE, 12, TEST_KEY);
+		encryption_state->Process((const_data_ptr_t)values_encoded, bp_size, (data_ptr_t)state.values_encoded, bp_size);
+		encryption_state->FinalizeCTR((data_ptr_t)state.values_encoded, bp_size, nullptr, 0);
+	}
+
 	void CompressVector() {
 		if (nulls_idx) {
 			alp::AlpUtils::FindAndReplaceNullsInVector<T>(input_vector, vector_null_positions, vector_idx, nulls_idx);
 		}
 		alp::AlpCompression<T, false>::Compress(input_vector, vector_idx, vector_null_positions, nulls_idx, state);
+
 		//! Check if the compressed vector fits on current segment
 		if (!HasEnoughSpace()) {
 			auto row_start = current_segment->start + current_segment->count;
@@ -131,21 +144,13 @@ public:
 			}
 		}
 		current_segment->count += vector_idx;
+		// encrypt before vector is flushed
 		FlushVector();
-	}
-
-	void EncryptVector(void* values_encoded, uint64_t bp_size){
-		// Encrypt with CTR to avoid storing the tag
-		auto encryption_state = state.ssl_factory.CreateEncryptionState();
-		encryption_state->InitializeEncryption(TEST_NONCE, 12, TEST_KEY);
-		encryption_state->Process((const_data_ptr_t)values_encoded, bp_size, (data_ptr_t)state.values_encoded, bp_size);
-		encryption_state->FinalizeCTR((data_ptr_t)state.values_encoded, bp_size, nullptr, 0);
 	}
 
 	// maybe here encrypt the segment
 	// Stores the vector and its metadata
 	void FlushVector() {
-		// here it stores all the data
 		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -166,7 +171,7 @@ public:
 			// remember: encrypting values are same length as bp_size
 			EncryptVector((void *)state.values_encoded, state.bp_size);
 		}
-
+		// then we copy to the data pointer
 		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
 		// We should never go out of bounds in the values_encoded array
 		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= state.bp_size);
@@ -181,7 +186,6 @@ public:
 			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
-		// todo: maybe use this to encrypt all
 		data_bytes_used += state.bp_size +
 		                   (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
 		                   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
@@ -207,6 +211,7 @@ public:
 		// Verify that the metadata_ptr is not smaller than the space used by the data
 		D_ASSERT(dataptr + metadata_offset <= metadata_ptr);
 
+		// also encrypt the alp metadata, later
 		auto bytes_used_by_metadata = UnsafeNumericCast<idx_t>(dataptr + info.GetBlockSize() - metadata_ptr);
 
 		// Initially the total segment size is the size of the block
@@ -245,7 +250,7 @@ public:
 		}
 		// TODO before flushing; encrypt segment
 		// note that also tag needs to be written
-		// Maybe just also implement CTR to avoid tag and storage overhead
+		// Maybe just also implement CTR to avoid tag storage overhead
 		FlushSegment();
 		current_segment.reset();
 	}
@@ -289,21 +294,21 @@ public:
 };
 
 template <class T>
-unique_ptr<CompressionState> AlpInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_uniq<AlpCompressionState<T>>(checkpointer, (AlpAnalyzeState<T> *)state.get());
+unique_ptr<CompressionState> AlpInitEncryption(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
+	return make_uniq<AlpEncryptionState<T>>(checkpointer, (AlpAnalyzeState<T> *)state.get());
 }
 
 template <class T>
-void AlpCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (AlpCompressionState<T> &)state_p;
+void AlpEncrypt(CompressionState &state_p, Vector &scan_vector, idx_t count) {
+	auto &state = (AlpEncryptionState<T> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
 }
 
 template <class T>
-void AlpFinalizeCompress(CompressionState &state_p) {
-	auto &state = (AlpCompressionState<T> &)state_p;
+void AlpFinalizeEncrypt(CompressionState &state_p) {
+	auto &state = (AlpEncryptionState<T> &)state_p;
 	state.Finalize();
 }
 

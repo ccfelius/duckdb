@@ -165,4 +165,28 @@ size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_
 	}
 }
 
+size_t AESStateSSL::FinalizeCTR(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
+	auto text_len = out_len;
+
+	switch (mode) {
+	case ENCRYPT:
+		if (1 != EVP_EncryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
+			throw InternalException("EncryptFinal failed");
+		}
+		text_len += out_len;
+		return text_len;
+
+	case DECRYPT:
+		// EVP_DecryptFinal() will return an error code if final block is not correctly formatted.
+		int ret = EVP_DecryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len));
+		text_len += out_len;
+
+		if (ret > 0) {
+			// success
+			return text_len;
+		}
+		throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
+	}
+}
+
 } // namespace duckdb

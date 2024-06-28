@@ -2,6 +2,7 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/compression/alp/alp_analyze.hpp"
 #include "duckdb/storage/compression/alp/alp_compress.hpp"
+#include "duckdb/storage/compression/alp/alp_encrypt.hpp"
 #include "duckdb/storage/compression/alp/alp_fetch.hpp"
 #include "duckdb/storage/compression/alp/alp_scan.hpp"
 
