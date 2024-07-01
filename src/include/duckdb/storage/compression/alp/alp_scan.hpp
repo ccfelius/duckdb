@@ -132,13 +132,14 @@ public:
 	}
 
 	// Encrypted Data is as the original Data
-	void DecryptVector (void* values_encoded, uint64_t bp_size){
-			// Encrypt with CTR to avoid storing the tag
-			auto encryption_state = ssl_factory.CreateEncryptionState();
-			encryption_state->InitializeDecryption(reinterpret_cast<const_data_ptr_t>(TEST_NONCE), 12,
-		                                           reinterpret_cast<const string *>(TEST_KEY));
-			encryption_state->Process((const_data_ptr_t)values_encoded, bp_size, (data_ptr_t)state.values_encoded, bp_size);
-			encryption_state->FinalizeCTR((data_ptr_t)state.values_encoded, bp_size, nullptr, 0);
+	void DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+		// Encrypt with CTR to avoid storing the tag
+		AESStateSSLFactory ssl_factory;
+		auto encryption_state = ssl_factory.CreateEncryptionState();
+		encryption_state->InitializeDecryption(reinterpret_cast<const_data_ptr_t>(TEST_NONCE), 12,
+		                                       reinterpret_cast<const string *>(TEST_KEY));
+		encryption_state->Process(in, in_len, out, out_len);
+		encryption_state->FinalizeCTR(out, out_len, nullptr, 0);
 	}
 
 	template <bool SKIP = false>
@@ -151,12 +152,19 @@ public:
 		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
 
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
-
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
 		//DECRYPT HERE
-		// using vec ptr, vec size
+//		if (ENCRYPT){
+//			// here encrypt the encoded values!
+//			// remember: encrypting values are same length as bp_size
+//			// what should we do for out_len?
+//			DecryptVector(start_index, data_bytes_used, encrypted_data, data_bytes_used);
+//			memcpy((void *)data_ptr, encrypted_data, data_bytes_used);
+//			// data ptr - all these sizes.
+//		}
 
+		// using vec ptr, vec size
 		// Load the vector data
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;

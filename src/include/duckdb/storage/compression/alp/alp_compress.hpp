@@ -134,19 +134,20 @@ public:
 		FlushVector();
 	}
 
-	void EncryptVector(void* values_encoded, uint64_t bp_size){
+	void EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 		// Encrypt with CTR to avoid storing the tag
 		auto encryption_state = state.ssl_factory.CreateEncryptionState();
-		encryption_state->InitializeEncryption(TEST_NONCE, 12, TEST_KEY);
-		encryption_state->Process((const_data_ptr_t)values_encoded, bp_size, (data_ptr_t)state.values_encoded, bp_size);
-		encryption_state->FinalizeCTR((data_ptr_t)state.values_encoded, bp_size, nullptr, 0);
+		encryption_state->InitializeEncryption(reinterpret_cast<const_data_ptr_t>(TEST_NONCE), 16 + 16,
+		                                       reinterpret_cast<const string *>(TEST_KEY));
+		encryption_state->Process(in, in_len, out, out_len);
+		encryption_state->FinalizeCTR(out, out_len, nullptr, 0);
 	}
 
 	// maybe here encrypt the segment
 	// Stores the vector and its metadata
 	void FlushVector() {
 		// here it stores all the data
-
+		// wait, store is just a value and ptr
 		// from the start of store we need to encrypt the data
 		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
@@ -163,13 +164,6 @@ public:
 		Store<uint8_t>(UnsafeNumericCast<uint8_t>(state.bit_width), data_ptr);
 		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
-		if (ENCRYPT){
-			// here encrypt the encoded values!
-			// remember: encrypting values are same length as bp_size
-			EncryptVector((void *)state.values_encoded, state.bp_size);
-			// data ptr - all these sizes.
-		}
-
 		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
 		// We should never go out of bounds in the values_encoded array
 		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= state.bp_size);
@@ -184,11 +178,23 @@ public:
 			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
+
 		// todo: maybe use this to encrypt all
 		data_bytes_used += state.bp_size +
 		                   (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
 		                   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
 		                   AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+
+		// here go back to data thing used, encrypt all and then do back pointer
+
+// create empty buffer
+		uint8_t* encrypted_data = new uint8_t[data_bytes_used];
+		auto start_index = data_ptr - data_bytes_used;
+
+		if (ENCRYPT){
+			EncryptVector(start_index, data_bytes_used, encrypted_data, data_bytes_used);
+			memcpy((void *)data_ptr, (void *)encrypted_data, data_bytes_used);
+		}
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);

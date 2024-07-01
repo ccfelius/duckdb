@@ -244,3 +244,9 @@ size_t MbedTlsWrapper::AESGCMStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duck
 	}
 	return result;
 }
+
+size_t MbedTlsWrapper::AESGCMStateMBEDTLS::FinalizeCTR(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag,
+                                                       duckdb::idx_t tag_len){
+	throw runtime_error("Not implemented");
+}
+
