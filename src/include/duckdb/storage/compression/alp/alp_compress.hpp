@@ -8,8 +8,8 @@
 
 #pragma once
 
-#define TEST_KEY "0123456789112345" // 128
-#define TEST_NONCE "1123456789111111" // 128
+#define TEST_KEY "123456789112345" // 128
+#define TEST_NONCE "11234567891" // 128
 #define ENCRYPT 1
 
 #include "duckdb/common/helper.hpp"
@@ -135,9 +135,11 @@ public:
 	}
 
 	void EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+		//! Nonce created by Initialize()
+		//! Encrypt the data
 		// Encrypt with CTR to avoid storing the tag
 		auto encryption_state = state.ssl_factory.CreateEncryptionState();
-		encryption_state->InitializeEncryption(reinterpret_cast<const_data_ptr_t>(TEST_NONCE), 16 + 16,
+		encryption_state->InitializeEncryption(reinterpret_cast<const unsigned char *>(TEST_NONCE), 12,
 		                                       reinterpret_cast<const string *>(TEST_KEY));
 		encryption_state->Process(in, in_len, out, out_len);
 		encryption_state->FinalizeCTR(out, out_len, nullptr, 0);

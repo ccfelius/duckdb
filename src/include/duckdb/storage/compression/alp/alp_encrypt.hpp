@@ -9,7 +9,7 @@
 #pragma once
 
 #define TEST_KEY "0123456789112345" // 128
-#define TEST_NONCE "1123456789111111" // 128
+#define TEST_NONCE "11234567891111110000" // 128
 #define ENCRYPT 1
 
 #include "duckdb/common/helper.hpp"

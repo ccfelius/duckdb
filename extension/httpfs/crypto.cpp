@@ -31,25 +31,20 @@ void hex256(hash_bytes &in, hash_str &out) {
 	}
 }
 
-
-const EVP_CIPHER *GetCipherGCM(const string &key) {
-	// For now, we only support GCM ciphers
-	// TODO: add support for CTR
-	switch (key.size()) {
-	case 16:
-		return EVP_aes_128_gcm();
-	case 24:
-		return EVP_aes_192_gcm();
-	case 32:
-		return EVP_aes_256_gcm();
-	default:
-		throw InternalException("Invalid AES key length");
+const EVP_CIPHER *GetCipher(const string &key, bool encryption_mode) {
+	// 1 for GCM, 0 for CTR
+	if (encryption_mode) {
+		switch (key.size()) {
+		case 16:
+			return EVP_aes_128_gcm();
+		case 24:
+			return EVP_aes_192_gcm();
+		case 32:
+			return EVP_aes_256_gcm();
+		default:
+			throw InternalException("Invalid AES key length");
+		}
 	}
-}
-
-const EVP_CIPHER *GetCipherCTR(const string &key) {
-	// For now, we only support GCM ciphers
-	// TODO: add support for CTR
 	switch (key.size()) {
 	case 16:
 		return EVP_aes_128_ctr();
@@ -59,15 +54,7 @@ const EVP_CIPHER *GetCipherCTR(const string &key) {
 		return EVP_aes_256_ctr();
 	default:
 		throw InternalException("Invalid AES key length");
-	}
-}
-
-const EVP_CIPHER *GetCipher(const string &key, bool encryption_mode){
-	// 1 for GCM, 0 for CTR
-	if (encryption_mode){
-		return GetCipherGCM(key);
-	}
-	return GetCipherCTR(key);
+		}
 }
 
 AESStateSSL::AESStateSSL() : gcm_context(EVP_CIPHER_CTX_new()) {
@@ -93,8 +80,8 @@ void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
 void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
 	mode = ENCRYPT;
 
-	// for now hardcode the cipher
-	if (1 != EVP_EncryptInit_ex(gcm_context, GetCipher(*key, 1), NULL, const_data_ptr_cast(key->data()), iv)) {
+	// for now hardcode the cipher on CTR
+	if (1 != EVP_EncryptInit_ex(gcm_context, GetCipher(*key, 0), NULL, const_data_ptr_cast(key->data()), iv)) {
 		throw InternalException("EncryptInit failed");
 	}
 }
@@ -102,7 +89,8 @@ void AESStateSSL::InitializeEncryption(const_data_ptr_t iv, idx_t iv_len, const 
 void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const string *key) {
 	mode = DECRYPT;
 
-	if (1 != EVP_DecryptInit_ex(gcm_context, GetCipher(*key, 1), NULL, const_data_ptr_cast(key->data()), iv)) {
+	// for now hardcode the cipher on CTR
+	if (1 != EVP_DecryptInit_ex(gcm_context, GetCipher(*key, 0), NULL, const_data_ptr_cast(key->data()), iv)) {
 		throw InternalException("DecryptInit failed");
 	}
 }
