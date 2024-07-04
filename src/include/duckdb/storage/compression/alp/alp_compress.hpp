@@ -8,8 +8,6 @@
 
 #pragma once
 
-#define TEST_KEY "123456789112345" // 128
-#define TEST_NONCE "11234567891" // 128
 #define ENCRYPT 1
 
 #include "duckdb/common/helper.hpp"
@@ -63,6 +61,10 @@ public:
 
 	T input_vector[AlpConstants::ALP_VECTOR_SIZE];
 	uint16_t vector_null_positions[AlpConstants::ALP_VECTOR_SIZE];
+
+	// predefine nonce and key
+	const unsigned char nonce[12] = "11234567891";
+	const string key = "1234567891123451";
 
 	alp::AlpCompressionState<T, false> state;
 
@@ -135,22 +137,14 @@ public:
 	}
 
 	void EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-		//! Nonce created by Initialize()
-		//! Encrypt the data
-		// Encrypt with CTR to avoid storing the tag
 		auto encryption_state = state.ssl_factory.CreateEncryptionState();
-		encryption_state->InitializeEncryption(reinterpret_cast<const unsigned char *>(TEST_NONCE), 12,
-		                                       reinterpret_cast<const string *>(TEST_KEY));
+		encryption_state->InitializeEncryption(nonce, 12, &key);
 		encryption_state->Process(in, in_len, out, out_len);
-		encryption_state->FinalizeCTR(out, out_len, nullptr, 0);
+		encryption_state->FinalizeCTR(out, 0, nullptr, 0);
 	}
 
-	// maybe here encrypt the segment
 	// Stores the vector and its metadata
 	void FlushVector() {
-		// here it stores all the data
-		// wait, store is just a value and ptr
-		// from the start of store we need to encrypt the data
 		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -166,6 +160,19 @@ public:
 		Store<uint8_t>(UnsafeNumericCast<uint8_t>(state.bit_width), data_ptr);
 		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
+		// first we encrypt 13 bytes of ALP constants
+		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+
+		if (ENCRYPT){
+			uint8_t* encrypted_data = new uint8_t[metadata_bytes];
+			data_ptr -= metadata_bytes;
+			EncryptVector(data_ptr, metadata_bytes, encrypted_data, metadata_bytes);
+			memcpy((void *)data_ptr, (void *)encrypted_data, metadata_bytes);
+			data_ptr += metadata_bytes;
+		}
+
+		idx_t vector_bytes = state.bp_size;
+
 		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
 		// We should never go out of bounds in the values_encoded array
 		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= state.bp_size);
@@ -175,27 +182,25 @@ public:
 		if (state.exceptions_count > 0) {
 			memcpy((void *)data_ptr, (void *)state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
 			data_ptr += sizeof(EXACT_TYPE) * state.exceptions_count;
+			vector_bytes += sizeof(EXACT_TYPE) * state.exceptions_count;
 			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
 			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
+			vector_bytes += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
-
-		// todo: maybe use this to encrypt all
 		data_bytes_used += state.bp_size +
 		                   (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
 		                   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
 		                   AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
-		// here go back to data thing used, encrypt all and then do back pointer
-
-// create empty buffer
-		uint8_t* encrypted_data = new uint8_t[data_bytes_used];
-		auto start_index = data_ptr - data_bytes_used;
-
+		// Then we encrypt the compressed vector and the exceptions
 		if (ENCRYPT){
-			EncryptVector(start_index, data_bytes_used, encrypted_data, data_bytes_used);
-			memcpy((void *)data_ptr, (void *)encrypted_data, data_bytes_used);
+			uint8_t* encrypted_data_vec = new uint8_t[vector_bytes];
+			data_ptr -= vector_bytes;
+			EncryptVector(data_ptr, vector_bytes, encrypted_data_vec, vector_bytes);
+			memcpy((void *)data_ptr, (void *)encrypted_data_vec, vector_bytes);
+			data_ptr += vector_bytes;
 		}
 
 		// Write pointer to the vector data (metadata)
@@ -254,9 +259,7 @@ public:
 			CompressVector();
 			D_ASSERT(vector_idx == 0);
 		}
-		// TODO before flushing; encrypt segment
-		// note that also tag needs to be written
-		// Maybe just also implement CTR to avoid tag and storage overhead
+
 		FlushSegment();
 		current_segment.reset();
 	}

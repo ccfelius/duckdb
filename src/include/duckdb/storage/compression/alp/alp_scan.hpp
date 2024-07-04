@@ -7,9 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-
-#define TEST_KEY "0123456789112345" // 128
-#define TEST_NONCE "1123456789111111" // 128
 #define ENCRYPT 1
 
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
@@ -92,6 +89,10 @@ public:
 	AESStateSSLFactory ssl_factory;
 	AlpVectorState<T> vector_state;
 
+	// predefine nonce and key
+	const unsigned char nonce[12] = "11234567891";
+	const string key = "1234567891123451";
+
 	ColumnSegment &segment;
 	idx_t count;
 
@@ -134,10 +135,8 @@ public:
 	// Encrypted Data is as the original Data
 	void DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 		// Encrypt with CTR to avoid storing the tag
-		AESStateSSLFactory ssl_factory;
 		auto encryption_state = ssl_factory.CreateEncryptionState();
-		encryption_state->InitializeDecryption(reinterpret_cast<const_data_ptr_t>(TEST_NONCE), 12,
-		                                       reinterpret_cast<const string *>(TEST_KEY));
+		encryption_state->InitializeDecryption(nonce, 12, &key);
 		encryption_state->Process(in, in_len, out, out_len);
 		encryption_state->FinalizeCTR(out, out_len, nullptr, 0);
 	}
@@ -154,17 +153,19 @@ public:
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
-		//DECRYPT HERE
-//		if (ENCRYPT){
-//			// here encrypt the encoded values!
-//			// remember: encrypting values are same length as bp_size
-//			// what should we do for out_len?
-//			DecryptVector(start_index, data_bytes_used, encrypted_data, data_bytes_used);
-//			memcpy((void *)data_ptr, encrypted_data, data_bytes_used);
-//			// data ptr - all these sizes.
-//		}
+		// Calculate the number of bytes used by the vector
+		// Maybe put this in a different method
+		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
+		                        AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE +
+		                        AlpConstants::BIT_WIDTH_SIZE;
 
-		// using vec ptr, vec size
+		// First decrypt the AlpConstants
+		if (ENCRYPT) {
+			uint8_t* decrypted_data = new uint8_t[metadata_bytes];
+			DecryptVector(vector_ptr, metadata_bytes, decrypted_data, metadata_bytes);
+			memcpy((void *)vector_ptr, (void *)decrypted_data, metadata_bytes);
+		}
+
 		// Load the vector data
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;
@@ -186,8 +187,26 @@ public:
 		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
 		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
 
+		uint64_t bp_size = 0;
+
 		if (vector_state.bit_width > 0) {
-			auto bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
+			bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
+		}
+
+		uint64_t vec_bytes_used = 0;
+
+		if (vector_state.exceptions_count > 0) {
+			vec_bytes_used = bp_size + ((sizeof(EXACT_TYPE) * vector_state.exceptions_count) + (AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count));
+		}
+
+		// Decrypt the compressed vector + exceptions
+		if (ENCRYPT) {
+			uint8_t* decrypted_data = new uint8_t[vec_bytes_used];
+			DecryptVector(vector_ptr, vec_bytes_used, decrypted_data, vec_bytes_used);
+			memcpy((void *)vector_ptr, (void *)decrypted_data, vec_bytes_used);
+		}
+
+		if (vector_state.bit_width > 0) {
 			memcpy(vector_state.for_encoded, (void *)vector_ptr, bp_size);
 			vector_ptr += bp_size;
 		}
