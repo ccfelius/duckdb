@@ -97,21 +97,32 @@ void AESStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const 
 
 size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 
+	size_t len;
+	size_t ciphertext_len;
+
 	switch (mode) {
 
-	case ENCRYPT:
-		if (1 != EVP_EncryptUpdate(context, data_ptr_cast(out), reinterpret_cast<int *>(&out_len),
-		                           const_data_ptr_cast(in), (int)in_len)) {
+	case ENCRYPT: {
+		int temp_len = 0;
+		if (1 != EVP_EncryptUpdate(context, data_ptr_cast(out), &temp_len, const_data_ptr_cast(in),
+		                           (int)in_len)) {
 			throw InternalException("EncryptUpdate failed");
 		}
+		len = static_cast<idx_t>(temp_len);
+	}
+		ciphertext_len = len;
 		break;
 
-	case DECRYPT:
-		if (1 != EVP_DecryptUpdate(context, data_ptr_cast(out), reinterpret_cast<int *>(&out_len),
-		                           const_data_ptr_cast(in), (int)in_len)) {
+	case DECRYPT: {
+		int temp_len = 0;
+		if (1 != EVP_DecryptUpdate(context, data_ptr_cast(out), &temp_len, const_data_ptr_cast(in),
+		                           (int)in_len)) {
 
 			throw InternalException("DecryptUpdate failed");
 		}
+		len = static_cast<idx_t>(temp_len);
+	}
+		ciphertext_len = len;
 		break;
 	}
 
@@ -119,7 +130,7 @@ size_t AESStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, i
 		throw InternalException("AES GCM failed, in- and output lengths differ");
 	}
 
-	return out_len;
+	return ciphertext_len;
 }
 
 size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {

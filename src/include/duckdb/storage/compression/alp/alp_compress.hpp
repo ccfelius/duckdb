@@ -141,12 +141,12 @@ public:
 		state.encryption_state->InitializeEncryption(nonce, 12, &key);
 	}
 
-	void EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-		state.encryption_state->Process(in, in_len, out, out_len);
+	size_t EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+		return state.encryption_state->Process(in, in_len, out, out_len);
 	}
 
-	void FinalizeEncryption(data_ptr_t out){
-		state.encryption_state->FinalizeCTR(out, 0);
+	size_t FinalizeEncryption(data_ptr_t out){
+		return state.encryption_state->FinalizeCTR(out, 0);
 	}
 
 	// Stores the vector and its metadata
@@ -173,7 +173,8 @@ public:
 		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE
 		                       + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
-		EncryptVector(data_ptr - metadata_bytes, metadata_bytes, data_ptr - metadata_bytes, metadata_bytes);
+		auto size_md = EncryptVector(data_ptr - metadata_bytes, metadata_bytes, data_ptr - metadata_bytes, metadata_bytes);
+		D_ASSERT(size_md == metadata_bytes);
 
 		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
 		// We should never go out of bounds in the values_encoded array
@@ -197,8 +198,11 @@ public:
 		idx_t vector_bytes  = state.bp_size +
 		                    (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE));
 
-		EncryptVector(data_ptr - vector_bytes, vector_bytes, data_ptr - vector_bytes, vector_bytes);
-		FinalizeEncryption(data_ptr - vector_bytes);
+		auto size_vector = EncryptVector(data_ptr - vector_bytes, vector_bytes, data_ptr - vector_bytes, vector_bytes);
+		D_ASSERT(size_vector == vector_bytes);
+
+		auto size_final = FinalizeEncryption(data_ptr - vector_bytes);
+		D_ASSERT(size_final == 0);
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);

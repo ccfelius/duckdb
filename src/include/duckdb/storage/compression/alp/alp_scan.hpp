@@ -139,12 +139,12 @@ public:
 		encryption_state->InitializeDecryption(nonce, 12, &key);
 	}
 
-	void DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-		encryption_state->Process(in, in_len, out, out_len);
+	size_t DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+		return encryption_state->Process(in, in_len, out, out_len);
 	}
 
-	void FinalizeDecryption(data_ptr_t out){
-		encryption_state->FinalizeCTR(out, 0);
+	size_t FinalizeDecryption(data_ptr_t out){
+		return encryption_state->FinalizeCTR(out, 0);
 	}
 
 	template <bool SKIP = false>
@@ -167,9 +167,13 @@ public:
 		                        AlpConstants::BIT_WIDTH_SIZE;
 
 		// First decrypt the AlpConstants
-		DecryptVector(vector_ptr, metadata_bytes, vector_ptr, metadata_bytes);
+		uint8_t *temp_buffer = new uint8_t[metadata_bytes];
+		memcpy(temp_buffer, vector_ptr, metadata_bytes);
+		auto size_metadata = DecryptVector(temp_buffer, metadata_bytes, temp_buffer, metadata_bytes);
+		memcpy(vector_ptr, temp_buffer, metadata_bytes);
+		D_ASSERT(size_metadata == metadata_bytes);
 
-		// Load the decrypted vector data
+		// Deserialize the decrypted vector data
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -203,8 +207,11 @@ public:
 		}
 
 		// Decrypt the compressed vector + exceptions
-		DecryptVector(vector_ptr, vec_bytes_used, vector_ptr, vec_bytes_used);
-		FinalizeDecryption(vector_ptr);
+		auto size_vector = DecryptVector(vector_ptr, vec_bytes_used, vector_ptr, vec_bytes_used);
+		D_ASSERT(size_vector == vec_bytes_used);
+
+		auto size_final = FinalizeDecryption(vector_ptr);
+		D_ASSERT(size_final == 0);
 
 		if (vector_state.bit_width > 0) {
 			memcpy(vector_state.for_encoded, (void *)vector_ptr, bp_size);

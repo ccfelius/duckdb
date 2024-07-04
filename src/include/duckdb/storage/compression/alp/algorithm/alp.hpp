@@ -384,19 +384,6 @@ struct AlpDecompression {
 	                       uint16_t exceptions_count, T *exceptions, const uint16_t *exceptions_positions,
 	                       uint64_t frame_of_reference, uint8_t bit_width) {
 
-//		// predefine nonce and key
-//		const unsigned char nonce[12] = "11234567891";
-//		const string key = "1234567891123451";
-//
-//		// First decrypt here
-//		auto ssl_factory = AESStateSSLFactory();
-//		auto encryption_state = ssl_factory.CreateEncryptionState();
-//		encryption_state->InitializeDecryption(nonce, 12,
-//		                                       &key);
-//
-//		// figure out how many bytes we need to decrypt
-//		encryption_state->Process(for_encoded, count * 8, for_encoded, count * 8);
-//		encryption_state->FinalizeCTR(for_encoded, count * 8, for_encoded, count * 8);
 
 		AlpEncodingIndices encoding_indices = {vector_exponent, vector_factor};
 
