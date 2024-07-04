@@ -90,6 +90,7 @@ public:
 	vector<AlpCombination> best_k_combinations;
 	uint8_t values_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
 	AESStateSSLFactory ssl_factory;
+	shared_ptr<EncryptionState> encryption_state;
 
 };
 

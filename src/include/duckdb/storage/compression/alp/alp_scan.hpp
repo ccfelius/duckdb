@@ -87,6 +87,8 @@ public:
 	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
 	AESStateSSLFactory ssl_factory;
+	shared_ptr<EncryptionState> encryption_state;
+
 	AlpVectorState<T> vector_state;
 
 	// predefine nonce and key
@@ -132,18 +134,24 @@ public:
 		total_value_count += vector_size;
 	}
 
-	// Encrypted Data is as the original Data
-	void DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-		// Encrypt with CTR to avoid storing the tag
-		auto encryption_state = ssl_factory.CreateEncryptionState();
+	void InitializeDecryption(){
+		encryption_state = ssl_factory.CreateEncryptionState();
 		encryption_state->InitializeDecryption(nonce, 12, &key);
+	}
+
+	void DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 		encryption_state->Process(in, in_len, out, out_len);
-		encryption_state->FinalizeCTR(out, out_len, nullptr, 0);
+	}
+
+	void FinalizeDecryption(data_ptr_t out){
+		encryption_state->FinalizeCTR(out, 0);
 	}
 
 	template <bool SKIP = false>
 	void LoadVector(T *value_buffer) {
 		vector_state.Reset();
+
+		InitializeDecryption();
 
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
@@ -153,20 +161,15 @@ public:
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
-		// Calculate the number of bytes used by the vector
-		// Maybe put this in a different method
+		// Number of bytes used by the storing AlpConstants
 		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
 		                        AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE +
 		                        AlpConstants::BIT_WIDTH_SIZE;
 
 		// First decrypt the AlpConstants
-		if (ENCRYPT) {
-			uint8_t* decrypted_data = new uint8_t[metadata_bytes];
-			DecryptVector(vector_ptr, metadata_bytes, decrypted_data, metadata_bytes);
-			memcpy((void *)vector_ptr, (void *)decrypted_data, metadata_bytes);
-		}
+		DecryptVector(vector_ptr, metadata_bytes, vector_ptr, metadata_bytes);
 
-		// Load the vector data
+		// Load the decrypted vector data
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -200,11 +203,8 @@ public:
 		}
 
 		// Decrypt the compressed vector + exceptions
-		if (ENCRYPT) {
-			uint8_t* decrypted_data = new uint8_t[vec_bytes_used];
-			DecryptVector(vector_ptr, vec_bytes_used, decrypted_data, vec_bytes_used);
-			memcpy((void *)vector_ptr, (void *)decrypted_data, vec_bytes_used);
-		}
+		DecryptVector(vector_ptr, vec_bytes_used, vector_ptr, vec_bytes_used);
+		FinalizeDecryption(vector_ptr);
 
 		if (vector_state.bit_width > 0) {
 			memcpy(vector_state.for_encoded, (void *)vector_ptr, bp_size);

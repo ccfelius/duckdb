@@ -33,12 +33,12 @@ public:
 	void InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, const std::string *key) override;
 	size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) override;
 	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
-	size_t FinalizeCTR(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
+	size_t FinalizeCTR(data_ptr_t out, idx_t out_len) override;
 	void GenerateRandomData(data_ptr_t data, idx_t len) override;
 
 private:
 	bool ssl = true;
-	EVP_CIPHER_CTX *gcm_context;
+	EVP_CIPHER_CTX *context;
 	Mode mode;
 };
 

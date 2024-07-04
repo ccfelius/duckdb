@@ -136,15 +136,24 @@ public:
 		FlushVector();
 	}
 
+	void InitializeEncryption(){
+		state.encryption_state = state.ssl_factory.CreateEncryptionState();
+		state.encryption_state->InitializeEncryption(nonce, 12, &key);
+	}
+
 	void EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-		auto encryption_state = state.ssl_factory.CreateEncryptionState();
-		encryption_state->InitializeEncryption(nonce, 12, &key);
-		encryption_state->Process(in, in_len, out, out_len);
-		encryption_state->FinalizeCTR(out, 0, nullptr, 0);
+		state.encryption_state->Process(in, in_len, out, out_len);
+	}
+
+	void FinalizeEncryption(data_ptr_t out){
+		state.encryption_state->FinalizeCTR(out, 0);
 	}
 
 	// Stores the vector and its metadata
 	void FlushVector() {
+
+		InitializeEncryption();
+
 		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -160,18 +169,11 @@ public:
 		Store<uint8_t>(UnsafeNumericCast<uint8_t>(state.bit_width), data_ptr);
 		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
-		// first we encrypt 13 bytes of ALP constants
-		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+		// first we encrypt 13 bytes of AlpConstants
+		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE
+		                       + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
-		if (ENCRYPT){
-			uint8_t* encrypted_data = new uint8_t[metadata_bytes];
-			data_ptr -= metadata_bytes;
-			EncryptVector(data_ptr, metadata_bytes, encrypted_data, metadata_bytes);
-			memcpy((void *)data_ptr, (void *)encrypted_data, metadata_bytes);
-			data_ptr += metadata_bytes;
-		}
-
-		idx_t vector_bytes = state.bp_size;
+		EncryptVector(data_ptr - metadata_bytes, metadata_bytes, data_ptr - metadata_bytes, metadata_bytes);
 
 		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
 		// We should never go out of bounds in the values_encoded array
@@ -182,11 +184,9 @@ public:
 		if (state.exceptions_count > 0) {
 			memcpy((void *)data_ptr, (void *)state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
 			data_ptr += sizeof(EXACT_TYPE) * state.exceptions_count;
-			vector_bytes += sizeof(EXACT_TYPE) * state.exceptions_count;
 			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
 			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
-			vector_bytes += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
 		data_bytes_used += state.bp_size +
@@ -194,14 +194,11 @@ public:
 		                   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
 		                   AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
-		// Then we encrypt the compressed vector and the exceptions
-		if (ENCRYPT){
-			uint8_t* encrypted_data_vec = new uint8_t[vector_bytes];
-			data_ptr -= vector_bytes;
-			EncryptVector(data_ptr, vector_bytes, encrypted_data_vec, vector_bytes);
-			memcpy((void *)data_ptr, (void *)encrypted_data_vec, vector_bytes);
-			data_ptr += vector_bytes;
-		}
+		idx_t vector_bytes  = state.bp_size +
+		                    (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE));
+
+		EncryptVector(data_ptr - vector_bytes, vector_bytes, data_ptr - vector_bytes, vector_bytes);
+		FinalizeEncryption(data_ptr - vector_bytes);
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);

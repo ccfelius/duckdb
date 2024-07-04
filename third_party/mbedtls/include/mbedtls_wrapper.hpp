@@ -53,7 +53,7 @@ class AESGCMStateMBEDTLS : public duckdb::EncryptionState {
 		                          duckdb::idx_t out_len) override;
 		DUCKDB_API size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len) override;
 		DUCKDB_API void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) override;
-		DUCKDB_API size_t FinalizeCTR(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len) override;
+		DUCKDB_API size_t FinalizeCTR(duckdb::data_ptr_t out, duckdb::idx_t out_len) override;
 		DUCKDB_API const std::string GetLib();
 
 	private:

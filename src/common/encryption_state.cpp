@@ -31,8 +31,7 @@ size_t EncryptionState::Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, 
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-size_t EncryptionState::FinalizeCTR(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag,
-                                 duckdb::idx_t tag_len) {
+size_t EncryptionState::FinalizeCTR(duckdb::data_ptr_t out, duckdb::idx_t out_len) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
