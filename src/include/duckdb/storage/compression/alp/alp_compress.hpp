@@ -191,13 +191,6 @@ public:
 		uint8_t *buffer = new uint8_t[bytes_used];
 		SerializeMetadata(buffer, metadata_bytes);
 		buffer += metadata_bytes;
-//		auto size_md = EncryptVector(metadata_buffer, metadata_bytes, data_ptr, metadata_bytes);
-//		D_ASSERT(size_md == metadata_bytes);
-//		data_ptr += metadata_bytes;
-
-//		idx_t vector_bytes  = state.bp_size +
-//		                     (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE));
-//		auto size_vector = EncryptVector(state.values_encoded, state.bp_size, data_ptr, vector_bytes);
 
 		// copy encoded values to buffer to encrypt
 		memcpy(buffer, state.values_encoded, state.bp_size);
@@ -221,8 +214,6 @@ public:
 		auto size_final = FinalizeEncryption(data_ptr);
 		D_ASSERT(size_final == 0);
 
-//		// Copy the encrypted buffer to the data_ptr
-//		memcpy((void *)data_ptr, (void *)buffer, bytes_used);
 		data_ptr += bytes_used;
 
 		// Write pointer to the vector data (metadata)

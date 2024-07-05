@@ -209,13 +209,13 @@ public:
 		DeserializeMetadata(metadata_buffer, vector_size);
 		vector_ptr += metadata_bytes;
 
-		uint64_t bp_size = 0;
+		idx_t bp_size = 0;
 
 		if (vector_state.bit_width > 0) {
 			bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
 		}
 
-		uint64_t vec_bytes_used = 0;
+		idx_t vec_bytes_used = 0;
 
 		if (vector_state.exceptions_count > 0) {
 			vec_bytes_used = bp_size + ((sizeof(EXACT_TYPE) * vector_state.exceptions_count) + (AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count));
@@ -225,22 +225,23 @@ public:
 		uint8_t *buffer = new uint8_t[vec_bytes_used];
 		auto size_vector = DecryptVector(vector_ptr, vec_bytes_used, buffer, vec_bytes_used);
 		D_ASSERT(size_vector == vec_bytes_used);
-		vector_ptr += vec_bytes_used;
 
 		auto size_final = FinalizeDecryption(buffer);
 		D_ASSERT(size_final == 0);
 
 		if (vector_state.bit_width > 0) {
-			memcpy(vector_state.for_encoded, (void *)buffer, bp_size);
+			memcpy(vector_state.for_encoded, buffer, bp_size);
 			buffer += bp_size;
 		}
 
 		if (vector_state.exceptions_count > 0) {
-			memcpy(vector_state.exceptions, (void *)buffer, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
+			memcpy(vector_state.exceptions, buffer, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
 			buffer += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
-			memcpy(vector_state.exceptions_positions, (void *)buffer,
+			memcpy(vector_state.exceptions_positions, buffer,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
+
+		vector_ptr += vec_bytes_used - AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count;
 
 		// Decode all the vector values to the specified 'value_buffer'
 		vector_state.template LoadValues<SKIP>(value_buffer, vector_size);
