@@ -8,6 +8,7 @@
 
 #pragma once
 #define ENCRYPT 1
+#define TEST_KEY "0123456789112345"
 
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 
@@ -93,7 +94,7 @@ public:
 
 	// predefine nonce and key
 	unsigned char iv[16];
-	const string key = "1234567891123451";
+	const string key = TEST_KEY;
 
 	ColumnSegment &segment;
 	idx_t count;
@@ -178,6 +179,7 @@ public:
 		                        AlpConstants::BIT_WIDTH_SIZE;
 
 		// First decrypt the AlpConstants
+		// For the second iteration; this is already decrypted
 		uint8_t *temp_buffer = new uint8_t[metadata_bytes];
 		memcpy(temp_buffer, vector_ptr, metadata_bytes);
 		auto size_metadata = DecryptVector(temp_buffer, metadata_bytes, temp_buffer, metadata_bytes);

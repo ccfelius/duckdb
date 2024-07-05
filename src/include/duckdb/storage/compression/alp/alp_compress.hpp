@@ -9,6 +9,7 @@
 #pragma once
 
 #define ENCRYPT 1
+#define TEST_KEY "0123456789112345"
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
@@ -64,7 +65,7 @@ public:
 
 	// predefine nonce and key
 	unsigned char iv[16];
-	const string key = "1234567891123451";
+	const string key = TEST_KEY;
 
 	alp::AlpCompressionState<T, false> state;
 
@@ -148,9 +149,8 @@ public:
 	void InitializeEncryption(){
 		state.encryption_state = state.ssl_factory.CreateEncryptionState();
 		SetIV();
-		state.encryption_state->InitializeDecryption(iv, 16, &key);
+		state.encryption_state->InitializeEncryption(iv, 16, &key);
 	}
-
 
 	size_t EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 		return state.encryption_state->Process(in, in_len, out, out_len);
