@@ -92,7 +92,7 @@ public:
 	AlpVectorState<T> vector_state;
 
 	// predefine nonce and key
-	const unsigned char nonce[12] = "11234567891";
+	unsigned char iv[16];
 	const string key = "1234567891123451";
 
 	ColumnSegment &segment;
@@ -134,10 +134,21 @@ public:
 		total_value_count += vector_size;
 	}
 
+	void SetIV(){
+		memcpy((void*)iv, "12345678901", 12);
+		memset((void *)iv, 0, sizeof(iv) - 4);
+		iv[12] = 0x00;
+		iv[13] = 0x00;
+		iv[14] = 0x00;
+		iv[15] = 0x00;
+	};
+
 	void InitializeDecryption(){
 		encryption_state = ssl_factory.CreateEncryptionState();
-		encryption_state->InitializeDecryption(nonce, 12, &key);
+		SetIV();
+		encryption_state->InitializeDecryption(iv, 16, &key);
 	}
+
 
 	size_t DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 		return encryption_state->Process(in, in_len, out, out_len);

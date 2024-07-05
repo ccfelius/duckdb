@@ -63,7 +63,7 @@ public:
 	uint16_t vector_null_positions[AlpConstants::ALP_VECTOR_SIZE];
 
 	// predefine nonce and key
-	const unsigned char nonce[12] = "11234567891";
+	unsigned char iv[16];
 	const string key = "1234567891123451";
 
 	alp::AlpCompressionState<T, false> state;
@@ -136,10 +136,21 @@ public:
 		FlushVector();
 	}
 
+	void SetIV(){
+		memcpy((void*)iv, "12345678901", 12);
+		memset((void *)iv, 0, sizeof(iv) - 4);
+		iv[12] = 0x00;
+		iv[13] = 0x00;
+		iv[14] = 0x00;
+		iv[15] = 0x00;
+	};
+
 	void InitializeEncryption(){
 		state.encryption_state = state.ssl_factory.CreateEncryptionState();
-		state.encryption_state->InitializeEncryption(nonce, 12, &key);
+		SetIV();
+		state.encryption_state->InitializeDecryption(iv, 16, &key);
 	}
+
 
 	size_t EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 		return state.encryption_state->Process(in, in_len, out, out_len);
