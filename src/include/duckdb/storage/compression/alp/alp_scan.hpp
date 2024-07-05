@@ -144,6 +144,29 @@ public:
 		iv[15] = 0x00;
 	};
 
+	void DeserializeMetadata(data_ptr_t vector_ptr, idx_t vector_size){
+		// Deserialize the decrypted vector data
+		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
+		vector_ptr += AlpConstants::EXPONENT_SIZE;
+
+		vector_state.v_factor = Load<uint8_t>(vector_ptr);
+		vector_ptr += AlpConstants::FACTOR_SIZE;
+
+		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
+		vector_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
+
+		vector_state.frame_of_reference = Load<uint64_t>(vector_ptr);
+		vector_ptr += AlpConstants::FOR_SIZE;
+
+		vector_state.bit_width = Load<uint8_t>(vector_ptr);
+		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
+
+		D_ASSERT(vector_state.exceptions_count <= vector_size);
+		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);
+		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
+		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
+	}
+
 	void InitializeDecryption(){
 		encryption_state = ssl_factory.CreateEncryptionState();
 		SetIV();
@@ -178,34 +201,13 @@ public:
 		                        AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE +
 		                        AlpConstants::BIT_WIDTH_SIZE;
 
-		// First decrypt the AlpConstants
-		// For the second iteration; this is already decrypted
-		uint8_t *temp_buffer = new uint8_t[metadata_bytes];
-		memcpy(temp_buffer, vector_ptr, metadata_bytes);
-		auto size_metadata = DecryptVector(temp_buffer, metadata_bytes, temp_buffer, metadata_bytes);
-		memcpy(vector_ptr, temp_buffer, metadata_bytes);
+		// First decrypt the AlpConstants and put this in a buffer
+		uint8_t *metadata_buffer = new uint8_t[metadata_bytes];
+		auto size_metadata = DecryptVector(vector_ptr, metadata_bytes, metadata_buffer, metadata_bytes);
 		D_ASSERT(size_metadata == metadata_bytes);
 
-		// Deserialize the decrypted vector data
-		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
-		vector_ptr += AlpConstants::EXPONENT_SIZE;
-
-		vector_state.v_factor = Load<uint8_t>(vector_ptr);
-		vector_ptr += AlpConstants::FACTOR_SIZE;
-
-		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
-		vector_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
-
-		vector_state.frame_of_reference = Load<uint64_t>(vector_ptr);
-		vector_ptr += AlpConstants::FOR_SIZE;
-
-		vector_state.bit_width = Load<uint8_t>(vector_ptr);
-		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
-
-		D_ASSERT(vector_state.exceptions_count <= vector_size);
-		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);
-		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
-		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
+		DeserializeMetadata(metadata_buffer, vector_size);
+		vector_ptr += metadata_bytes;
 
 		uint64_t bp_size = 0;
 
@@ -220,21 +222,23 @@ public:
 		}
 
 		// Decrypt the compressed vector + exceptions
-		auto size_vector = DecryptVector(vector_ptr, vec_bytes_used, vector_ptr, vec_bytes_used);
+		uint8_t *buffer = new uint8_t[vec_bytes_used];
+		auto size_vector = DecryptVector(vector_ptr, vec_bytes_used, buffer, vec_bytes_used);
 		D_ASSERT(size_vector == vec_bytes_used);
+		vector_ptr += vec_bytes_used;
 
-		auto size_final = FinalizeDecryption(vector_ptr);
+		auto size_final = FinalizeDecryption(buffer);
 		D_ASSERT(size_final == 0);
 
 		if (vector_state.bit_width > 0) {
-			memcpy(vector_state.for_encoded, (void *)vector_ptr, bp_size);
-			vector_ptr += bp_size;
+			memcpy(vector_state.for_encoded, (void *)buffer, bp_size);
+			buffer += bp_size;
 		}
 
 		if (vector_state.exceptions_count > 0) {
-			memcpy(vector_state.exceptions, (void *)vector_ptr, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
-			vector_ptr += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
-			memcpy(vector_state.exceptions_positions, (void *)vector_ptr,
+			memcpy(vector_state.exceptions, (void *)buffer, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
+			buffer += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
+			memcpy(vector_state.exceptions_positions, (void *)buffer,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
