@@ -241,9 +241,6 @@ public:
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
-		vector_ptr += vec_bytes_used;
-		//vector_ptr += vec_bytes_used - AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count;
-
 		// Decode all the vector values to the specified 'value_buffer'
 		vector_state.template LoadValues<SKIP>(value_buffer, vector_size);
 	}
