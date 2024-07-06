@@ -215,10 +215,10 @@ public:
 			bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
 		}
 
-		idx_t vec_bytes_used = 0;
+		idx_t vec_bytes_used = bp_size;
 
 		if (vector_state.exceptions_count > 0) {
-			vec_bytes_used = bp_size + ((sizeof(EXACT_TYPE) * vector_state.exceptions_count) + (AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count));
+			vec_bytes_used += ((sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) * vector_state.exceptions_count);
 		}
 
 		// Decrypt the compressed vector + exceptions
@@ -226,7 +226,7 @@ public:
 		auto size_vector = DecryptVector(vector_ptr, vec_bytes_used, buffer, vec_bytes_used);
 		D_ASSERT(size_vector == vec_bytes_used);
 
-		auto size_final = FinalizeDecryption(buffer);
+		auto size_final = FinalizeDecryption(vector_ptr);
 		D_ASSERT(size_final == 0);
 
 		if (vector_state.bit_width > 0) {
@@ -237,11 +237,12 @@ public:
 		if (vector_state.exceptions_count > 0) {
 			memcpy(vector_state.exceptions, buffer, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
 			buffer += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
-			memcpy(vector_state.exceptions_positions, buffer,
+			memcpy(vector_state.exceptions_positions, (void *)buffer,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
-		vector_ptr += vec_bytes_used - AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count;
+		vector_ptr += vec_bytes_used;
+		//vector_ptr += vec_bytes_used - AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count;
 
 		// Decode all the vector values to the specified 'value_buffer'
 		vector_state.template LoadValues<SKIP>(value_buffer, vector_size);
