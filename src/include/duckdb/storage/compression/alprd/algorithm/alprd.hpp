@@ -17,6 +17,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include "crypto.hpp"
 
 #include <cmath>
 
@@ -58,6 +59,9 @@ public:
 	idx_t right_bit_packed_size;
 	unordered_map<uint16_t, uint16_t> left_parts_dict_map;
 	uint8_t actual_dictionary_size;
+	AESStateSSLFactory ssl_factory;
+	shared_ptr<EncryptionState> encryption_state;
+
 };
 
 template <class T, bool EMPTY>

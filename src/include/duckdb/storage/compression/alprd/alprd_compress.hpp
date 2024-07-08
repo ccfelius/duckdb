@@ -8,6 +8,9 @@
 
 #pragma once
 
+#define ENCRYPT 1
+#define TEST_KEY "0123456789112345"
+
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -66,6 +69,10 @@ public:
 
 	EXACT_TYPE input_vector[AlpRDConstants::ALP_VECTOR_SIZE];
 	uint16_t vector_null_positions[AlpRDConstants::ALP_VECTOR_SIZE];
+
+	// predefine nonce and key
+	unsigned char iv[16];
+	const string key = TEST_KEY;
 
 	alp::AlpRDCompressionState<T, false> state;
 
@@ -139,9 +146,30 @@ public:
 		current_segment->count += vector_idx;
 		FlushVector();
 	}
+	void SetIV(){
+		memcpy((void*)iv, "12345678901", 12);
+		memset((void *)iv, 0, sizeof(iv) - 4);
+		iv[12] = 0x00;
+		iv[13] = 0x00;
+		iv[14] = 0x00;
+		iv[15] = 0x00;
+	};
 
-	// Stores the vector and its metadata
-	void FlushVector() {
+	void InitializeEncryption(){
+		state.encryption_state = state.ssl_factory.CreateEncryptionState();
+		SetIV();
+		state.encryption_state->InitializeEncryption(iv, 16, &key);
+	}
+
+	size_t EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+		return state.encryption_state->Process(in, in_len, out, out_len);
+	}
+
+	size_t FinalizeEncryption(data_ptr_t out){
+		return state.encryption_state->FinalizeCTR(out, 0);
+	}
+
+	void SerializeMetadata(data_ptr_t data_ptr) {
 		Store<uint16_t>(state.exceptions_count, data_ptr);
 		data_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 
@@ -150,19 +178,40 @@ public:
 
 		memcpy((void *)data_ptr, (void *)state.right_parts_encoded, state.right_bit_packed_size);
 		data_ptr += state.right_bit_packed_size;
+	}
+
+
+	// Stores the vector and its metadata
+	void FlushVector() {
+
+		InitializeEncryption();
+
+		idx_t bytes_used = RequiredSpace();
+
+		// first we encrypt the AlpConstants + bp size
+		idx_t metadata_bytes = AlpRDConstants::EXCEPTIONS_COUNT_SIZE + state.left_bit_packed_size + state.right_bit_packed_size;
+
+		// create a buffer for encryption
+		uint8_t *buffer = new uint8_t[bytes_used];
+		SerializeMetadata(buffer);
+		buffer += metadata_bytes;
 
 		if (state.exceptions_count > 0) {
-			memcpy((void *)data_ptr, (void *)state.exceptions, AlpRDConstants::EXCEPTION_SIZE * state.exceptions_count);
-			data_ptr += AlpRDConstants::EXCEPTION_SIZE * state.exceptions_count;
-			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
+			memcpy(buffer, (void *)state.exceptions, AlpRDConstants::EXCEPTION_SIZE * state.exceptions_count);
+			buffer += AlpRDConstants::EXCEPTION_SIZE * state.exceptions_count;
+			memcpy(buffer, (void *)state.exceptions_positions,
 			       AlpRDConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
-			data_ptr += AlpRDConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
+			buffer += AlpRDConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
-		data_bytes_used +=
-		    state.left_bit_packed_size + state.right_bit_packed_size +
-		    (state.exceptions_count * (AlpRDConstants::EXCEPTION_SIZE + AlpRDConstants::EXCEPTION_POSITION_SIZE)) +
-		    AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
+		data_bytes_used += bytes_used;
+
+		auto size_vector = EncryptVector(buffer - bytes_used, bytes_used, data_ptr, bytes_used);
+		D_ASSERT(size_vector == bytes_used);
+		auto size_final = FinalizeEncryption(data_ptr);
+		D_ASSERT(size_final == 0);
+
+		data_ptr += bytes_used;
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;

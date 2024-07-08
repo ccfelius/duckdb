@@ -7,6 +7,8 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
+#define ENCRYPT 1
+#define TEST_KEY "0123456789112345"
 
 #include "duckdb/storage/compression/alprd/algorithm/alprd.hpp"
 #include "duckdb/storage/compression/alprd/alprd_constants.hpp"
@@ -22,6 +24,9 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/encryption_state.hpp"
+#include "mbedtls_wrapper.hpp"
+#include "crypto.hpp"
 
 namespace duckdb {
 
@@ -65,6 +70,7 @@ public:
 	uint8_t right_bit_width;
 	uint8_t left_bit_width;
 	uint16_t left_parts_dict[AlpRDConstants::MAX_DICTIONARY_SIZE];
+
 };
 
 template <class T>
@@ -81,6 +87,8 @@ public:
 		segment_data = handle.Ptr() + segment.GetBlockOffset();
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
+
+		// TODO; already decrypt stuff here
 
 		// Load the Right Bit Width which is in the segment header after the pointer to the first metadata
 		vector_state.right_bit_width = Load<uint8_t>(segment_data + AlpRDConstants::METADATA_POINTER_SIZE);
@@ -102,6 +110,12 @@ public:
 	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
 	AlpRDVectorState<T> vector_state;
+	AESStateSSLFactory ssl_factory;
+	shared_ptr<EncryptionState> encryption_state;
+
+	// predefine nonce and key
+	unsigned char iv[16];
+	const string key = TEST_KEY;
 
 	ColumnSegment &segment;
 	idx_t count;
@@ -142,20 +156,18 @@ public:
 		total_value_count += vector_size;
 	}
 
-	template <bool SKIP = false>
-	void LoadVector(EXACT_TYPE *value_buffer) {
-		vector_state.Reset();
 
-		// Load the offset (metadata) indicating where the vector data starts
-		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
-		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
+	void SetIV(){
+		memcpy((void*)iv, "12345678901", 12);
+		memset((void *)iv, 0, sizeof(iv) - 4);
+		iv[12] = 0x00;
+		iv[13] = 0x00;
+		iv[14] = 0x00;
+		iv[15] = 0x00;
+	};
 
-		idx_t vector_size = MinValue((idx_t)AlpRDConstants::ALP_VECTOR_SIZE, (count - total_value_count));
-
-		data_ptr_t vector_ptr = segment_data + data_byte_offset;
-
-		// Load the vector data
+	void DeserializeMetadata(data_ptr_t vector_ptr, idx_t vector_size){
+		// Deserialize the decrypted vector data
 		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
 		vector_ptr += AlpRDConstants::EXCEPTIONS_COUNT_SIZE;
 		D_ASSERT(vector_state.exceptions_count <= vector_size);
@@ -168,6 +180,50 @@ public:
 
 		memcpy(vector_state.right_encoded, (void *)vector_ptr, right_bp_size);
 		vector_ptr += right_bp_size;
+	}
+
+	void InitializeDecryption(){
+		encryption_state = ssl_factory.CreateEncryptionState();
+		SetIV();
+		encryption_state->InitializeDecryption(iv, 16, &key);
+	}
+
+
+	size_t DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+		return encryption_state->Process(in, in_len, out, out_len);
+	}
+
+	size_t FinalizeDecryption(data_ptr_t out){
+		return encryption_state->FinalizeCTR(out, 0);
+	}
+
+	template <bool SKIP = false>
+	void LoadVector(EXACT_TYPE *value_buffer) {
+		vector_state.Reset();
+
+		InitializeDecryption();
+
+		// Load the offset (metadata) indicating where the vector data starts
+		metadata_ptr -= AlpRDConstants::METADATA_POINTER_SIZE;
+		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
+		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
+
+		idx_t vector_size = MinValue((idx_t)AlpRDConstants::ALP_VECTOR_SIZE, (count - total_value_count));
+
+		data_ptr_t vector_ptr = segment_data + data_byte_offset;
+
+		// Number of bytes used by the storing AlpConstants
+		idx_t metadata_bytes = AlpRDConstants::EXCEPTIONS_COUNT_SIZE + vector_state.left_bit_width + vector_state.right_bit_width;
+
+		// First decrypt the AlpConstants and put this in a buffer
+		uint8_t *metadata_buffer = new uint8_t[metadata_bytes];
+		auto size_metadata = DecryptVector(vector_ptr, metadata_bytes, metadata_buffer, metadata_bytes);
+		D_ASSERT(size_metadata == metadata_bytes);
+
+		DeserializeMetadata(metadata_buffer, vector_size);
+		vector_ptr += metadata_bytes;
+
+		idx_t bp_size = 0;
 
 		if (vector_state.exceptions_count > 0) {
 			memcpy(vector_state.exceptions, (void *)vector_ptr,

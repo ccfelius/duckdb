@@ -160,7 +160,7 @@ public:
 		return state.encryption_state->FinalizeCTR(out, 0);
 	}
 
-	void SerializeMetadata(data_ptr_t data_ptr, idx_t metadata_bytes) {
+	void SerializeMetadata(data_ptr_t data_ptr) {
 		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -188,8 +188,10 @@ public:
 		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE
 		                       + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
+		// create a buffer for encryption
+		// TODO: this buffer is unnecessary, we can copy directly to the data_ptr
 		uint8_t *buffer = new uint8_t[bytes_used];
-		SerializeMetadata(buffer, metadata_bytes);
+		SerializeMetadata(buffer);
 		buffer += metadata_bytes;
 
 		// copy encoded values to buffer to encrypt
