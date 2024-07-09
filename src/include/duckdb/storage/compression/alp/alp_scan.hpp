@@ -135,6 +135,14 @@ public:
 		total_value_count += vector_size;
 	}
 
+	// Determines if it's the last vector in the block
+	bool IsLastVector() {
+		// Skip the offset indicating where the data starts
+		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
+		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, count - total_value_count);
+		total_value_count += vector_size;
+	}
+
 	void SetIV(){
 		memcpy((void*)iv, "12345678901", 12);
 		memset((void *)iv, 0, sizeof(iv) - 4);

@@ -841,6 +841,21 @@ Value EnableProgressBarPrintSetting::GetSetting(const ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Encryption Key
+//===--------------------------------------------------------------------===//
+void EncryptionKeySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.encryption_key = input.GetValue<string>();
+}
+
+void EncryptionKeySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.encryption_key = DBConfig().options.encryption_key;
+}
+
+Value EncryptionKeySetting::GetSetting(const ClientContext &context) {
+	return Value(); // we don't want to display this?
+}
+
+//===--------------------------------------------------------------------===//
 // Errors As JSON
 //===--------------------------------------------------------------------===//
 void ErrorsAsJsonSetting::ResetLocal(ClientContext &context) {

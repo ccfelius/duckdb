@@ -42,6 +42,17 @@ public:
 		return make_shared_ptr<EncryptionState>();
 	}
 
+	virtual bool ValidKey(const std::string &key) {
+		switch (key.size()) {
+		case 16:
+		case 24:
+		case 32:
+			return true;
+		default:
+			return false;
+		}
+	}
+
 	virtual ~EncryptionUtil() {
 	}
 };

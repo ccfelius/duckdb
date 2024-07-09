@@ -377,6 +377,15 @@ struct EnableProgressBarPrintSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct EncryptionKeySetting {
+	static constexpr const char *Name = "encryption_key";
+	static constexpr const char *Description = "Set the encryption key for the database";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ErrorsAsJsonSetting {
 	static constexpr const char *Name = "errors_as_json";
 	static constexpr const char *Description = "Output error messages as structured JSON instead of as a raw string";

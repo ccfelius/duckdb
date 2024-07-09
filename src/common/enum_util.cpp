@@ -6740,6 +6740,8 @@ const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value) {
 		return "WEEKDAY_ISO";
 	case StrTimeSpecifier::WEEK_NUMBER_ISO:
 		return "WEEK_NUMBER_ISO";
+	case StrTimeSpecifier::SKIP_FOLLOWING:
+		return "SKIP_FOLLOWING";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -6854,6 +6856,9 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "WEEK_NUMBER_ISO")) {
 		return StrTimeSpecifier::WEEK_NUMBER_ISO;
+	}
+	if (StringUtil::Equals(value, "SKIP_FOLLOWING")) {
+		return StrTimeSpecifier::SKIP_FOLLOWING;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

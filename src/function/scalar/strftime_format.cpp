@@ -601,6 +601,12 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 				case 'V':
 					specifier = StrTimeSpecifier::WEEK_NUMBER_ISO;
 					break;
+				case '_':
+					if (i + 1 < format_string.size()) {
+						return "%_ needs to be the last entry in format string";
+					}
+					specifier = StrTimeSpecifier::SKIP_FOLLOWING;
+					break;
 				case 'c':
 				case 'x':
 				case 'X':
@@ -1295,6 +1301,10 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result) c
 				result.tz.assign(tz_begin, tz_end);
 				break;
 			}
+			case StrTimeSpecifier::SKIP_FOLLOWING:
+				// ignore anything that follows
+				pos = size;
+				break;
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
 			}

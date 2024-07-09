@@ -27,6 +27,11 @@ struct StorageManagerOptions {
 	bool use_direct_io = false;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size = optional_idx();
+	string encryption_key;
+
+	bool NeedsEncryption() const {
+		return !encryption_key.empty();
+	}
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -89,8 +94,8 @@ private:
 	//!	to detect inconsistencies with the file header.
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
-	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
-	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;
+	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_encryption = false) const;
+	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_encryption = false) const;
 
 	idx_t GetBlockLocation(block_id_t block_id);
 
@@ -100,6 +105,8 @@ private:
 
 private:
 	AttachedDatabase &db;
+	//! The main database header struct
+	MainHeader main_file_header;
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
 	uint8_t active_header;
 	//! The path where the file is stored
