@@ -20,7 +20,7 @@ namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 
-using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLS;
+//using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLS;
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
