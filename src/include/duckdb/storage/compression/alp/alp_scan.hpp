@@ -7,8 +7,6 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#define ENCRYPT 1
-#define TEST_KEY "0123456789112345"
 
 #include "duckdb/storage/compression/alp/algorithm/alp.hpp"
 
@@ -18,8 +16,6 @@
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/encryption_state.hpp"
-#include "mbedtls_wrapper.hpp"
 
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -80,21 +76,13 @@ public:
 		segment_data = handle.Ptr() + segment.GetBlockOffset();
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
-		ssl_factory = *(new AESStateSSLFactory());
 	}
 
 	BufferHandle handle;
 	data_ptr_t metadata_ptr;
 	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
-	AESStateSSLFactory ssl_factory;
-	shared_ptr<EncryptionState> encryption_state;
-
 	AlpVectorState<T> vector_state;
-
-	// predefine nonce and key
-	unsigned char iv[16];
-	const string key = TEST_KEY;
 
 	ColumnSegment &segment;
 	idx_t count;
@@ -135,25 +123,21 @@ public:
 		total_value_count += vector_size;
 	}
 
-	// Determines if it's the last vector in the block
-	bool IsLastVector() {
-		// Skip the offset indicating where the data starts
+	template <bool SKIP = false>
+	void LoadVector(T *value_buffer) {
+		vector_state.Reset();
+
+		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
-		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, count - total_value_count);
-		total_value_count += vector_size;
-	}
+		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
+		auto block_size = Storage::BLOCK_SIZE;
+		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
 
-	void SetIV(){
-		memcpy((void*)iv, "12345678901", 12);
-		memset((void *)iv, 0, sizeof(iv) - 4);
-		iv[12] = 0x00;
-		iv[13] = 0x00;
-		iv[14] = 0x00;
-		iv[15] = 0x00;
-	};
+		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
 
-	void DeserializeMetadata(data_ptr_t vector_ptr, idx_t vector_size){
-		// Deserialize the decrypted vector data
+		data_ptr_t vector_ptr = segment_data + data_byte_offset;
+
+		// Load the vector data
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
 		vector_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -173,79 +157,17 @@ public:
 		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);
 		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
 		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
-	}
-
-	void InitializeDecryption(){
-		encryption_state = ssl_factory.CreateEncryptionState();
-		SetIV();
-		encryption_state->InitializeDecryption(iv, 16, &key);
-	}
-
-
-	size_t DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-		return encryption_state->Process(in, in_len, out, out_len);
-	}
-
-	size_t FinalizeDecryption(data_ptr_t out){
-		return encryption_state->FinalizeCTR(out, 0);
-	}
-
-	template <bool SKIP = false>
-	void LoadVector(T *value_buffer) {
-		vector_state.Reset();
-
-		InitializeDecryption();
-
-		// Load the offset (metadata) indicating where the vector data starts
-		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
-		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
-
-		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
-		data_ptr_t vector_ptr = segment_data + data_byte_offset;
-
-		// Number of bytes used by the storing AlpConstants
-		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
-		                        AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE +
-		                        AlpConstants::BIT_WIDTH_SIZE;
-
-		// First decrypt the AlpConstants and put this in a buffer
-		uint8_t *metadata_buffer = new uint8_t[metadata_bytes];
-		auto size_metadata = DecryptVector(vector_ptr, metadata_bytes, metadata_buffer, metadata_bytes);
-		D_ASSERT(size_metadata == metadata_bytes);
-
-		DeserializeMetadata(metadata_buffer, vector_size);
-		vector_ptr += metadata_bytes;
-
-		idx_t bp_size = 0;
 
 		if (vector_state.bit_width > 0) {
-			bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
-		}
-
-		idx_t vec_bytes_used = bp_size;
-
-		if (vector_state.exceptions_count > 0) {
-			vec_bytes_used += ((sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) * vector_state.exceptions_count);
-		}
-
-		// Decrypt the compressed vector + exceptions
-		uint8_t *buffer = new uint8_t[vec_bytes_used];
-		auto size_vector = DecryptVector(vector_ptr, vec_bytes_used, buffer, vec_bytes_used);
-		D_ASSERT(size_vector == vec_bytes_used);
-
-		auto size_final = FinalizeDecryption(vector_ptr);
-		D_ASSERT(size_final == 0);
-
-		if (vector_state.bit_width > 0) {
-			memcpy(vector_state.for_encoded, buffer, bp_size);
-			buffer += bp_size;
+			auto bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
+			memcpy(vector_state.for_encoded, (void *)vector_ptr, bp_size);
+			vector_ptr += bp_size;
 		}
 
 		if (vector_state.exceptions_count > 0) {
-			memcpy(vector_state.exceptions, buffer, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
-			buffer += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
-			memcpy(vector_state.exceptions_positions, (void *)buffer,
+			memcpy(vector_state.exceptions, (void *)vector_ptr, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
+			vector_ptr += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
+			memcpy(vector_state.exceptions_positions, (void *)vector_ptr,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
@@ -256,12 +178,11 @@ public:
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
 	void Skip(ColumnSegment &col_segment, idx_t skip_count) {
-
 		if (total_value_count != 0 && !VectorFinished()) {
 			// Finish skipping the current vector
-			idx_t to_skip = LeftInVector();
-			skip_count -= to_skip;
+			idx_t to_skip = MinValue<idx_t>(skip_count, LeftInVector());
 			ScanVector<T, true>(nullptr, to_skip);
+			skip_count -= to_skip;
 		}
 		// Figure out how many entire vectors we can skip
 		// For these vectors, we don't even need to process the metadata or values

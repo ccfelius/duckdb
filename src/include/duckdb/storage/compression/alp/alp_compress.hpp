@@ -8,9 +8,6 @@
 
 #pragma once
 
-#define ENCRYPT 1
-#define TEST_KEY "0123456789112345"
-
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -24,8 +21,6 @@
 #include "duckdb/storage/compression/patas/patas.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/encryption_state.hpp"
-#include "mbedtls_wrapper.hpp"
 
 #include <functional>
 
@@ -62,10 +57,6 @@ public:
 
 	T input_vector[AlpConstants::ALP_VECTOR_SIZE];
 	uint16_t vector_null_positions[AlpConstants::ALP_VECTOR_SIZE];
-
-	// predefine nonce and key
-	unsigned char iv[16];
-	const string key = TEST_KEY;
 
 	alp::AlpCompressionState<T, false> state;
 
@@ -137,30 +128,8 @@ public:
 		FlushVector();
 	}
 
-	void SetIV(){
-		memcpy((void*)iv, "12345678901", 12);
-		memset((void *)iv, 0, sizeof(iv) - 4);
-		iv[12] = 0x00;
-		iv[13] = 0x00;
-		iv[14] = 0x00;
-		iv[15] = 0x00;
-	};
-
-	void InitializeEncryption(){
-		state.encryption_state = state.ssl_factory.CreateEncryptionState();
-		SetIV();
-		state.encryption_state->InitializeEncryption(iv, 16, &key);
-	}
-
-	size_t EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-		return state.encryption_state->Process(in, in_len, out, out_len);
-	}
-
-	size_t FinalizeEncryption(data_ptr_t out){
-		return state.encryption_state->FinalizeCTR(out, 0);
-	}
-
-	void SerializeMetadata(data_ptr_t data_ptr) {
+	// Stores the vector and its metadata
+	void FlushVector() {
 		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
 		data_ptr += AlpConstants::EXPONENT_SIZE;
 
@@ -175,48 +144,25 @@ public:
 
 		Store<uint8_t>(UnsafeNumericCast<uint8_t>(state.bit_width), data_ptr);
 		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
-	}
 
-	// Stores the vector and its metadata
-	void FlushVector() {
-
-		InitializeEncryption();
-
-		idx_t bytes_used = RequiredSpace();
-
-		// first we encrypt 13 bytes of AlpConstants
-		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE
-		                       + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
-
-		// create a buffer for encryption
-		// TODO: this buffer is unnecessary, we can copy directly to the data_ptr
-		uint8_t *buffer = new uint8_t[bytes_used];
-		SerializeMetadata(buffer);
-		buffer += metadata_bytes;
-
-		// copy encoded values to buffer to encrypt
-		memcpy(buffer, state.values_encoded, state.bp_size);
-		buffer += state.bp_size;
-
+		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
 		// We should never go out of bounds in the values_encoded array
 		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= state.bp_size);
 
+		data_ptr += state.bp_size;
+
 		if (state.exceptions_count > 0) {
-			memcpy(buffer, state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
-			buffer += sizeof(EXACT_TYPE) * state.exceptions_count;
-			memcpy(buffer, state.exceptions_positions,
+			memcpy((void *)data_ptr, (void *)state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
+			data_ptr += sizeof(EXACT_TYPE) * state.exceptions_count;
+			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
-			buffer += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
+			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
-		data_bytes_used += bytes_used;
-
-		auto size_vector = EncryptVector(buffer - bytes_used, bytes_used, data_ptr, bytes_used);
-		D_ASSERT(size_vector == bytes_used);
-		auto size_final = FinalizeEncryption(data_ptr);
-		D_ASSERT(size_final == 0);
-
-		data_ptr += bytes_used;
+		data_bytes_used += state.bp_size +
+		                   (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		                   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
+		                   AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);
@@ -264,7 +210,6 @@ public:
 		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
 
 		handle.Destroy();
-		// current segment, encrypt the whole thing here?
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
 		data_bytes_used = 0;
 		vectors_flushed = 0;
@@ -275,7 +220,6 @@ public:
 			CompressVector();
 			D_ASSERT(vector_idx == 0);
 		}
-
 		FlushSegment();
 		current_segment.reset();
 	}

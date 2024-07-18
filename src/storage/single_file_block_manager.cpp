@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <cstring>
 
+#define TEST_KEY "0123456789112345"
+
 namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
@@ -40,9 +42,9 @@ void MainHeader::Write(WriteStream &ser) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
-	if (flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
-		ser.WriteData(aes_encryption_iv, AES_IV_LEN);
-	}
+//	if (flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+//		ser.WriteData(aes_encryption_iv, AES_IV_LEN);
+//	}
 	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
 	SerializeVersionNumber(ser, DuckDB::SourceID());
 }
@@ -93,9 +95,9 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
-	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
-		source.ReadData(header.aes_encryption_iv, AES_IV_LEN);
-	}
+//	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+//		source.ReadData(header.aes_encryption_iv, AES_IV_LEN);
+//	}
 	DeserializeVersionNumber(source, header.library_git_desc);
 	DeserializeVersionNumber(source, header.library_git_hash);
 	return header;
@@ -190,20 +192,6 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	main_file_header.version_number = VERSION_NUMBER;
 	memset(main_file_header.flags, 0, sizeof(uint64_t) * 4);
 
-	if (options.NeedsEncryption()) {
-		main_file_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
-		// we generate and store a random initialization vector (IV) for AES
-		// with openssl
-		auto encryption_util = new AESStateSSLFactory();
-		auto aes = encryption_util->CreateEncryptionState();
-		aes->GenerateRandomData(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN);
-		// this is mbedtls
-//		auto aes = new AESGCMState();
-//		aes->GenerateRandomData(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN);
-		D_ASSERT(MainHeader::AES_IV_LEN == 16); // IV length should be equal to block size
-		// for now hardcode block size to 16
-	}
-
 	SerializeHeaderStructure<MainHeader>(main_file_header, header_buffer.buffer);
 	// now write the header to the file
 	ChecksumAndWrite(header_buffer, 0, true);
@@ -260,17 +248,13 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	ReadAndChecksum(header_buffer, 0, true);
 	main_file_header = DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);
 
-	if (main_file_header.IsEncrypted() && !options.NeedsEncryption()) {
-		throw CatalogException("Cannot open encrypted database \"%s\" without a password", path);
-	}
-
 	// read the database headers from disk
 	DatabaseHeader h1;
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
+	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE, true);
 	h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
 
 	DatabaseHeader h2;
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL, true);
 	h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
 
 	// check the header with the highest iteration count
@@ -293,12 +277,15 @@ const string SaltKey(const string encryption_key){
 	return state.Finalize();
 }
 
-//static shared_ptr<EncryptionState> CreateAesState(const string encryption_key) {
-//	AESStateSSLFactory *encryption_util = new AESStateSSLFactory();
-//	auto derived_key = SaltKey(encryption_key);
-//	D_ASSERT(encryption_util->ValidKey(derived_key));
-//	return encryption_util->CreateEncryptionState();;
-//}
+void SetIV(char *iv){
+	memcpy((void*)iv, "12345678901", 12);
+	memset((void *)iv, 0, sizeof(iv) - 4);
+	// set last 4 bytes of nonce to 0
+	iv[12] = 0x00;
+	iv[13] = 0x00;
+	iv[14] = 0x00;
+	iv[15] = 0x00;
+};
 
 void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_encryption) const {
 	// read the buffer from disk
@@ -308,10 +295,13 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	if (options.NeedsEncryption() && !skip_encryption) {
 		AESStateSSLFactory *encryption_util = new AESStateSSLFactory();
 		auto aes = encryption_util->CreateEncryptionState();
-		auto derived_key = SaltKey(options.encryption_key);
+		auto derived_key = SaltKey(TEST_KEY);
 		encryption_util->ValidKey(derived_key);
-		aes->InitializeDecryption(main_file_header.aes_encryption_iv,
-		                         MainHeader::AES_IV_LEN, &derived_key);
+		unsigned char iv[16];
+		SetIV(reinterpret_cast<char *>(iv));
+		aes->InitializeDecryption(iv, 16, &derived_key);
+
+		// read buffer for aes
 		auto aes_buffer = duckdb::unique_ptr<data_t[]>(new data_t[block.size]);
 		auto aes_res = aes->Process(block.InternalBuffer(), block.size, aes_buffer.get(), block.size);
 		if (aes_res != block.size) {
@@ -341,10 +331,13 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	if (options.NeedsEncryption() && !skip_encryption) {
 		AESStateSSLFactory *encryption_util = new AESStateSSLFactory();
 		auto aes = encryption_util->CreateEncryptionState();
-		auto derived_key = SaltKey(options.encryption_key);
+		auto derived_key = SaltKey(TEST_KEY);
 		encryption_util->ValidKey(derived_key);
-		aes->InitializeEncryption(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN, &derived_key);
+		unsigned char iv[16];
+		SetIV(reinterpret_cast<char *>(iv));
+		aes->InitializeEncryption(iv, 16, &derived_key);
 
+		// write buffer for aes
 		auto aes_buffer = duckdb::unique_ptr<data_t[]>(new data_t[block.size]);
 		auto aes_res = aes->Process(block.InternalBuffer(), block.size, aes_buffer.get(), block.size);
 		if (aes_res != block.size) {
@@ -352,6 +345,7 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 		}
 		memcpy(block.InternalBuffer(), aes_buffer.get(), block.size);
 	}
+
 	// now write the buffer
 	block.Write(*handle, location);
 }

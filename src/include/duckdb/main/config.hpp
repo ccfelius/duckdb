@@ -255,7 +255,7 @@ struct DBConfigOptions {
 	// rows match, we perform an index scan instead of a table scan.
 	idx_t index_scan_max_count = STANDARD_VECTOR_SIZE;
 	//! Database encryption key
-	string encryption_key ;
+	string encryption_key;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
