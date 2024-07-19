@@ -24,6 +24,8 @@
 
 #include <functional>
 
+#define TEST_KEY "0123456789112345"
+
 namespace duckdb {
 
 template <class T>
@@ -198,7 +200,9 @@ public:
 			uint32_t verify_bytes;
 			memcpy((void *)&verify_bytes, metadata_ptr, 4);
 #endif
+			// this is in release mode, we do not encrypt the metadata_ptr at the beginning of an ALP block
 			memmove(dataptr + metadata_offset, metadata_ptr, bytes_used_by_metadata);
+
 #ifdef DEBUG
 			//! Now assert that the memmove was correct
 			D_ASSERT(verify_bytes == *(uint32_t *)(dataptr + metadata_offset));
@@ -207,7 +211,34 @@ public:
 		}
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
+		// first 32 bits of a segment is the metadata ptr
 		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
+
+		// Encrypt the ALP segment
+		AESStateSSLFactory *encryption_util = new AESStateSSLFactory();
+		auto aes = encryption_util->CreateEncryptionState();
+
+		unsigned char iv[16];
+		memcpy((void*)iv, "12345678901", 12);
+		memset((void *)iv, 0, sizeof(iv) - 4);
+		// set last 4 bytes of nonce to 0
+		iv[12] = 0x00;
+		iv[13] = 0x00;
+		iv[14] = 0x00;
+		iv[15] = 0x00;
+
+		aes->InitializeEncryption(iv, 12, reinterpret_cast<const string *>(TEST_KEY));
+
+		// write buffer for aes
+		auto aes_buffer = duckdb::unique_ptr<data_t[]>(new data_t[total_segment_size]);
+		auto aes_res = aes->Process(dataptr + AlpConstants::METADATA_POINTER_SIZE, total_segment_size, aes_buffer.get(), total_segment_size);
+
+		if (aes_res != total_segment_size) {
+			throw IOException("Encryption failure");
+		}
+
+		// copy the decrypted data to the segment_data ptr
+		memcpy(dataptr + AlpConstants::METADATA_POINTER_SIZE, aes_buffer.get(), total_segment_size);
 
 		handle.Destroy();
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);

@@ -32,8 +32,7 @@ struct StorageManagerOptions {
 //	string encryption_key;
 
 	bool NeedsEncryption() const {
-		return true;
-		//return false;
+		return false;
 		//return !encryption_key.empty();
 	}
 };

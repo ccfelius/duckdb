@@ -512,10 +512,11 @@ idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) {
 	return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
 }
 
+// Only here, from not extended DB, there skip_encryption = false, so encryption is not skipped
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	ReadAndChecksum(block, GetBlockLocation(block.id));
+	ReadAndChecksum(block, GetBlockLocation(block.id), true);
 }
 
 void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) {

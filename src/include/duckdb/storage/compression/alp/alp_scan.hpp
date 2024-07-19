@@ -22,6 +22,8 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
+#define TEST_KEY "0123456789112345"
+
 namespace duckdb {
 
 template <class T>
@@ -63,6 +65,17 @@ public:
 	uint8_t bit_width;
 };
 
+//void SetIV(char *iv){
+//	memcpy((void*)iv, "12345678901", 12);
+//	memset((void *)iv, 0, sizeof(iv) - 4);
+//	// set last 4 bytes of nonce to 0
+//	iv[12] = 0x00;
+//	iv[13] = 0x00;
+//	iv[14] = 0x00;
+//	iv[15] = 0x00;
+//};
+
+
 template <class T>
 struct AlpScanState : public SegmentScanState {
 public:
@@ -74,8 +87,39 @@ public:
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		segment_data = handle.Ptr() + segment.GetBlockOffset();
+		// first 32 bits of the segment_data is the metadata pointer
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
+
+		// calculate buffer block size
+		// the first 32 bits (metadata_ptr) is NOT encrypted
+		const idx_t block_size = Storage::BLOCK_SIZE - AlpConstants::METADATA_POINTER_SIZE;
+
+		// decrypt the ALP block
+		AESStateSSLFactory *encryption_util = new AESStateSSLFactory();
+		auto aes = encryption_util->CreateEncryptionState();
+
+		unsigned char iv[16];
+		memcpy((void*)iv, "12345678901", 12);
+		memset((void *)iv, 0, sizeof(iv) - 4);
+		// set last 4 bytes of nonce to 0
+		iv[12] = 0x00;
+		iv[13] = 0x00;
+		iv[14] = 0x00;
+		iv[15] = 0x00;
+
+		aes->InitializeDecryption(iv, 16, reinterpret_cast<const string *>(TEST_KEY));
+
+		// write buffer for aes
+		auto aes_buffer = duckdb::unique_ptr<data_t[]>(new data_t[block_size]);
+		auto aes_res = aes->Process(segment_data + AlpConstants::METADATA_POINTER_SIZE, block_size, aes_buffer.get(), block_size);
+
+		if (aes_res != block_size) {
+			throw IOException("Encryption failure");
+		}
+
+		// copy the decrypted data to the segment_data ptr
+		memcpy(segment_data + AlpConstants::METADATA_POINTER_SIZE, aes_buffer.get(), block_size);
 	}
 
 	BufferHandle handle;
