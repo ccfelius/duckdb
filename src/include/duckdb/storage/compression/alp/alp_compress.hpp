@@ -180,39 +180,39 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushVector() {
+		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
+		data_ptr += AlpConstants::EXPONENT_SIZE;
 
-		idx_t bytes_used = RequiredSpace();
+		Store<uint8_t>(state.vector_encoding_indices.factor, data_ptr);
+		data_ptr += AlpConstants::FACTOR_SIZE;
 
-		// first we encrypt 13 bytes of AlpConstants
-		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE
-		                       + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+		Store<uint16_t>(state.exceptions_count, data_ptr);
+		data_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
 
-		SerializeMetadata(data_ptr);
-		data_ptr += metadata_bytes;
+		Store<uint64_t>(state.frame_of_reference, data_ptr);
+		data_ptr += AlpConstants::FOR_SIZE;
 
-		// copy encoded values to buffer to encrypt
-		memcpy(data_ptr, state.values_encoded, state.bp_size);
-		data_ptr += state.bp_size;
+		Store<uint8_t>(UnsafeNumericCast<uint8_t>(state.bit_width), data_ptr);
+		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
+		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
 		// We should never go out of bounds in the values_encoded array
 		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= state.bp_size);
 
+		data_ptr += state.bp_size;
+
 		if (state.exceptions_count > 0) {
-			memcpy(data_ptr, state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
+			memcpy((void *)data_ptr, (void *)state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
 			data_ptr += sizeof(EXACT_TYPE) * state.exceptions_count;
-			memcpy(data_ptr, state.exceptions_positions,
+			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
 			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
-		data_bytes_used += bytes_used;
-
-//		auto size_vector = EncryptVector(buffer - bytes_used, bytes_used, data_ptr, bytes_used);
-//		D_ASSERT(size_vector == bytes_used);
-//		auto size_final = FinalizeEncryption(data_ptr);
-//		D_ASSERT(size_final == 0);
-
-		data_ptr += bytes_used;
+		data_bytes_used += state.bp_size +
+		                   (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		                   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
+		                   AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);
@@ -262,11 +262,21 @@ public:
 		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
 
 		// Encrypt the segment (block)
-		auto size_vector = EncryptSegment(dataptr, total_segment_size, dataptr, total_segment_size);
+		// create a buffer to encrypt the segment
+		uint8_t *buffer = new uint8_t[total_segment_size];
+		auto size_vector = EncryptSegment(dataptr, total_segment_size, buffer, total_segment_size);
 		D_ASSERT(size_vector == total_segment_size);
-		auto size_final = FinalizeEncryption(dataptr);
+		auto size_final = FinalizeEncryption(buffer);
 		D_ASSERT(size_final == 0);
 
+		//! Copy the first 4 bytes of the metadata
+		uint32_t verify_encrypted_bytes;
+		memcpy((void *)&verify_encrypted_bytes, buffer, 4);
+
+		memmove(dataptr, buffer, total_segment_size);
+
+		//! Now assert that the memmove of encrypted bytes was correct
+		D_ASSERT(verify_encrypted_bytes == *(uint32_t *)(dataptr));
 
 		handle.Destroy();
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
