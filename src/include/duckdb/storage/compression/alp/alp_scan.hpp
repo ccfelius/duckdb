@@ -72,15 +72,60 @@ struct AlpScanState : public SegmentScanState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
+	void SetIV(){
+		memcpy((void*)iv, "12345678901", 12);
+		memset((void *)iv, 0, sizeof(iv) - 4);
+		iv[12] = 0x00;
+		iv[13] = 0x00;
+		iv[14] = 0x00;
+		iv[15] = 0x00;
+	};
+
+	void InitializeDecryption(){
+		encryption_state = ssl_factory.CreateEncryptionState();
+		SetIV();
+		encryption_state->InitializeDecryption(iv, 16, &key);
+	}
+
+
+	size_t DecryptSegment(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+		return encryption_state->Process(in, in_len, out, out_len);
+	}
+
+	size_t FinalizeDecryption(data_ptr_t out){
+		return encryption_state->FinalizeCTR(out, 0);
+	}
+
 	explicit AlpScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
+		// Decrypt the block before any usage
+		ssl_factory = *(new AESStateSSLFactory());
+		InitializeDecryption();
+
+		// Pin the block to decrypt
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		segment_data = handle.Ptr() + segment.GetBlockOffset();
+		const auto block_size = Storage::BLOCK_SIZE - segment.GetBlockOffset();
+
+		// Get total blocksize
+//		const auto block_size = min(Storage::BLOCK_SIZE,
+
+		// Decrypt the compressed block
+		uint8_t *buffer = new uint8_t[block_size];
+		auto size_vector = DecryptSegment(segment_data, block_size, buffer, block_size);
+		D_ASSERT(size_vector == block_size);
+		FinalizeDecryption(buffer);
+
+		// move buffer to segment data
+		memmove(segment_data, buffer, block_size);
+
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
-		ssl_factory = *(new AESStateSSLFactory());
+//		auto metadata_offset = Load<uint32_t>(buffer);
+//		metadata_ptr = buffer + metadata_offset;
+
 	}
 
 	BufferHandle handle;
@@ -135,15 +180,6 @@ public:
 		total_value_count += vector_size;
 	}
 
-	void SetIV(){
-		memcpy((void*)iv, "12345678901", 12);
-		memset((void *)iv, 0, sizeof(iv) - 4);
-		iv[12] = 0x00;
-		iv[13] = 0x00;
-		iv[14] = 0x00;
-		iv[15] = 0x00;
-	};
-
 	void DeserializeMetadata(data_ptr_t vector_ptr, idx_t vector_size){
 		// Deserialize the decrypted vector data
 		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
@@ -167,26 +203,9 @@ public:
 		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
 	}
 
-	void InitializeDecryption(){
-		encryption_state = ssl_factory.CreateEncryptionState();
-		SetIV();
-		encryption_state->InitializeDecryption(iv, 16, &key);
-	}
-
-
-	size_t DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-		return encryption_state->Process(in, in_len, out, out_len);
-	}
-
-	size_t FinalizeDecryption(data_ptr_t out){
-		return encryption_state->FinalizeCTR(out, 0);
-	}
-
 	template <bool SKIP = false>
 	void LoadVector(T *value_buffer) {
 		vector_state.Reset();
-
-		InitializeDecryption();
 
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
@@ -201,12 +220,7 @@ public:
 		                        AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE +
 		                        AlpConstants::BIT_WIDTH_SIZE;
 
-		// First decrypt the AlpConstants and put this in a buffer
-		uint8_t *metadata_buffer = new uint8_t[metadata_bytes];
-		auto size_metadata = DecryptVector(vector_ptr, metadata_bytes, metadata_buffer, metadata_bytes);
-		D_ASSERT(size_metadata == metadata_bytes);
-
-		DeserializeMetadata(metadata_buffer, vector_size);
+		DeserializeMetadata(vector_ptr, vector_size);
 		vector_ptr += metadata_bytes;
 
 		idx_t bp_size = 0;
@@ -221,23 +235,18 @@ public:
 			vec_bytes_used += ((sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) * vector_state.exceptions_count);
 		}
 
-		// Decrypt the compressed vector + exceptions
-		uint8_t *buffer = new uint8_t[vec_bytes_used];
-		auto size_vector = DecryptVector(vector_ptr, vec_bytes_used, buffer, vec_bytes_used);
-		D_ASSERT(size_vector == vec_bytes_used);
-
 		auto size_final = FinalizeDecryption(vector_ptr);
 		D_ASSERT(size_final == 0);
 
 		if (vector_state.bit_width > 0) {
-			memcpy(vector_state.for_encoded, buffer, bp_size);
-			buffer += bp_size;
+			memcpy(vector_state.for_encoded, vector_ptr, bp_size);
+			vector_ptr += bp_size;
 		}
 
 		if (vector_state.exceptions_count > 0) {
-			memcpy(vector_state.exceptions, buffer, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
-			buffer += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
-			memcpy(vector_state.exceptions_positions, (void *)buffer,
+			memcpy(vector_state.exceptions, vector_ptr, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
+			vector_ptr += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
+			memcpy(vector_state.exceptions_positions, (void *)vector_ptr,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
