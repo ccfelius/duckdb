@@ -137,7 +137,6 @@ public:
 
 	void SetIV(){
 		memcpy((void*)iv, "12345678901", 12);
-		memset((void *)iv, 0, sizeof(iv) - 4);
 		iv[12] = 0x00;
 		iv[13] = 0x00;
 		iv[14] = 0x00;

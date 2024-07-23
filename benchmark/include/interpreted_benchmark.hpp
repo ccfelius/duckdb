@@ -85,6 +85,7 @@ private:
 	bool in_memory = true;
 	bool streaming = false;
 	bool require_reinit = false;
+	bool restart = false;
 };
 
 } // namespace duckdb
