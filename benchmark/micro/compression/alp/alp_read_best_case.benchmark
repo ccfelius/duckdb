@@ -12,5 +12,7 @@ PRAGMA force_compression='alp';
 create table alp_random_doubles as select round(random(), 1)::DOUBLE as data from range(200000000) tbl(i);
 checkpoint;
 
+require_reinit;
+
 run
 select avg(data) from alp_random_doubles;
