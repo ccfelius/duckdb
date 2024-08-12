@@ -137,7 +137,7 @@ public:
 		data_t tag[ParquetCrypto::TAG_BYTES];
 		auto write_size = aes->Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
 		// Write remaining bytes (important for OCB)
-//		trans.write(aes_buffer, write_size);
+		trans.write(aes_buffer, write_size);
 		// Write tag for verification
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
@@ -204,8 +204,7 @@ public:
 
 	uint32_t Finalize(uint8_t *buf) {
 
-		// for OCB, the read buffer offset can be smaller then the size
-		// if remaining bytes need to be encrypted
+		// uncomment after benchmarks
 //		if (read_buffer_offset != read_buffer_size) {
 //			throw InternalException("read buffer offset: %d, read buffer size: %d",
 //			                        read_buffer_offset, read_buffer_size);
@@ -281,7 +280,7 @@ private:
 		data_t read_tag[ParquetCrypto::TAG_BYTES];
 		transport_remaining -= trans.read(read_tag, ParquetCrypto::TAG_BYTES);
 		if (memcmp(computed_tag, read_tag, ParquetCrypto::TAG_BYTES) != 0) {
-			throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
+			throw InvalidInputException("Computed tag differs from read tag, are you using the right key?");
 		}
 	}
 

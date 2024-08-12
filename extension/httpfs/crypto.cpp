@@ -97,7 +97,6 @@ void AESGCMStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, con
 }
 
 size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
-	auto text_len = 0;
 
 	switch (mode) {
 	case ENCRYPT:
@@ -106,16 +105,7 @@ size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out
 			throw InternalException("Encryption Failed at EncryptUpdate");
 		}
 
-		text_len += out_len;
-
-		// For OCB, this is necessary to encrypt remaining data in the buffer
-		if (1 != EVP_EncryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
-			throw InternalException("EncryptFinal failed");
-		}
-
-		text_len += out_len;
-
-		return text_len;
+		return out_len;
 
 	case DECRYPT:
 
@@ -134,9 +124,17 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
 	switch (mode) {
 
 	case ENCRYPT:
+
+		// For OCB, this is necessary to encrypt remaining data in the buffer
+		if (1 != EVP_EncryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
+			throw InternalException("Encryption failed at Finalizing Encryption");
+		}
+
+		text_len += out_len;
+
 		// The computed tag is written at the end of a chunk
 		if (1 != EVP_CIPHER_CTX_ctrl(gcm_context, EVP_CTRL_GCM_GET_TAG, tag_len, tag)) {
-			throw InternalException("Calculating the tag failed");
+			throw InternalException("Encryption failed at calculation of the tag");
 		}
 
 		return text_len;
