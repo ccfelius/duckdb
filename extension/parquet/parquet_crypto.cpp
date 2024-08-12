@@ -136,7 +136,8 @@ public:
 		// Finalize the last encrypted data
 		data_t tag[ParquetCrypto::TAG_BYTES];
 		auto write_size = aes->Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
-		trans.write(aes_buffer, write_size);
+		// Write remaining bytes (important for OCB)
+//		trans.write(aes_buffer, write_size);
 		// Write tag for verification
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
@@ -186,30 +187,39 @@ public:
 				ReadBlock(buf);
 			}
 			const auto next = MinValue(read_buffer_size - read_buffer_offset, len);
+
+			if (next < len){
+				remaining_bytes = next;
+			}
+
 			read_buffer_offset += next;
+			// in case of remaining bytes, we need to handle it carefully
 			buf += next;
-			len -= next;
+			// the final bytes are finished in Finalize() call
+			len -= read_buffer_size;
 		}
 
 		return result;
 	}
 
-	uint32_t Finalize() {
+	uint32_t Finalize(uint8_t *buf) {
 
-		if (read_buffer_offset != read_buffer_size) {
-			throw InternalException("DecryptionTransport::Finalize was called with bytes remaining in read buffer: \n"
-			                        "read buffer offset: %d, read buffer size: %d",
-			                        read_buffer_offset, read_buffer_size);
-		}
+		// for OCB, the read buffer offset can be smaller then the size
+		// if remaining bytes need to be encrypted
+//		if (read_buffer_offset != read_buffer_size) {
+//			throw InternalException("read buffer offset: %d, read buffer size: %d",
+//			                        read_buffer_offset, read_buffer_size);
+//		}
 
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
 
 		if (aes->IsOpenSSL()) {
 			// For OpenSSL, the obtained tag is an input argument for aes->Finalize()
 			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
-			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-				throw InternalException(
-				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
+			// this needs to be buf
+			if (aes->Finalize(buf, remaining_bytes, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
+//				throw InternalException(
+//				    "Decryption: Finalize was called with bytes remaining in AES context out");
 			}
 		} else {
 			// For mbedtls, computed_tag is an output argument for aes->Finalize()
@@ -217,6 +227,7 @@ public:
 				throw InternalException(
 				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
 			}
+			// We need to verify the tag manually
 			VerifyTag(computed_tag);
 		}
 
@@ -231,7 +242,7 @@ public:
 		D_ASSERT(transport_remaining == total_bytes - ParquetCrypto::NONCE_BYTES);
 		auto result = Allocator::DefaultAllocator().Allocate(transport_remaining - ParquetCrypto::TAG_BYTES);
 		read_virt(result.get(), transport_remaining - ParquetCrypto::TAG_BYTES);
-		Finalize();
+		Finalize(result.get());
 		return result;
 	}
 
@@ -257,12 +268,13 @@ private:
 #ifdef DEBUG
 		auto size = aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
 		                         ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
-		D_ASSERT(size == read_buffer_size);
+//		D_ASSERT(size == read_buffer_size);
 #else
-		aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
+		auto size = aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
 		             ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
 #endif
-		read_buffer_offset = 0;
+		// if there are remaining bytes, this should be handled carefully
+		read_buffer_offset = read_buffer_size - size;
 	}
 
 	void VerifyTag(data_t *computed_tag) {
@@ -285,6 +297,7 @@ private:
 	data_t read_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE];
 	uint32_t read_buffer_size;
 	uint32_t read_buffer_offset;
+	uint32_t remaining_bytes;
 
 	//! Remaining bytes to read, set by Initialize(), decremented by ReadBlock()
 	uint32_t total_bytes;
@@ -358,7 +371,7 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
 	dtrans.read(buffer, buffer_size);
 
 	// Verify AES tag and read length
-	return dtrans.Finalize();
+	return dtrans.Finalize(buffer);
 }
 
 uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,

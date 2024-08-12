@@ -7,6 +7,8 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "httplib.hpp"
 
+#define OCB_ENABLED 1
+
 namespace duckdb {
 
 void sha256(const char *in, size_t in_len, hash_bytes &out) {
@@ -32,17 +34,30 @@ void hex256(hash_bytes &in, hash_str &out) {
 }
 
 const EVP_CIPHER *GetCipher(const string &key) {
-	// For now, we only support GCM ciphers
-	switch (key.size()) {
-	case 16:
-		return EVP_aes_128_gcm();
-	case 24:
-		return EVP_aes_192_gcm();
-	case 32:
-		return EVP_aes_256_gcm();
-	default:
-		throw InternalException("Invalid AES key length");
-	}
+
+	if (OCB_ENABLED) {
+		switch (key.size()) {
+		case 16:
+			return EVP_aes_128_ocb();
+		case 24:
+			return EVP_aes_192_ocb();
+		case 32:
+			return EVP_aes_256_ocb();
+		default:
+			throw InternalException("Invalid AES key length");
+		}
+	} else {
+	    switch (key.size()) {
+	    case 16:
+		    return EVP_aes_128_gcm();
+	    case 24:
+		    return EVP_aes_192_gcm();
+	    case 32:
+		    return EVP_aes_256_gcm();
+	    default:
+		    throw InternalException("Invalid AES key length");
+	    }
+    }
 }
 
 AESGCMStateSSL::AESGCMStateSSL() : gcm_context(EVP_CIPHER_CTX_new()) {
@@ -61,7 +76,7 @@ bool AESGCMStateSSL::IsOpenSSL() {
 }
 
 void AESGCMStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
-	// generate random bytes for nonce
+	// generate random bytes for nonce/IV
 	RAND_bytes(data, len);
 }
 
@@ -82,52 +97,58 @@ void AESGCMStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, con
 }
 
 size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+	auto text_len = 0;
 
 	switch (mode) {
 	case ENCRYPT:
 		if (1 != EVP_EncryptUpdate(gcm_context, data_ptr_cast(out), reinterpret_cast<int *>(&out_len),
 		                           const_data_ptr_cast(in), (int)in_len)) {
-			throw InternalException("EncryptUpdate failed");
+			throw InternalException("Encryption Failed at EncryptUpdate");
 		}
-		break;
+
+		text_len += out_len;
+
+		// For OCB, this is necessary to encrypt remaining data in the buffer
+		if (1 != EVP_EncryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
+			throw InternalException("EncryptFinal failed");
+		}
+
+		text_len += out_len;
+
+		return text_len;
 
 	case DECRYPT:
+
 		if (1 != EVP_DecryptUpdate(gcm_context, data_ptr_cast(out), reinterpret_cast<int *>(&out_len),
 		                           const_data_ptr_cast(in), (int)in_len)) {
-
-			throw InternalException("DecryptUpdate failed");
+			throw InternalException("Decryption failed at DecryptUpdate");
 		}
-		break;
-	}
 
-	if (out_len != in_len) {
-		throw InternalException("AES GCM failed, in- and output lengths differ");
+		return out_len;
 	}
-
-	return out_len;
 }
 
 size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
 	auto text_len = out_len;
 
 	switch (mode) {
+
 	case ENCRYPT:
-		if (1 != EVP_EncryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
-			throw InternalException("EncryptFinal failed");
-		}
-		text_len += out_len;
 		// The computed tag is written at the end of a chunk
 		if (1 != EVP_CIPHER_CTX_ctrl(gcm_context, EVP_CTRL_GCM_GET_TAG, tag_len, tag)) {
 			throw InternalException("Calculating the tag failed");
 		}
+
 		return text_len;
+
 	case DECRYPT:
 		// Set expected tag value
 		if (!EVP_CIPHER_CTX_ctrl(gcm_context, EVP_CTRL_GCM_SET_TAG, tag_len, tag)) {
-			throw InternalException("Finalizing tag failed");
+			throw InternalException("Decryption: Finalizing tag failed");
 		}
 		// EVP_DecryptFinal() will return an error code if final block is not correctly formatted.
 		int ret = EVP_DecryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len));
+
 		text_len += out_len;
 
 		if (ret > 0) {
