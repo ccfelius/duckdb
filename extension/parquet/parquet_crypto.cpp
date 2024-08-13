@@ -136,7 +136,7 @@ public:
 			current = current->prev;
 		}
 
-		printf("\nEncrypted intermediate Bytes: %d of %d", written_bytes, ciphertext_length);
+//		printf("\nEncrypted intermediate Bytes: %d of %d", written_bytes, ciphertext_length);
 
 
 		// Finalize the last encrypted data
@@ -146,7 +146,10 @@ public:
 		trans.write(aes_buffer + last_written, size);
 		written_bytes += size;
 		D_ASSERT(written_bytes == ciphertext_length);
-		printf("\nEncrypted total Bytes: %d of %d", written_bytes, ciphertext_length);
+
+		if (written_bytes != ciphertext_length) {
+			throw InternalException("Encrypted bytes is not equal expected ciphertext length: %d", written_bytes, ciphertext_length);
+		}
 		// Write tag for verification
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
@@ -198,7 +201,7 @@ public:
 				ReadBlock(buf);
 			}
 			const auto next = MinValue(read_buffer_size - read_buffer_offset, len);
-			D_ASSERT(next == written_bytes);
+			D_ASSERT(next == last_written);
 
 			if (next < len){
 				remaining_bytes = len - next;
@@ -207,7 +210,6 @@ public:
 
 			read_buffer_offset += next;
 			// in case of remaining bytes, we know it is the last block
-
 			if (!remaining_bytes) {
 				buf += next;
 			}
@@ -232,9 +234,10 @@ public:
 			// For OpenSSL, the obtained tag is an input argument for aes->Finalize()
 			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
 			// this needs to be buf
+			//auto size = aes->Finalize(buf, last_written, computed_tag, ParquetCrypto::TAG_BYTES);
 			auto size = aes->Finalize(buf, written_bytes, computed_tag, ParquetCrypto::TAG_BYTES);
 			written_bytes += size;
-			printf("\nTotal decrypted bytes: [%d]", written_bytes);
+			printf("\nTotal decrypted bytes: [%d]\n\n", written_bytes);
 
 		} else {
 			// For mbedtls, computed_tag is an output argument for aes->Finalize()
@@ -289,13 +292,15 @@ private:
 		             ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
 #endif
 		written_bytes += size;
-		printf("\nIntermediate decrypted bytes: %d", written_bytes);
+		last_written = size;
+		//printf("\nIntermediate decrypted bytes: %d", written_bytes);
 //		if (size < read_buffer_size){
 //			printf("\nsize: %d, read_buffer_size: %d. Difference: %d", size, read_buffer_size, read_buffer_size - size);
 //		}
 
 		if (size > read_buffer_size){
 			printf("\nWARNING: size: %d > read_buffer_size: %d. Difference: %d", size, read_buffer_size, read_buffer_size - size);
+			throw InternalException("size: %d > read_buffer_size: %d. Difference: %d", size, read_buffer_size, read_buffer_size - size);
 		}
 
 		remaining_bytes = read_buffer_size - size;
@@ -327,6 +332,7 @@ private:
 	uint32_t read_buffer_offset;
 	uint32_t remaining_bytes;
 	uint32_t written_bytes = 0;
+	uint32_t last_written = 0;
 
 	//! Remaining bytes to read, set by Initialize(), decremented by ReadBlock()
 	uint32_t total_bytes;
