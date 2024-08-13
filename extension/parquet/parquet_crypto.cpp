@@ -129,15 +129,21 @@ public:
 				auto write_size =
 				    aes->Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
 				trans.write(aes_buffer, write_size);
+				written_bytes += write_size;
 			}
 			current = current->prev;
 		}
 
+		printf("\nEncrypted intermediate Bytes: %d", written_bytes);
+
+
 		// Finalize the last encrypted data
 		data_t tag[ParquetCrypto::TAG_BYTES];
-		auto write_size = aes->Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
+		auto size = aes->Finalize(aes_buffer, written_bytes, tag, ParquetCrypto::TAG_BYTES);
 		// Write remaining bytes (important for OCB)
-		trans.write(aes_buffer, write_size);
+		trans.write(aes_buffer + written_bytes, size);
+		written_bytes += size;
+		printf("\nEncrypted total Bytes: %d", written_bytes);
 		// Write tag for verification
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
@@ -165,6 +171,7 @@ private:
 
 	//! Arena Allocator to fully materialize in memory before encrypting
 	ArenaAllocator allocator;
+	uint32_t written_bytes = 0;
 };
 
 //! Decryption wrapper for a transport protocol
@@ -187,14 +194,19 @@ public:
 				ReadBlock(buf);
 			}
 			const auto next = MinValue(read_buffer_size - read_buffer_offset, len);
+			D_ASSERT(next == written_bytes);
 
 			if (next < len){
-				remaining_bytes = next;
+				remaining_bytes = len - next;
+				printf("\nremaining bytes, next, len: %d, %d, %d\n", remaining_bytes, next, len);
 			}
 
 			read_buffer_offset += next;
-			// in case of remaining bytes, we need to handle it carefully
-			buf += next;
+			// in case of remaining bytes, we know it is the last block
+
+			if (!remaining_bytes) {
+				buf += next;
+			}
 			// the final bytes are finished in Finalize() call
 			len -= read_buffer_size;
 		}
@@ -216,10 +228,10 @@ public:
 			// For OpenSSL, the obtained tag is an input argument for aes->Finalize()
 			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
 			// this needs to be buf
-			if (aes->Finalize(buf, remaining_bytes, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-//				throw InternalException(
-//				    "Decryption: Finalize was called with bytes remaining in AES context out");
-			}
+			auto size = aes->Finalize(buf, written_bytes, computed_tag, ParquetCrypto::TAG_BYTES);
+			written_bytes += size;
+			printf("\nTotal decrypted bytes: [%d]", written_bytes);
+
 		} else {
 			// For mbedtls, computed_tag is an output argument for aes->Finalize()
 			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
@@ -272,7 +284,20 @@ private:
 		auto size = aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
 		             ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
 #endif
-		// if there are remaining bytes, this should be handled carefully
+		written_bytes += size;
+		printf("\nIntermediate decrypted bytes: %d", written_bytes);
+//		if (size < read_buffer_size){
+//			printf("\nsize: %d, read_buffer_size: %d. Difference: %d", size, read_buffer_size, read_buffer_size - size);
+//		}
+
+		if (size > read_buffer_size){
+			printf("\nWARNING: size: %d > read_buffer_size: %d. Difference: %d", size, read_buffer_size, read_buffer_size - size);
+		}
+
+		remaining_bytes = read_buffer_size - size;
+
+		if (remaining_bytes > 0) {printf("\nremaining bytes: %d", remaining_bytes);}
+		// handle remaining bytes
 		read_buffer_offset = read_buffer_size - size;
 	}
 
@@ -297,6 +322,7 @@ private:
 	uint32_t read_buffer_size;
 	uint32_t read_buffer_offset;
 	uint32_t remaining_bytes;
+	uint32_t written_bytes = 0;
 
 	//! Remaining bytes to read, set by Initialize(), decremented by ReadBlock()
 	uint32_t total_bytes;

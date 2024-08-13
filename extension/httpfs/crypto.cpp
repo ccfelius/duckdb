@@ -119,7 +119,7 @@ size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out
 }
 
 size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
-	auto text_len = out_len;
+	idx_t text_len = 0;
 
 	switch (mode) {
 
@@ -153,6 +153,7 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
 			// success
 			return text_len;
 		}
+
 		throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
 	}
 }
