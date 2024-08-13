@@ -97,15 +97,18 @@ void AESGCMStateSSL::InitializeDecryption(const_data_ptr_t iv, idx_t iv_len, con
 }
 
 size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+	idx_t text_len = 0;
 
 	switch (mode) {
 	case ENCRYPT:
+
 		if (1 != EVP_EncryptUpdate(gcm_context, data_ptr_cast(out), reinterpret_cast<int *>(&out_len),
 		                           const_data_ptr_cast(in), (int)in_len)) {
 			throw InternalException("Encryption Failed at EncryptUpdate");
 		}
 
-		return out_len;
+		text_len += out_len;
+		break;
 
 	case DECRYPT:
 
@@ -114,8 +117,10 @@ size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out
 			throw InternalException("Decryption failed at DecryptUpdate");
 		}
 
-		return out_len;
+		text_len += out_len;
 	}
+
+	return text_len;
 }
 
 size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {

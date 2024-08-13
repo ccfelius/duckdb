@@ -203,17 +203,20 @@ public:
 			const auto next = MinValue(read_buffer_size - read_buffer_offset, len);
 			D_ASSERT(next == last_written);
 
-			if (next < len){
+			if (next < len) {
 				remaining_bytes = len - next;
 				printf("\nremaining bytes, next, len: %d, %d, %d\n", remaining_bytes, next, len);
 			}
 
-			read_buffer_offset += next;
-			// in case of remaining bytes, we know it is the last block
-			if (!remaining_bytes) {
-				buf += next;
+//			read_buffer_offset += next;
+
+			if (remaining_bytes){
+				// in case of remaining bytes, we know it is the last block
+				return result;
 			}
-			// the final bytes are finished in Finalize() call
+
+			read_buffer_offset += next;
+			buf += next;
 			len -= read_buffer_size;
 		}
 
@@ -235,6 +238,7 @@ public:
 			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
 			// this needs to be buf
 			//auto size = aes->Finalize(buf, last_written, computed_tag, ParquetCrypto::TAG_BYTES);
+			// here all written bytes, because buffer contains all written data
 			auto size = aes->Finalize(buf, written_bytes, computed_tag, ParquetCrypto::TAG_BYTES);
 			written_bytes += size;
 			printf("\nTotal decrypted bytes: [%d]\n\n", written_bytes);
@@ -302,7 +306,8 @@ private:
 			printf("\nWARNING: size: %d > read_buffer_size: %d. Difference: %d", size, read_buffer_size, read_buffer_size - size);
 			throw InternalException("size: %d > read_buffer_size: %d. Difference: %d", size, read_buffer_size, read_buffer_size - size);
 		}
-
+		
+		printf("\nread buffer size, size: %d, %d", read_buffer_size, size);
 		remaining_bytes = read_buffer_size - size;
 
 		if (remaining_bytes > 0) {printf("\nremaining bytes: %d", remaining_bytes);}
