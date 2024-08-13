@@ -17,12 +17,19 @@ PRAGMA add_parquet_key('key128', '0123456789112345')
 foreach key_len 128
 
 statement ok
-COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+create table random_numbers as select * from range(1000);
 
-query I
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
+statement ok
+COPY (SELECT * from random_numbers) to '__TEST_DIR__/encrypted${key_len}_openssl.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+
+query I sort r1
+select * from read_parquet('__TEST_DIR__/encrypted${key_len}_openssl.parquet', encryption_config={footer_key: 'key${key_len}'})
 ----
-42
+
+query I sort r1
+select * from random_numbers;
+----
+
 
 endloop
 
