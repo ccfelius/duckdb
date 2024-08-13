@@ -1,0 +1,45 @@
+# name: test/sql/copy/parquet/parquet_encrypted_tpch_httpfs_small.test_slow
+# description: Test Parquet encryption with OpenSSL for TPC-H
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1)
+
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/tpch_encrypted' (FORMAT 'parquet', ENCRYPTION_CONFIG {footer_key: 'key128'})
+
+load :memory:
+
+# re-add key upon loading the DB again
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/tpch_encrypted'
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
