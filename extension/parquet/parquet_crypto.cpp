@@ -119,6 +119,7 @@ public:
 		// Write nonce at beginning of encrypted chunk
 		trans.write(nonce, ParquetCrypto::NONCE_BYTES);
 
+		// the aes_buffer is continuously reused within a block
 		data_t aes_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE];
 		auto current = allocator.GetTail();
 
@@ -130,20 +131,22 @@ public:
 				    aes->Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
 				trans.write(aes_buffer, write_size);
 				written_bytes += write_size;
+				last_written = write_size;
 			}
 			current = current->prev;
 		}
 
-		printf("\nEncrypted intermediate Bytes: %d", written_bytes);
+		printf("\nEncrypted intermediate Bytes: %d of %d", written_bytes, ciphertext_length);
 
 
 		// Finalize the last encrypted data
 		data_t tag[ParquetCrypto::TAG_BYTES];
-		auto size = aes->Finalize(aes_buffer, written_bytes, tag, ParquetCrypto::TAG_BYTES);
+		auto size = aes->Finalize(aes_buffer, last_written, tag, ParquetCrypto::TAG_BYTES);
 		// Write remaining bytes (important for OCB)
-		trans.write(aes_buffer + written_bytes, size);
+		trans.write(aes_buffer + last_written, size);
 		written_bytes += size;
-		printf("\nEncrypted total Bytes: %d", written_bytes);
+		D_ASSERT(written_bytes == ciphertext_length);
+		printf("\nEncrypted total Bytes: %d of %d", written_bytes, ciphertext_length);
 		// Write tag for verification
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
 
@@ -172,6 +175,7 @@ private:
 	//! Arena Allocator to fully materialize in memory before encrypting
 	ArenaAllocator allocator;
 	uint32_t written_bytes = 0;
+	uint32_t last_written = 0;
 };
 
 //! Decryption wrapper for a transport protocol
