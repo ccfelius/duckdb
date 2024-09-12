@@ -78,6 +78,7 @@ public:
 		// ScanStates never exceed the boundaries of a Segment,
 		// but are not guaranteed to start at the beginning of the Block
 		segment_data = handle.Ptr() + segment.GetBlockOffset();
+		// the first value to load is the metadata pointers offset's
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
 		ssl_factory = *(new AESStateSSLFactory());
@@ -87,6 +88,8 @@ public:
 	data_ptr_t metadata_ptr;
 	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
+
+	// initialize decryption
 	AESStateSSLFactory ssl_factory;
 	shared_ptr<EncryptionState> encryption_state;
 
@@ -137,106 +140,91 @@ public:
 
 	void SetIV(){
 		memcpy((void*)iv, "12345678901", 12);
+		// put here vector nr?
 		iv[12] = 0x00;
 		iv[13] = 0x00;
 		iv[14] = 0x00;
 		iv[15] = 0x00;
 	};
 
-	void DeserializeMetadata(data_ptr_t vector_ptr, idx_t vector_size){
-		// Deserialize the decrypted vector data
-		vector_state.v_exponent = Load<uint8_t>(vector_ptr);
-		vector_ptr += AlpConstants::EXPONENT_SIZE;
-
-		vector_state.v_factor = Load<uint8_t>(vector_ptr);
-		vector_ptr += AlpConstants::FACTOR_SIZE;
-
-		vector_state.exceptions_count = Load<uint16_t>(vector_ptr);
-		vector_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
-
-		vector_state.frame_of_reference = Load<uint64_t>(vector_ptr);
-		vector_ptr += AlpConstants::FOR_SIZE;
-
-		vector_state.bit_width = Load<uint8_t>(vector_ptr);
-		vector_ptr += AlpConstants::BIT_WIDTH_SIZE;
-
-		D_ASSERT(vector_state.exceptions_count <= vector_size);
-		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);
-		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
-		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
-	}
-
 	void InitializeDecryption(){
 		encryption_state = ssl_factory.CreateEncryptionState();
-		SetIV();
 		encryption_state->InitializeDecryption(iv, 16, &key);
 	}
-
 
 	size_t DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 		return encryption_state->Process(in, in_len, out, out_len);
 	}
 
-	size_t FinalizeDecryption(data_ptr_t out){
-		return encryption_state->FinalizeCTR(out, 0);
+	uint64_t GetVectorSizeInBytes(uint32_t data_byte_offset, data_ptr_t vector_ptr, bool is_last_vector = false) {
+
+		if (is_last_vector) {
+			return metadata_ptr - vector_ptr;
+		}
+
+		auto next_offset = Load<uint32_t>(metadata_ptr - AlpConstants::METADATA_POINTER_SIZE);
+		auto result = next_offset - data_byte_offset;
+		return result;
 	}
 
 	template <bool SKIP = false>
 	void LoadVector(T *value_buffer) {
 		vector_state.Reset();
 
+		// we will typically need to reset this though
+		SetIV();
 		InitializeDecryption();
 
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
-		D_ASSERT(data_byte_offset < Storage::BLOCK_SIZE);
+		D_ASSERT(data_byte_offset < segment.GetBlockManager().GetBlockSize());
+		auto values_left = count - total_value_count;
 
-		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, (count - total_value_count));
+		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, values_left);
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
-		// Number of bytes used by the storing AlpConstants
-		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
-		                        AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE +
-		                        AlpConstants::BIT_WIDTH_SIZE;
+		// Calculate the size of the vector in bytes
+		auto vector_size_in_bytes = GetVectorSizeInBytes(data_byte_offset, vector_ptr, values_left <= AlpConstants::ALP_VECTOR_SIZE);
 
-		// First decrypt the AlpConstants and put this in a buffer
-		uint8_t *metadata_buffer = new uint8_t[metadata_bytes];
-		auto size_metadata = DecryptVector(vector_ptr, metadata_bytes, metadata_buffer, metadata_bytes);
-		D_ASSERT(size_metadata == metadata_bytes);
+		// Create a buffer to store the data
+		uint8_t *plaintext_buffer = new uint8_t[vector_size_in_bytes];
 
-		DeserializeMetadata(metadata_buffer, vector_size);
-		vector_ptr += metadata_bytes;
+		// Decrypt vector
+		auto size = DecryptVector(vector_ptr, vector_size_in_bytes, plaintext_buffer, vector_size_in_bytes);
+		D_ASSERT(vector_size_in_bytes == size);
 
-		idx_t bp_size = 0;
+		// Deserialize the decrypted vector data
+		vector_state.v_exponent = Load<uint8_t>(plaintext_buffer);
+		plaintext_buffer += AlpConstants::EXPONENT_SIZE;
 
-		if (vector_state.bit_width > 0) {
-			bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
-		}
+		vector_state.v_factor = Load<uint8_t>(plaintext_buffer);
+		plaintext_buffer += AlpConstants::FACTOR_SIZE;
 
-		idx_t vec_bytes_used = bp_size;
+		vector_state.exceptions_count = Load<uint16_t>(plaintext_buffer);
+		plaintext_buffer += AlpConstants::EXCEPTIONS_COUNT_SIZE;
 
-		if (vector_state.exceptions_count > 0) {
-			vec_bytes_used += ((sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE) * vector_state.exceptions_count);
-		}
+		vector_state.frame_of_reference = Load<uint64_t>(plaintext_buffer);
+		plaintext_buffer += AlpConstants::FOR_SIZE;
 
-		// Decrypt the compressed vector + exceptions
-		uint8_t *buffer = new uint8_t[vec_bytes_used];
-		auto size_vector = DecryptVector(vector_ptr, vec_bytes_used, buffer, vec_bytes_used);
-		D_ASSERT(size_vector == vec_bytes_used);
+		vector_state.bit_width = Load<uint8_t>(plaintext_buffer);
+		plaintext_buffer += AlpConstants::BIT_WIDTH_SIZE;
 
-		auto size_final = FinalizeDecryption(vector_ptr);
-		D_ASSERT(size_final == 0);
+		D_ASSERT(vector_state.exceptions_count <= vector_size);
+		D_ASSERT(vector_state.v_exponent <= AlpTypedConstants<T>::MAX_EXPONENT);
+		D_ASSERT(vector_state.v_factor <= vector_state.v_exponent);
+		D_ASSERT(vector_state.bit_width <= sizeof(uint64_t) * 8);
 
 		if (vector_state.bit_width > 0) {
-			memcpy(vector_state.for_encoded, buffer, bp_size);
-			buffer += bp_size;
+			auto bp_size = BitpackingPrimitives::GetRequiredSize(vector_size, vector_state.bit_width);
+			memcpy(vector_state.for_encoded, (void *)plaintext_buffer, bp_size);
+			plaintext_buffer += bp_size;
 		}
 
 		if (vector_state.exceptions_count > 0) {
-			memcpy(vector_state.exceptions, buffer, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
-			buffer += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
-			memcpy(vector_state.exceptions_positions, (void *)buffer,
+			memcpy(vector_state.exceptions, (void *)plaintext_buffer, sizeof(EXACT_TYPE) * vector_state.exceptions_count);
+			plaintext_buffer += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
+			memcpy(vector_state.exceptions_positions, (void *)plaintext_buffer,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
