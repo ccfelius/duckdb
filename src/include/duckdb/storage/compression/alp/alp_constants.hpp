@@ -15,6 +15,7 @@ namespace duckdb {
 
 class AlpConstants {
 public:
+	//static constexpr uint32_t ALP_VECTOR_SIZE = 1024;
 	static constexpr uint32_t ALP_VECTOR_SIZE = 1024;
 	static constexpr uint32_t RG_SAMPLES = 8;
 	static constexpr uint16_t SAMPLES_PER_VECTOR = 32;
