@@ -13,4 +13,4 @@ create table alp_random_doubles as select round(random(), 1)::DOUBLE as data fro
 checkpoint;
 
 run
-select * from alp_random_doubles where data = 0.335;
+select * from alp_random_doubles where data > 0.323 and data < 0.355;

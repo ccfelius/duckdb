@@ -1,0 +1,16 @@
+# name: benchmark/micro/compression/alp/alp_range_join.benchmark
+# description: Range join between Doubles in ALP
+# group: [alp]
+
+name Alp Range Join
+group alp
+storage persistent
+
+load
+DROP TABLE IF EXISTS alp_random_doubles;
+PRAGMA force_compression='alp';
+create table alp_random_doubles as select round(random(), 1)::DOUBLE as data from range(100000) tbl(i);
+checkpoint;
+
+run
+SELECT COUNT(*) FROM alp_random_doubles a, alp_random_doubles b WHERE a.data > b.data ORDER BY 1;
