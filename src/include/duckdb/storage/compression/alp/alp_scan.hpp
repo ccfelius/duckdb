@@ -188,6 +188,9 @@ public:
 		auto vector_size_in_bytes = GetVectorSizeInBytes(data_byte_offset, vector_ptr, values_left <= AlpConstants::ALP_VECTOR_SIZE);
 
 		// Create a buffer to store the data
+		// size bijhouden, geef memory terug, of allocate 256kb
+		// check datachunk alloc van duckdb
+		// start met 16kb of 256kb
 		uint8_t *plaintext_buffer = new uint8_t[vector_size_in_bytes];
 
 		// Decrypt vector
