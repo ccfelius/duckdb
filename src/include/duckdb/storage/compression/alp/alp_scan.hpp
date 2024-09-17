@@ -95,9 +95,7 @@ public:
 
 	AlpVectorState<T> vector_state;
 
-	// Create a buffer with maximum possible length of an ALP vector
-	uint8_t decryption_buffer[Storage::BLOCK_SIZE];
-	// Maintain a pointer to the start of the decryption buffer
+	uint8_t decryption_buffer[(((sizeof(T) + 10) * AlpConstants::ALP_VECTOR_SIZE) + 14) * 2];
 	uint8_t* plaintext_buffer = decryption_buffer;
 
 	// predefine nonce and key
@@ -140,6 +138,10 @@ public:
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, count - total_value_count);
 		total_value_count += vector_size;
+	}
+
+	void ResetBuffer() {
+		plaintext_buffer = decryption_buffer;
 	}
 
 	void SetIV(){
@@ -191,12 +193,6 @@ public:
 		// Calculate the size of the vector in bytes
 		auto vector_size_in_bytes = GetVectorSizeInBytes(data_byte_offset, vector_ptr, values_left <= AlpConstants::ALP_VECTOR_SIZE);
 
-		// Create a buffer to store the data
-		// size bijhouden, geef memory terug, of allocate 256kb
-		// check datachunk alloc van duckdb
-		// start met 16kb of 256kb
-//		uint8_t *plaintext_buffer = new uint8_t[vector_size_in_bytes];
-
 		// Decrypt vector
 		auto size = DecryptVector(vector_ptr, vector_size_in_bytes, plaintext_buffer, vector_size_in_bytes);
 		D_ASSERT(vector_size_in_bytes == size);
@@ -233,9 +229,11 @@ public:
 			plaintext_buffer += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
 			memcpy(vector_state.exceptions_positions, (void *)plaintext_buffer,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
+//			plaintext_buffer += AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count;
 		}
 
-		plaintext_buffer -= vector_size_in_bytes;
+		// Reset buffer
+		plaintext_buffer = decryption_buffer;
 
 		// Decode all the vector values to the specified 'value_buffer'
 		vector_state.template LoadValues<SKIP>(value_buffer, vector_size);
