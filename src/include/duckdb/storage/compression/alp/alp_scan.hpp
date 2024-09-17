@@ -235,7 +235,7 @@ public:
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
 
-//		plaintext_buffer -= vector_size_in_bytes;
+		plaintext_buffer -= vector_size_in_bytes;
 
 		// Decode all the vector values to the specified 'value_buffer'
 		vector_state.template LoadValues<SKIP>(value_buffer, vector_size);
