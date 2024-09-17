@@ -95,6 +95,11 @@ public:
 
 	AlpVectorState<T> vector_state;
 
+	// Create a buffer with maximum possible length of an ALP vector
+	uint8_t decryption_buffer[Storage::BLOCK_SIZE];
+	// Maintain a pointer to the start of the decryption buffer
+	uint8_t* plaintext_buffer = decryption_buffer;
+
 	// predefine nonce and key
 	unsigned char iv[16];
 	const string key = TEST_KEY;
@@ -126,7 +131,6 @@ public:
 			}
 		}
 		vector_state.template Scan<SKIP>((uint8_t *)values, vector_size);
-
 		total_value_count += vector_size;
 	}
 
@@ -191,7 +195,7 @@ public:
 		// size bijhouden, geef memory terug, of allocate 256kb
 		// check datachunk alloc van duckdb
 		// start met 16kb of 256kb
-		uint8_t *plaintext_buffer = new uint8_t[vector_size_in_bytes];
+//		uint8_t *plaintext_buffer = new uint8_t[vector_size_in_bytes];
 
 		// Decrypt vector
 		auto size = DecryptVector(vector_ptr, vector_size_in_bytes, plaintext_buffer, vector_size_in_bytes);
@@ -230,6 +234,8 @@ public:
 			memcpy(vector_state.exceptions_positions, (void *)plaintext_buffer,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
 		}
+
+//		plaintext_buffer -= vector_size_in_bytes;
 
 		// Decode all the vector values to the specified 'value_buffer'
 		vector_state.template LoadValues<SKIP>(value_buffer, vector_size);
