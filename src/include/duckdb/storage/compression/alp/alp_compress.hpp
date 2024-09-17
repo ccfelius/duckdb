@@ -72,7 +72,6 @@ public:
 public:
 	void SetIV(){
 		memcpy((void*)iv, "12345678901", 12);
-		memset((void *)iv, 0, sizeof(iv) - 4);
 		iv[12] = 0x00;
 		iv[13] = 0x00;
 		iv[14] = 0x00;
@@ -179,40 +178,39 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushVector() {
+		Store<uint8_t>(state.vector_encoding_indices.exponent, data_ptr);
+		data_ptr += AlpConstants::EXPONENT_SIZE;
 
-		idx_t bytes_used = RequiredSpace();
+		Store<uint8_t>(state.vector_encoding_indices.factor, data_ptr);
+		data_ptr += AlpConstants::FACTOR_SIZE;
 
-		// first we encrypt 13 bytes of AlpConstants
-		idx_t metadata_bytes = AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE + AlpConstants::EXCEPTIONS_COUNT_SIZE
-		                       + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
+		Store<uint16_t>(state.exceptions_count, data_ptr);
+		data_ptr += AlpConstants::EXCEPTIONS_COUNT_SIZE;
 
-		// create a buffer for encryption
-		// TODO: this buffer is unnecessary, we can copy directly to the data_ptr
-		uint8_t *buffer = new uint8_t[bytes_used];
-		SerializeMetadata(buffer);
-		buffer += metadata_bytes;
+		Store<uint64_t>(state.frame_of_reference, data_ptr);
+		data_ptr += AlpConstants::FOR_SIZE;
 
-		// copy encoded values to buffer to encrypt
-		memcpy(buffer, state.values_encoded, state.bp_size);
-		buffer += state.bp_size;
+		Store<uint8_t>(UnsafeNumericCast<uint8_t>(state.bit_width), data_ptr);
+		data_ptr += AlpConstants::BIT_WIDTH_SIZE;
 
+		memcpy((void *)data_ptr, (void *)state.values_encoded, state.bp_size);
 		// We should never go out of bounds in the values_encoded array
 		D_ASSERT((AlpConstants::ALP_VECTOR_SIZE * 8) >= state.bp_size);
 
+		data_ptr += state.bp_size;
+
 		if (state.exceptions_count > 0) {
-			memcpy(buffer, state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
-			buffer += sizeof(EXACT_TYPE) * state.exceptions_count;
-			memcpy(buffer, state.exceptions_positions,
+			memcpy((void *)data_ptr, (void *)state.exceptions, sizeof(EXACT_TYPE) * state.exceptions_count);
+			data_ptr += sizeof(EXACT_TYPE) * state.exceptions_count;
+			memcpy((void *)data_ptr, (void *)state.exceptions_positions,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count);
-			buffer += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
+			data_ptr += AlpConstants::EXCEPTION_POSITION_SIZE * state.exceptions_count;
 		}
 
-		data_bytes_used += bytes_used;
-
-		// auto size_vector = EncryptVector(buffer - bytes_used, bytes_used, data_ptr, bytes_used);
-		//D_ASSERT(size_vector == bytes_used);
-
-		data_ptr += bytes_used;
+		data_bytes_used += state.bp_size +
+		                   (state.exceptions_count * (sizeof(EXACT_TYPE) + AlpConstants::EXCEPTION_POSITION_SIZE)) +
+		                   AlpConstants::EXPONENT_SIZE + AlpConstants::FACTOR_SIZE +
+		                   AlpConstants::EXCEPTIONS_COUNT_SIZE + AlpConstants::FOR_SIZE + AlpConstants::BIT_WIDTH_SIZE;
 
 		// Write pointer to the vector data (metadata)
 		metadata_ptr -= sizeof(uint32_t);
@@ -260,25 +258,17 @@ public:
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
 		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
-		dataptr += sizeof(uint32_t );
 
 		// Encrypt the segment (block)
 		const auto ciphertext_size = metadata_offset - sizeof(uint32_t);
 		// create a buffer to encrypt the segment
+		// encrypt to a buffer
 		uint8_t *buffer = new uint8_t[ciphertext_size];
-		auto size_vector = EncryptSegment(dataptr, ciphertext_size, buffer, ciphertext_size);
+		auto size_vector = EncryptSegment(dataptr + sizeof(uint32_t), ciphertext_size, buffer, ciphertext_size);
+
+		memmove(dataptr + sizeof(uint32_t ), buffer, ciphertext_size);
 		// auto size_vector = EncryptSegment(dataptr + sizeof(uint32_t), ciphertext_size, dataptr + sizeof(uint32_t), ciphertext_size);
 		D_ASSERT(size_vector == ciphertext_size);
-
-		//! Copy the first 4 bytes of the metadata
-//		uint32_t verify_encrypted_bytes;
-//		memcpy((void *)&verify_encrypted_bytes, buffer, 4);
-		memmove(dataptr, buffer, ciphertext_size);
-
-		//! Now assert that the memmove of encrypted bytes was correct
-//		D_ASSERT(verify_encrypted_bytes == *(uint32_t *)(dataptr + sizeof(uint32_t)));
-
-		dataptr -= sizeof(uint32_t);
 
 		handle.Destroy();
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);

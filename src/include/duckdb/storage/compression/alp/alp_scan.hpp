@@ -72,6 +72,21 @@ struct AlpScanState : public SegmentScanState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
+	void SetIV(){
+		memcpy((void*)iv, "12345678901", 12);
+		// put here vector nr?
+		iv[12] = 0x00;
+		iv[13] = 0x00;
+		iv[14] = 0x00;
+		iv[15] = 0x00;
+	};
+
+	void InitializeDecryption(){
+		encryption_state = ssl_factory.CreateEncryptionState();
+		SetIV();
+		encryption_state->InitializeDecryption(iv, 16, &key);
+	}
+
 	explicit AlpScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
 
 		// Decrypt the block before any usage
@@ -86,7 +101,6 @@ public:
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
 
-		SetIV();
 		InitializeDecryption();
 
 	}
@@ -166,20 +180,6 @@ public:
 
 		// set bool after_skip = true
 		last_skip = true;
-	}
-
-	void SetIV(){
-		memcpy((void*)iv, "12345678901", 12);
-		// put here vector nr?
-		iv[12] = 0x00;
-		iv[13] = 0x00;
-		iv[14] = 0x00;
-		iv[15] = 0x00;
-	};
-
-	void InitializeDecryption(){
-		encryption_state = ssl_factory.CreateEncryptionState();
-		encryption_state->InitializeDecryption(iv, 16, &key);
 	}
 
 	size_t DecryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
