@@ -70,6 +70,25 @@ public:
 	alp::AlpCompressionState<T, false> state;
 
 public:
+	void SetIV(){
+		memcpy((void*)iv, "12345678901", 12);
+		memset((void *)iv, 0, sizeof(iv) - 4);
+		iv[12] = 0x00;
+		iv[13] = 0x00;
+		iv[14] = 0x00;
+		iv[15] = 0x00;
+	};
+
+	void InitializeEncryption(){
+		state.encryption_state = state.ssl_factory.CreateEncryptionState();
+		SetIV();
+		state.encryption_state->InitializeEncryption(iv, 16, &key);
+	}
+
+	size_t EncryptSegment(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
+		return state.encryption_state->Process(in, in_len, out, out_len);
+	}
+
 	// Returns the space currently used in the segment (in bytes)
 	idx_t UsedSpace() const {
 		return AlpConstants::METADATA_POINTER_SIZE + data_bytes_used;
@@ -137,26 +156,8 @@ public:
 		FlushVector();
 	}
 
-	void SetIV(){
-		memcpy((void*)iv, "12345678901", 12);
-		iv[12] = 0x00;
-		iv[13] = 0x00;
-		iv[14] = 0x00;
-		iv[15] = 0x00;
-	};
-
-	void InitializeEncryption(){
-		state.encryption_state = state.ssl_factory.CreateEncryptionState();
-		SetIV();
-		state.encryption_state->InitializeEncryption(iv, 16, &key);
-	}
-
 	size_t EncryptVector(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len) {
 		return state.encryption_state->Process(in, in_len, out, out_len);
-	}
-
-	size_t FinalizeEncryption(data_ptr_t out){
-		return state.encryption_state->FinalizeCTR(out, 0);
 	}
 
 	void SerializeMetadata(data_ptr_t data_ptr) {
@@ -178,8 +179,6 @@ public:
 
 	// Stores the vector and its metadata
 	void FlushVector() {
-
-		InitializeEncryption();
 
 		idx_t bytes_used = RequiredSpace();
 
@@ -210,10 +209,8 @@ public:
 
 		data_bytes_used += bytes_used;
 
-		auto size_vector = EncryptVector(buffer - bytes_used, bytes_used, data_ptr, bytes_used);
-		D_ASSERT(size_vector == bytes_used);
-		auto size_final = FinalizeEncryption(data_ptr);
-		D_ASSERT(size_final == 0);
+		// auto size_vector = EncryptVector(buffer - bytes_used, bytes_used, data_ptr, bytes_used);
+		//D_ASSERT(size_vector == bytes_used);
 
 		data_ptr += bytes_used;
 
@@ -231,6 +228,8 @@ public:
 	void FlushSegment() {
 		auto &checkpoint_state = checkpointer.GetCheckpointState();
 		auto dataptr = handle.Ptr();
+
+		InitializeEncryption();
 
 		idx_t metadata_offset = AlignValue(UsedSpace());
 
@@ -261,6 +260,25 @@ public:
 
 		// Store the offset to the end of metadata (to be used as a backwards pointer in decoding)
 		Store<uint32_t>(NumericCast<uint32_t>(total_segment_size), dataptr);
+		dataptr += sizeof(uint32_t );
+
+		// Encrypt the segment (block)
+		const auto ciphertext_size = metadata_offset - sizeof(uint32_t);
+		// create a buffer to encrypt the segment
+		uint8_t *buffer = new uint8_t[ciphertext_size];
+		auto size_vector = EncryptSegment(dataptr, ciphertext_size, buffer, ciphertext_size);
+		// auto size_vector = EncryptSegment(dataptr + sizeof(uint32_t), ciphertext_size, dataptr + sizeof(uint32_t), ciphertext_size);
+		D_ASSERT(size_vector == ciphertext_size);
+
+		//! Copy the first 4 bytes of the metadata
+//		uint32_t verify_encrypted_bytes;
+//		memcpy((void *)&verify_encrypted_bytes, buffer, 4);
+		memmove(dataptr, buffer, ciphertext_size);
+
+		//! Now assert that the memmove of encrypted bytes was correct
+//		D_ASSERT(verify_encrypted_bytes == *(uint32_t *)(dataptr + sizeof(uint32_t)));
+
+		dataptr -= sizeof(uint32_t);
 
 		handle.Destroy();
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);

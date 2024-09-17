@@ -73,6 +73,10 @@ public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 	explicit AlpScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
+
+		// Decrypt the block before any usage
+		ssl_factory = *(new AESStateSSLFactory());
+
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 		// ScanStates never exceed the boundaries of a Segment,
@@ -81,13 +85,19 @@ public:
 		// the first value to load is the metadata pointers offset's
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
-		ssl_factory = *(new AESStateSSLFactory());
+
+		SetIV();
+		InitializeDecryption();
+
 	}
 
 	BufferHandle handle;
 	data_ptr_t metadata_ptr;
 	data_ptr_t segment_data;
 	idx_t total_value_count = 0;
+	uint8_t skip_bytes = 0;
+	uint32_t iv_ctr = 0;
+	bool last_skip = false;
 
 	// initialize decryption
 	AESStateSSLFactory ssl_factory;
@@ -95,6 +105,7 @@ public:
 
 	AlpVectorState<T> vector_state;
 
+	// maybe even move up, this buffer can be used for all vectors within a single row-group
 	uint8_t decryption_buffer[(((sizeof(T) + 10) * AlpConstants::ALP_VECTOR_SIZE) + 14) * 2];
 	uint8_t* plaintext_buffer = decryption_buffer;
 
@@ -138,10 +149,23 @@ public:
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, count - total_value_count);
 		total_value_count += vector_size;
-	}
 
-	void ResetBuffer() {
-		plaintext_buffer = decryption_buffer;
+		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
+		D_ASSERT(data_byte_offset < segment.GetBlockManager().GetBlockSize());
+
+		auto values_left = count - total_value_count;
+
+		// Calculate the size of the vector in bytes for random access decryption
+		auto vector_size_in_bytes = GetVectorSizeInBytes(data_byte_offset, segment_data + data_byte_offset, values_left <= AlpConstants::ALP_VECTOR_SIZE);
+
+		// Equivalent to vector_size_in_bytes % 16
+		skip_bytes = vector_size_in_bytes & 15;
+
+		// Equivalent to vector_size_in_bytes / 16
+		iv_ctr += vector_size_in_bytes >> 4;
+
+		// set bool after_skip = true
+		last_skip = true;
 	}
 
 	void SetIV(){
@@ -163,7 +187,6 @@ public:
 	}
 
 	uint64_t GetVectorSizeInBytes(uint32_t data_byte_offset, data_ptr_t vector_ptr, bool is_last_vector = false) {
-
 		if (is_last_vector) {
 			return metadata_ptr - vector_ptr;
 		}
@@ -177,10 +200,6 @@ public:
 	void LoadVector(T *value_buffer) {
 		vector_state.Reset();
 
-		// we will typically need to reset this though
-		SetIV();
-		InitializeDecryption();
-
 		// Load the offset (metadata) indicating where the vector data starts
 		metadata_ptr -= AlpConstants::METADATA_POINTER_SIZE;
 		auto data_byte_offset = Load<uint32_t>(metadata_ptr);
@@ -190,12 +209,30 @@ public:
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, values_left);
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
+		if (last_skip && skip_bytes != 0){
+			// If Random Access Decryption is used, we need to update the IV counter
+			memcpy(iv + 12, &iv_ctr, sizeof(iv_ctr));
+			// We need to decrypt residual bytes as well
+			vector_ptr -= skip_bytes;
+		}
+
 		// Calculate the size of the vector in bytes
 		auto vector_size_in_bytes = GetVectorSizeInBytes(data_byte_offset, vector_ptr, values_left <= AlpConstants::ALP_VECTOR_SIZE);
 
 		// Decrypt vector
 		auto size = DecryptVector(vector_ptr, vector_size_in_bytes, plaintext_buffer, vector_size_in_bytes);
 		D_ASSERT(vector_size_in_bytes == size);
+
+		if (last_skip && skip_bytes){
+			// Skip the first bytes of plaintext_buffer
+			plaintext_buffer += skip_bytes;
+		}
+
+		// Equivalent to vector_size_in_bytes % 16
+		skip_bytes = vector_size_in_bytes & 15;
+
+		// Equivalent to vector_size_in_bytes / 16
+		iv_ctr += vector_size_in_bytes >> 4;
 
 		// Deserialize the decrypted vector data
 		vector_state.v_exponent = Load<uint8_t>(plaintext_buffer);
@@ -229,11 +266,11 @@ public:
 			plaintext_buffer += sizeof(EXACT_TYPE) * vector_state.exceptions_count;
 			memcpy(vector_state.exceptions_positions, (void *)plaintext_buffer,
 			       AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count);
-//			plaintext_buffer += AlpConstants::EXCEPTION_POSITION_SIZE * vector_state.exceptions_count;
 		}
 
 		// Reset buffer
 		plaintext_buffer = decryption_buffer;
+		last_skip = false;
 
 		// Decode all the vector values to the specified 'value_buffer'
 		vector_state.template LoadValues<SKIP>(value_buffer, vector_size);
