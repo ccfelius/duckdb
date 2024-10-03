@@ -265,12 +265,12 @@ public:
 
 #ifdef DEBUG
 		uint8_t *buffer = new uint8_t[ciphertext_size];
-		auto size_vector = EncryptSegment(dataptr + sizeof(uint32_t), ciphertext_size, dataptr + sizeof(uint32_t ), ciphertext_size);
+		auto size_vector = EncryptSegment(dataptr + sizeof(uint32_t), ciphertext_size, buffer, ciphertext_size);
 		memmove(dataptr + sizeof(uint32_t ), buffer, ciphertext_size);
-		D_ASSERT(size_vector == ciphertext_size);
 #else
 		auto size_vector = EncryptSegment(dataptr + sizeof(uint32_t), ciphertext_size, dataptr + sizeof(uint32_t ), ciphertext_size);
 #endif
+		D_ASSERT(size_vector == ciphertext_size);
 
 		handle.Destroy();
 		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);

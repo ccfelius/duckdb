@@ -47,7 +47,7 @@ class ColumnData {
 	friend class ColumnDataCheckpointer;
 
 public:
-	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
+	ColumnData(bool encrypted, uint8_t nonce, BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
 	           optional_ptr<ColumnData> parent);
 	virtual ~ColumnData();
 
@@ -68,6 +68,10 @@ public:
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
+
+	uint8_t *GetNonce() {
+		return nonce;
+	}
 
 	BlockManager &GetBlockManager() {
 		return block_manager;
@@ -201,6 +205,10 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
+	//! Encrypted, 1 = yes, 0 = no
+	bool encrypted;
+	//! nonce of 14 bytes, get XOR'ED with block_id
+	uint8_t nonce[14];
 };
 
 } // namespace duckdb

@@ -101,6 +101,11 @@ public:
 		auto metadata_offset = Load<uint32_t>(segment_data);
 		metadata_ptr = segment_data + metadata_offset;
 
+		// Check rowgroupid to construct nonce
+		// or a column nonce somewhere
+		// check blockID to construct nonce
+		// auto block_id = handle.GetBlockHandle()->BlockId();
+
 		InitializeDecryption();
 
 	}
@@ -209,15 +214,16 @@ public:
 		idx_t vector_size = MinValue((idx_t)AlpConstants::ALP_VECTOR_SIZE, values_left);
 		data_ptr_t vector_ptr = segment_data + data_byte_offset;
 
-		if (last_skip && skip_bytes != 0){
+		// Calculate the size of the vector in bytes
+		auto vector_size_in_bytes = GetVectorSizeInBytes(data_byte_offset, vector_ptr, values_left <= AlpConstants::ALP_VECTOR_SIZE);
+
+		if (last_skip && skip_bytes != 0) {
 			// If Random Access Decryption is used, we need to update the IV counter
 			memcpy(iv + 12, &iv_ctr, sizeof(iv_ctr));
 			// We need to decrypt residual bytes as well
 			vector_ptr -= skip_bytes;
+			vector_size_in_bytes += skip_bytes;
 		}
-
-		// Calculate the size of the vector in bytes
-		auto vector_size_in_bytes = GetVectorSizeInBytes(data_byte_offset, vector_ptr, values_left <= AlpConstants::ALP_VECTOR_SIZE);
 
 		// Decrypt vector
 		auto size = DecryptVector(vector_ptr, vector_size_in_bytes, plaintext_buffer, vector_size_in_bytes);
@@ -232,6 +238,7 @@ public:
 		skip_bytes = vector_size_in_bytes & 15;
 
 		// Equivalent to vector_size_in_bytes / 16
+		// dit klopt niet helemaal
 		iv_ctr += vector_size_in_bytes >> 4;
 
 		// Deserialize the decrypted vector data

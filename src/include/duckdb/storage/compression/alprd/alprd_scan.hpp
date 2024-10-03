@@ -223,8 +223,6 @@ public:
 		DeserializeMetadata(metadata_buffer, vector_size);
 		vector_ptr += metadata_bytes;
 
-		idx_t bp_size = 0;
-
 		if (vector_state.exceptions_count > 0) {
 			memcpy(vector_state.exceptions, (void *)vector_ptr,
 			       AlpRDConstants::EXCEPTION_SIZE * vector_state.exceptions_count);
