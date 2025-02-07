@@ -126,6 +126,7 @@ public:
 		while (current != nullptr) {
 			for (idx_t pos = 0; pos < current->current_position; pos += ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 				auto next = MinValue<idx_t>(current->current_position - pos, ParquetCrypto::CRYPTO_BLOCK_SIZE);
+				// loop through chunk; if you identify that its a
 				auto write_size =
 				    aes->Process(current->data.get() + pos, next, aes_buffer, ParquetCrypto::CRYPTO_BLOCK_SIZE);
 				trans.write(aes_buffer, write_size);
@@ -194,6 +195,29 @@ public:
 		return result;
 	}
 
+	void FinalizeGCMOpenSSL(data_t computed_tag){
+		transport_remaining -= trans.read(&computed_tag, ParquetCrypto::TAG_BYTES);
+
+		if (aes->Finalize(read_buffer, 0, &computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
+			throw InternalException(
+			    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
+		}
+	}
+
+	void FinalizeGCM(){
+			data_t computed_tag[ParquetCrypto::TAG_BYTES];
+
+		    if (aes->IsOpenSSL()) {
+			    FinalizeGCMOpenSSL(*computed_tag);
+		    }
+
+			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
+				throw InternalException(
+				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
+			}
+			VerifyTag(computed_tag);
+	}
+
 	uint32_t Finalize() {
 
 		if (read_buffer_offset != read_buffer_size) {
@@ -202,23 +226,7 @@ public:
 			                        read_buffer_offset, read_buffer_size);
 		}
 
-		data_t computed_tag[ParquetCrypto::TAG_BYTES];
-
-		if (aes->IsOpenSSL()) {
-			// For OpenSSL, the obtained tag is an input argument for aes->Finalize()
-			transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
-			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-				throw InternalException(
-				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
-			}
-		} else {
-			// For mbedtls, computed_tag is an output argument for aes->Finalize()
-			if (aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES) != 0) {
-				throw InternalException(
-				    "DecryptionTransport::Finalize was called with bytes remaining in AES context out");
-			}
-			VerifyTag(computed_tag);
-		}
+		FinalizeGCM();
 
 		if (transport_remaining != 0) {
 			throw InvalidInputException("Encoded ciphertext length differs from actual ciphertext length");
