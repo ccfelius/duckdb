@@ -285,7 +285,7 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 	}
 }
 
-uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
+uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object, bool page) {
 	if (encryption_config) {
 		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey(), *encryption_util);
 	} else {
@@ -570,7 +570,7 @@ void ParquetWriter::Finalize() {
 		geoparquet_data->Write(file_meta_data);
 	}
 
-	Write(file_meta_data);
+	Write(file_meta_data, false);
 
 	writer->Write<uint32_t>(writer->GetTotalWritten() - metadata_start_offset);
 

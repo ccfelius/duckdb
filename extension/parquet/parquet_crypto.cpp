@@ -88,7 +88,7 @@ using duckdb_apache::thrift::transport::TTransport;
 //! Encryption wrapper for a transport protocol
 class EncryptionTransport : public TTransport {
 public:
-	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
+	EncryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p, bool page)
 	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState()),
 	      allocator(Allocator::DefaultAllocator(), ParquetCrypto::CRYPTO_BLOCK_SIZE) {
 		Initialize(key);
@@ -342,10 +342,11 @@ uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
 }
 
 uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const string &key,
-                              const EncryptionUtil &encryption_util_p) {
+                              const EncryptionUtil &encryption_util_p, bool page) {
+
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
-	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
+	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p, page));
 	auto &etrans = reinterpret_cast<EncryptionTransport &>(*eprot->getTransport());
 
 	// Write the object in memory
@@ -370,11 +371,11 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
 }
 
 uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
-                                  const string &key, const EncryptionUtil &encryption_util_p) {
+                                  const string &key, const EncryptionUtil &encryption_util_p, bool page) {
 	// FIXME: we know the size upfront so we could do a streaming write instead of this
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
-	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p));
+	auto eprot = tproto_factory.getProtocol(std::make_shared<EncryptionTransport>(oprot, key, encryption_util_p, page));
 	auto &etrans = reinterpret_cast<EncryptionTransport &>(*eprot->getTransport());
 
 	// Write the data in memory

@@ -672,6 +672,7 @@ uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &ip
 uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
                                  const uint32_t buffer_size) {
 	if (parquet_options.encryption_config) {
+		// this is always a data page
 		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
 		                               *encryption_util);
 	} else {

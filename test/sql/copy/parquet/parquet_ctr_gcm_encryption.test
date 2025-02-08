@@ -1,0 +1,23 @@
+# name: test/sql/copy/parquet/parquet_ctr_gcm_encryption.test
+# description: Test Parquet encryption for AES_CTR_GCM
+# group: [parquet]
+
+require parquet
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+statement ok
+PRAGMA disable_verification
+
+# add keys of 3 different lengths
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted128.parquet' (ENCRYPTION_CONFIG {footer_key: 'key128'})
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet', encryption_config={footer_key: 'key128'})
+----
+42
