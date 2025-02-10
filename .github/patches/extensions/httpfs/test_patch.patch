@@ -1,0 +1,18 @@
+diff --git a/extension/httpfs/crypto.cpp b/extension/httpfs/crypto.cpp
+index af56f11..b624f2e 100644
+--- a/extension/httpfs/crypto.cpp
++++ b/extension/httpfs/crypto.cpp
+@@ -52,12 +52,11 @@ AESGCMStateSSL::AESGCMStateSSL() : gcm_context(EVP_CIPHER_CTX_new()) {
+ }
+ 
+ AESGCMStateSSL::~AESGCMStateSSL() {
+-	// Clean up
+ 	EVP_CIPHER_CTX_free(gcm_context);
+ }
+ 
+ bool AESGCMStateSSL::IsOpenSSL() {
+-	return ssl;
++	return true;
+ }
+ 
+ void AESGCMStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
