@@ -273,7 +273,7 @@ size_t MbedTlsWrapper::AESGCMStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duck
 	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
 	size_t result;
 	if (mbedtls_gcm_finish(context, out, out_len, &result, tag, tag_len) != 0) {
-		throw runtime_error("Unable to finalize AES");
+		throw runtime_error("Unable to finalize AES GCM");
 	}
 	return result;
 }
