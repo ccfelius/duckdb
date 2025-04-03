@@ -13,7 +13,7 @@ DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
 }
 
 void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional_ptr<const TableFilter> filter,
-                                             bool has_defines) {
+                                             optional_ptr<TableFilterState> filter_state, bool has_defines) {
 	auto old_dict_size = dictionary_size;
 	dictionary_size = new_dictionary_size;
 	filter_result.reset();
@@ -21,11 +21,12 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	can_have_nulls = has_defines;
 	// we use the first value in the dictionary to keep a NULL
 	if (!dictionary) {
-		dictionary = make_uniq<Vector>(reader.type, dictionary_size + 1);
+		dictionary = make_uniq<Vector>(reader.Type(), dictionary_size + 1);
 	} else if (dictionary_size > old_dict_size) {
 		dictionary->Resize(old_dict_size, dictionary_size + 1);
 	}
-	dictionary_id = reader.reader.file_name + "_" + reader.schema.name + "_" + std::to_string(reader.chunk_read_offset);
+	dictionary_id =
+	    reader.reader.file_name + "_" + reader.Schema().name + "_" + std::to_string(reader.chunk_read_offset);
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
 	auto &dict_validity = FlatVector::Validity(*dictionary);
 	dict_validity.Reset(dictionary_size + 1);
@@ -44,7 +45,8 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 		dictionary->ToUnifiedFormat(dictionary_size, vdata);
 		SelectionVector dict_sel;
 		filter_count = dictionary_size;
-		ColumnSegment::FilterSelection(dict_sel, *dictionary, vdata, *filter, dictionary_size, filter_count);
+		ColumnSegment::FilterSelection(dict_sel, *dictionary, vdata, *filter, *filter_state, dictionary_size,
+		                               filter_count);
 
 		// now set all matching tuples to true
 		for (idx_t i = 0; i < filter_count; i++) {
@@ -82,7 +84,7 @@ idx_t DictionaryDecoder::GetValidValues(uint8_t *defines, idx_t read_count, idx_
 		for (idx_t i = 0; i < read_count; i++) {
 			valid_sel.set_index(valid_count, i);
 			dictionary_selection_vector.set_index(i, dictionary_size);
-			valid_count += defines[result_offset + i] == reader.max_define;
+			valid_count += defines[result_offset + i] == reader.MaxDefine();
 		}
 	}
 	return valid_count;
@@ -97,10 +99,12 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 		// all values are valid - we can directly decompress the offsets into the selection vector
 		dict_decoder->GetBatch<uint32_t>(data_ptr_cast(dictionary_selection_vector.data()), valid_count);
 		// we do still need to verify the offsets though
+		uint32_t max_index = 0;
 		for (idx_t idx = 0; idx < valid_count; idx++) {
-			if (dictionary_selection_vector.get_index(idx) >= dictionary_size) {
-				throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
-			}
+			max_index = MaxValue(max_index, dictionary_selection_vector[idx]);
+		}
+		if (max_index >= dictionary_size) {
+			throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
 		}
 	} else if (valid_count > 0) {
 		// for the valid entries - decode the offsets
@@ -174,14 +178,19 @@ bool DictionaryDecoder::CanFilter(const TableFilter &filter) {
 	return true;
 }
 
-void DictionaryDecoder::Filter(uint8_t *defines, idx_t read_count, Vector &result, const TableFilter &filter,
-                               SelectionVector &sel, idx_t &approved_tuple_count) {
+void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector &result, SelectionVector &sel,
+                               idx_t &approved_tuple_count) {
 	if (!dictionary || dictionary_size < 0) {
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
 	D_ASSERT(filter_count > 0);
 	// read the dictionary values
-	auto valid_count = Read(defines, read_count, result, 0);
+	const auto valid_count = Read(defines, read_count, result, 0);
+	if (valid_count == 0) {
+		// all values are NULL
+		approved_tuple_count = 0;
+		return;
+	}
 
 	// apply the filter by checking the dictionary offsets directly
 	uint32_t *offsets;
@@ -194,7 +203,7 @@ void DictionaryDecoder::Filter(uint8_t *defines, idx_t read_count, Vector &resul
 	SelectionVector new_sel(valid_count);
 	approved_tuple_count = 0;
 	for (idx_t idx = 0; idx < valid_count; idx++) {
-		auto row_idx = valid_sel.get_index(idx);
+		auto row_idx = valid_count == read_count ? idx : valid_sel.get_index(idx);
 		auto offset = offsets[idx];
 		if (!filter_result[offset]) {
 			// does not pass the filter
