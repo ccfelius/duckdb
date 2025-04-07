@@ -1,0 +1,20 @@
+# name: test/sql/copy/encryption/encrypt_db.test
+# group: [encryption]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH 'existing_unecrypted.duckdb' AS db1;
+
+statement ok
+ATTACH 'new_encrypted.duckdb' AS db2 (ENCRYPTION_KEY 'asdf');
+
+statement ok
+COPY FROM DATABASE db1 TO db2;
+
+statement ok
+DETACH db1;
+
+statement ok
+DETACH db2;

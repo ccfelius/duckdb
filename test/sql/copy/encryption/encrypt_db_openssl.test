@@ -1,0 +1,4 @@
+# name: test/sql/copy/encryption/encrypt_db_openssl.test
+# group: [encryption]
+
+require httpfs

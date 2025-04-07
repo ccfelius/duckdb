@@ -330,6 +330,11 @@ public:
 	DUCKDB_API string GetDefaultTable() const;
 	DUCKDB_API string GetDefaultTableSchema() const;
 
+	//! FIXME: these should be virtual methods
+	DUCKDB_API bool HasEncryptionKey() const;
+	DUCKDB_API void SetEncryptionKey(const string &name);
+	DUCKDB_API string GetEncryptionKey() const;
+
 	//! Returns the dependency manager of this catalog - if the catalog has anye
 	virtual optional_ptr<DependencyManager> GetDependencyManager();
 
@@ -380,6 +385,9 @@ protected:
 	//! (optionally) a default table to query for `SELECT * FROM <catalog_name>;`
 	string default_table;
 	string default_table_schema;
+
+	//! (optionally)
+	string encryption_key;
 
 public:
 	//! Lookup an entry using TryLookupEntry, throws if entry not found and if_not_found == THROW_EXCEPTION

@@ -11,6 +11,8 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "mbedtls_wrapper.hpp"
+#include "duckdb/common/encryption_state.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -18,6 +20,8 @@
 namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
+
+using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	data_t version[MainHeader::MAX_VERSION_SIZE];
@@ -37,11 +41,26 @@ void MainHeader::Write(WriteStream &ser) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
+	if (flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+		ser.WriteData(aes_encryption_iv, AES_IV_LEN);
+	}
 	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
 	SerializeVersionNumber(ser, DuckDB::SourceID());
 }
 
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
+	data_t magic_bytes[MAGIC_BYTE_SIZE];
+	if (handle.GetFileSize() < MainHeader::MAGIC_BYTE_SIZE + MainHeader::MAGIC_BYTE_OFFSET) {
+		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
+	}
+	handle.Read(magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
+	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
+		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
+	}
+}
+
+void MainHeader::CheckEncryptionKey(FileHandle &handle) {
+	// TODO
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 	if (handle.GetFileSize() < MainHeader::MAGIC_BYTE_SIZE + MainHeader::MAGIC_BYTE_OFFSET) {
 		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
@@ -84,6 +103,12 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	// read the flags
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
+	}
+	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+		source.ReadData(header.aes_encryption_iv, AES_IV_LEN);
+	}
+	if (header.flags[1] != 0) {
+		throw IOException("The file is encrypted");
 	}
 	DeserializeVersionNumber(source, header.library_git_desc);
 	DeserializeVersionNumber(source, header.library_git_hash);
@@ -195,6 +220,43 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 	return main_header;
 }
 
+shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db){
+	auto encryption_util = db.GetDatabase().config.encryption_util;
+	if (encryption_util) {
+		// Use OpenSSL
+		encryption_util =  db.GetDatabase().config.encryption_util;
+	} else {
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
+	}
+
+	return encryption_util;
+}
+
+string DeriveKey(const string &user_key, data_ptr_t salt = nullptr) {
+	// todo: sha 256 is not recommended
+	// use a proper key derivation function (kdf)
+	SHA256State state;
+	// todo; use generated salt
+	state.AddString("IBd2nLfyDoWYZy6R81DVYxxdM7CAsOcX"); // random salt
+	state.AddString(user_key);
+	auto derived_key = state.Finalize();
+	// hardcode now to 32
+	D_ASSERT(derived_key.length() == 32);
+	return derived_key;
+}
+
+void EncryptCanary(uint64_t *header_flags, uint64_t canary, shared_ptr<EncryptionState> encryption_state, const string *derived_key){
+
+	// for now just zero-out the iv
+	uint8_t iv[16];
+	memset(iv, 0, sizeof(iv));
+
+	// Encrypt the canary
+	encryption_state->InitializeEncryption(iv, 16, derived_key);
+	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(&canary), sizeof(uint64_t), reinterpret_cast<data_ptr_t>(&header_flags[1]), sizeof(uint64_t));
+	// encryption_state->Finalize(reinterpret_cast<data_ptr_t>(header_flags), sizeof(uint64_t), nullptr, 0);
+}
+
 void SingleFileBlockManager::CreateNewDatabase() {
 	auto flags = GetFileFlags(true);
 
@@ -206,14 +268,36 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// first fill in the new header
 	header_buffer.Clear();
 
+	main_file_header.version_number = VERSION_NUMBER;
+	memset(main_file_header.flags, 0, sizeof(uint64_t) * 4);
+
+	if (options.NeedsEncryption()) {
+		auto encryption_key = options.GetEncryptionKey();
+		main_file_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+		auto derived_key = DeriveKey(encryption_key);
+
+		auto encryption_util = GetEncryptionUtil(db);
+		auto encryption_state = encryption_util->CreateEncryptionState();
+
+		// Encrypt canary with derived key (+ todo, salt)
+		EncryptCanary(main_file_header.flags, MainHeader::CANARY,
+		              encryption_util->CreateEncryptionState(), &derived_key);
+
+		// why should we store this in the main file header?
+		encryption_state->GenerateRandomData(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN);
+		// IV length should be equal to block size (for now, hardcoded to 16), but should be adaptable?
+		D_ASSERT(MainHeader::AES_IV_LEN == 16);
+
+	}
+
 	options.version_number = GetVersionNumber();
 	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
 	AddStorageVersionTag();
 
-	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
-	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
+	// MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+	SerializeHeaderStructure<MainHeader>(main_file_header, header_buffer.buffer);
 	// now write the header to the file
-	ChecksumAndWrite(header_buffer, 0);
+	ChecksumAndWrite(header_buffer, 0, true);
 	header_buffer.Clear();
 
 	// write the database headers
@@ -266,18 +350,26 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	MainHeader::CheckMagicBytes(*handle);
 	// otherwise, we check the metadata of the file
-	ReadAndChecksum(header_buffer, 0);
-	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer);
-	options.version_number = main_header.version_number;
+	ReadAndChecksum(header_buffer, 0, true);
+
+	// not sure if this is correct (ipv main_file_header)
+	main_file_header = DeserializeMainHeader(header_buffer.buffer);
+
+	if (main_file_header.IsEncrypted() && !options.NeedsEncryption()) {
+		throw CatalogException("Cannot open encrypted database \"%s\" without a password", path);
+	}
+
+	// MainHeader main_header = DeserializeMainHeader(header_buffer.buffer);
+	options.version_number = main_file_header.version_number;
 
 	// read the database headers from disk
 	DatabaseHeader h1;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
-	h1 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
+	h1 = DeserializeDatabaseHeader(main_file_header, header_buffer.buffer);
 
 	DatabaseHeader h2;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
-	h2 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
+	h2 = DeserializeDatabaseHeader(main_file_header, header_buffer.buffer);
 
 	// check the header with the highest iteration count
 	if (h1.iteration > h2.iteration) {
@@ -293,9 +385,28 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	LoadFreeList();
 }
 
-void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location) const {
+void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_encryption) const {
 	// read the buffer from disk
 	block.Read(*handle, location);
+
+	// decrypt if required
+	if (options.NeedsEncryption() && !skip_encryption) {
+		auto encryption_util = GetEncryptionUtil(db);
+		auto aes = encryption_util->CreateEncryptionState();
+
+		// todo; get salt!
+		auto derived_key = DeriveKey(options.encryption_key);
+		aes->InitializeDecryption(main_file_header.aes_encryption_iv,
+		                         MainHeader::AES_IV_LEN, &derived_key);
+
+		auto aes_buffer = duckdb::unique_ptr<data_t[]>(new data_t[block.size]);
+		//todo; you can decrypt directly to the internal buffer
+		auto aes_res = aes->Process(block.InternalBuffer(), block.size, aes_buffer.get(), block.size);
+		if (aes_res != block.size) {
+			throw IOException("Decryption failure");
+		}
+		memcpy(block.InternalBuffer(), aes_buffer.get(), block.size);
+	}
 
 	// compute the checksum
 	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
@@ -309,10 +420,32 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	}
 }
 
-void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location) const {
+void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location, bool skip_encryption) const {
 	// compute the checksum and write it to the start of the buffer (if not temp buffer)
 	uint64_t checksum = Checksum(block.buffer, block.Size());
 	Store<uint64_t>(checksum, block.InternalBuffer());
+
+	// encrypt if required
+	if (options.NeedsEncryption() && !skip_encryption) {
+
+		auto encryption_util = GetEncryptionUtil(db);
+		auto aes = encryption_util->CreateEncryptionState();
+
+		uint8_t salt[16];
+		aes->GenerateRandomData(salt, 16);
+		auto derived_key = DeriveKey(options.encryption_key, salt);
+		aes->InitializeEncryption(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN, &derived_key);
+
+		// todo; van we do this more clean?
+		auto aes_buffer = duckdb::unique_ptr<data_t[]>(new data_t[block.size]);
+		auto aes_res = aes->Process(block.InternalBuffer(), block.size, aes_buffer.get(), block.size);
+		if (aes_res != block.size) {
+			throw IOException("Encryption failure");
+		}
+
+		memcpy(block.InternalBuffer(), aes_buffer.get(), block.size);
+	}
+
 	// now write the buffer
 	block.Write(*handle, location);
 }

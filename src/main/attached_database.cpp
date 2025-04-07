@@ -93,6 +93,16 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 		type = AttachedDatabaseType::READ_WRITE_DATABASE;
 	}
 	for (auto &entry : options.options) {
+		if (StringUtil::CIEquals(entry.first, "encryption_key")) {
+			auto &config = DBConfig::GetConfig(db);
+			config.options.encryption_key = entry.second.ToString();
+			continue;
+		}
+		if (StringUtil::CIEquals(entry.first, "cipher")) {
+			auto &config = DBConfig::GetConfig(db);
+			config.options.encryption_key = entry.second.ToString();
+			continue;
+		}
 		if (StringUtil::CIEquals(entry.first, "block_size")) {
 			continue;
 		}

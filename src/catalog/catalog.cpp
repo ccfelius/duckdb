@@ -1186,6 +1186,19 @@ string Catalog::GetDefaultTableSchema() const {
 	return !default_table_schema.empty() ? default_table_schema : DEFAULT_SCHEMA;
 }
 
+//! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name
+bool Catalog::HasEncryptionKey() const {
+	return !encryption_key.empty();
+}
+
+void Catalog::SetEncryptionKey(const string &name) {
+	encryption_key = name;
+}
+
+string Catalog::GetEncryptionKey() const {
+	return encryption_key;
+}
+
 void Catalog::Verify() {
 }
 

@@ -1,0 +1,11 @@
+# name: test/sql/copy/encryption/attach_encryption_key.test
+# group: [encryption]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH 'new_encrypted.duckdb' AS db_encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+DETACH db_encrypted;
