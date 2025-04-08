@@ -59,7 +59,7 @@ void MainHeader::CheckMagicBytes(FileHandle &handle) {
 	}
 }
 
-void MainHeader::EncryptCanary(const shared_ptr<EncryptionState> &encryption_state, const string *derived_key) {
+void EncryptCanary(uint64_t *flags, const shared_ptr<EncryptionState> &encryption_state, const string *derived_key) {
 	// for now just zero-out the iv
 	uint8_t iv[16];
 	memset(iv, 0, sizeof(iv));
@@ -69,7 +69,7 @@ void MainHeader::EncryptCanary(const shared_ptr<EncryptionState> &encryption_sta
 	                          reinterpret_cast<data_ptr_t>(&flags[1]), sizeof(uint64_t));
 }
 
-void MainHeader::DecryptCanary(const shared_ptr<EncryptionState> &encryption_state, const string *derived_key) {
+void DecryptCanary(uint64_t *flags, const shared_ptr<EncryptionState> &encryption_state, const string *derived_key) {
 	// for now just zero-out the iv
 	uint8_t iv[16];
 	memset(iv, 0, sizeof(iv));
@@ -235,8 +235,8 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 
 shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db) {
 	auto encryption_util = db.GetDatabase().config.encryption_util;
+
 	if (encryption_util) {
-		// Use OpenSSL
 		encryption_util = db.GetDatabase().config.encryption_util;
 	} else {
 		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
@@ -273,19 +273,18 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	memset(main_file_header.flags, 0, sizeof(uint64_t) * 4);
 
 	if (options.NeedsEncryption()) {
-
 		auto encryption_key = options.GetEncryptionKey();
 		main_file_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 		auto derived_key = DeriveKey(encryption_key);
 		auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState();
 
 		// Encrypt or decrypt canary with derived key (+ todo, salt)
-		MainHeader::EncryptCanary(encryption_state, &derived_key);
+		EncryptCanary(main_file_header.flags, encryption_state, &derived_key);
 		main_file_header.flags[2] = static_cast<uint64_t>(options.GetCipher());
 
 #ifdef DEBUG
-		MainHeader::DecryptCanary(GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
-		MainHeader::EncryptCanary(GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
+		DecryptCanary(main_file_header.flags, GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
+		EncryptCanary(main_file_header.flags, GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
 #endif
 		// move this do the block header and not the main file header
 		encryption_state->GenerateRandomData(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN);
@@ -361,7 +360,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		throw CatalogException("Cannot open encrypted database \"%s\" without a password", path);
 	} else if (main_file_header.IsEncrypted()) {
 		auto derived_key = DeriveKey(options.encryption_key);
-		MainHeader::DecryptCanary(GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
+		DecryptCanary(main_file_header.flags, GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
 	}
 
 	// MainHeader main_header = DeserializeMainHeader(header_buffer.buffer);

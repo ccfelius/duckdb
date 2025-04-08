@@ -83,7 +83,7 @@ struct MainHeader {
 	//! The version of the database
 	uint64_t version_number;
 	//! The set of flags used by the database
-	static uint64_t flags[FLAG_COUNT];
+	uint64_t flags[FLAG_COUNT];
 
 	//! optional aes encryption initialization vector (iv)
 	//! only used if encryption flag is set
@@ -91,8 +91,6 @@ struct MainHeader {
 	data_t aes_encryption_iv[AES_IV_LEN];
 
 	static void CheckMagicBytes(FileHandle &handle);
-	static void EncryptCanary(const shared_ptr<EncryptionState> &encryption_state, const string *derived_key);
-	static void DecryptCanary(const shared_ptr<EncryptionState> &encryption_state, const string *derived_key);
 
 	string LibraryGitDesc() {
 		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);
