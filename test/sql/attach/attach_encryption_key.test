@@ -1,5 +1,5 @@
-# name: test/sql/copy/encryption/attach_encryption_key.test
-# group: [encryption]
+# name: test/sql/attach/attach_encryption_key.test
+# group: [attach]
 
 statement ok
 PRAGMA enable_verification

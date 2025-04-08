@@ -12,6 +12,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/encryption_state.hpp"
 
 namespace duckdb {
 struct FileHandle;
@@ -75,6 +76,8 @@ struct MainHeader {
 	static constexpr uint64_t ENCRYPTED_DATABASE_FLAG = 1;
 	//! Canary used for early wrong-key detection
 	static constexpr uint64_t CANARY = 7042025;
+	//! Encryption key length
+	static constexpr uint64_t ENCRYPTION_KEY_LENGTH = 32;
 	//! The magic bytes in front of the file should be "DUCK"
 	static const char MAGIC_BYTES[];
 	//! The version of the database
@@ -88,7 +91,10 @@ struct MainHeader {
 	data_t aes_encryption_iv[AES_IV_LEN];
 
 	static void CheckMagicBytes(FileHandle &handle);
-	static void CheckEncryptionKey(FileHandle &handle);
+	static void EncryptCanary(uint64_t *header_flags, uint64_t canary,
+	                          const shared_ptr<EncryptionState> &encryption_state, const string *derived_key);
+	static void DecryptCanary(uint64_t *header_flags, const shared_ptr<EncryptionState> &encryption_state,
+	                          const string *derived_key);
 
 	string LibraryGitDesc() {
 		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);

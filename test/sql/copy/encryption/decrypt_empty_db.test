@@ -1,0 +1,16 @@
+# name: test/sql/copy/encryption/decrypt_empty_db.test
+# group: [encryption]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+ATTACH 'new_encrypted.duckdb' AS db2 (ENCRYPTION_KEY 'xxx');
+----
+IO Error: Wrong encryption key used to open the database file
+
+statement ok
+ATTACH 'new_encrypted.duckdb' AS db2 (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH 'new_empty_db.duckdb' AS db1;
