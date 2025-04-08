@@ -279,24 +279,22 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	memset(main_file_header.flags, 0, sizeof(uint64_t) * 4);
 
 	if (options.NeedsEncryption()) {
+
 		auto encryption_key = options.GetEncryptionKey();
 		main_file_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 		auto derived_key = DeriveKey(encryption_key);
-
-		auto encryption_util = GetEncryptionUtil(db);
-		auto encryption_state = encryption_util->CreateEncryptionState();
+		auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState();
 
 		// Encrypt or decrypt canary with derived key (+ todo, salt)
-		MainHeader::EncryptCanary(main_file_header.flags, MainHeader::CANARY, encryption_util->CreateEncryptionState(),
-		                          &derived_key);
+		MainHeader::EncryptCanary(main_file_header.flags, MainHeader::CANARY, encryption_state, &derived_key);
+		main_file_header.flags[2] = static_cast<uint64_t>(options.GetCipher());
 
 #ifdef DEBUG
-		MainHeader::DecryptCanary(main_file_header.flags, encryption_util->CreateEncryptionState(), &derived_key);
-		MainHeader::EncryptCanary(main_file_header.flags, MainHeader::CANARY, encryption_util->CreateEncryptionState(),
-		                          &derived_key);
+		MainHeader::DecryptCanary(main_file_header.flags, GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
+		MainHeader::EncryptCanary(main_file_header.flags, MainHeader::CANARY,
+		                          GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
 #endif
-
-		// why should we store this in the main file header?
+		// move this do the block header and not the main file header
 		encryption_state->GenerateRandomData(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN);
 		// IV length should be equal to block size (for now, hardcoded to 16), but should be adaptable?
 		D_ASSERT(MainHeader::AES_IV_LEN == 16);
@@ -403,24 +401,20 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	// read the buffer from disk
 	block.Read(*handle, location);
 
-	// decrypt if required
 	if (options.NeedsEncryption() && !skip_encryption) {
 		auto encryption_util = GetEncryptionUtil(db);
-
-		// todo; get salt!
 		auto derived_key = DeriveKey(options.encryption_key);
 		auto encryption_state = encryption_util->CreateEncryptionState();
+
+		// todo; replace main file header IV by first 16 bytes of block
 		encryption_state->InitializeDecryption(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN,
 		                                       &derived_key);
 
-		// auto aes_buffer = duckdb::unique_ptr<data_t[]>(new data_t[block.size]);
-		// todo; you can decrypt directly to the internal buffer
 		auto aes_res =
 		    encryption_state->Process(block.InternalBuffer(), block.size, block.InternalBuffer(), block.size);
 		if (aes_res != block.size) {
 			throw IOException("Decryption failure");
 		}
-		// memcpy(block.InternalBuffer(), aes_buffer.get(), block.size);
 	}
 
 	// compute the checksum
@@ -442,28 +436,20 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 
 	// encrypt if required
 	if (options.NeedsEncryption() && !skip_encryption) {
-
 		auto encryption_util = GetEncryptionUtil(db);
 		auto encryption_state = encryption_util->CreateEncryptionState();
-
-		//		uint8_t salt[16];
-		//		encryption_state->GenerateRandomData(salt, 16);
 		auto derived_key = DeriveKey(options.encryption_key);
+
+		// todo; the iv needs to differ per block
 		encryption_state->InitializeEncryption(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN,
 		                                       &derived_key);
 
-		// todo; van we do this more clean?
-		// auto aes_buffer = duckdb::unique_ptr<data_t[]>(new data_t[block.size]);
-		// auto aes_res = aes->Process(block.InternalBuffer(), block.size, aes_buffer.get(), block.size);
 		auto aes_res =
 		    encryption_state->Process(block.InternalBuffer(), block.size, block.InternalBuffer(), block.size);
 		if (aes_res != block.size) {
 			throw IOException("Encryption failure");
 		}
-
-		// memcpy(block.InternalBuffer(), aes_buffer.get(), block.size);
 	}
-
 	// now write the buffer
 	block.Write(*handle, location);
 }

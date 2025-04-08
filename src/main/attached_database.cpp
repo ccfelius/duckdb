@@ -95,12 +95,25 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 	for (auto &entry : options.options) {
 		if (StringUtil::CIEquals(entry.first, "encryption_key")) {
 			auto &config = DBConfig::GetConfig(db);
+
+			if (entry.second.IsNull()) {
+				throw BinderException("No key found for \"%s\"", entry.first);
+			}
+
 			config.options.encryption_key = entry.second.ToString();
 			continue;
 		}
 		if (StringUtil::CIEquals(entry.first, "cipher")) {
 			auto &config = DBConfig::GetConfig(db);
-			config.options.encryption_key = entry.second.ToString();
+			auto cipher = StringUtil::Lower(entry.second.ToString());
+
+			if (cipher == "gcm" || cipher == "ctr" || cipher == "cbc") {
+				config.options.cipher = cipher;
+			} else {
+				throw BinderException("No cipher \"%s\" exists. Only GCM, CTR and CBC are supported",
+				                      entry.second.ToString());
+			}
+
 			continue;
 		}
 		if (StringUtil::CIEquals(entry.first, "block_size")) {

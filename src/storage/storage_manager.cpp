@@ -147,6 +147,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 	options.encryption_key = config.options.encryption_key;
+	options.cipher = config.options.cipher;
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
 	if (storage_options.row_group_size.IsValid()) {

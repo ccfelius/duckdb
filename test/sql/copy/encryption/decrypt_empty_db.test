@@ -5,6 +5,11 @@ statement ok
 PRAGMA enable_verification
 
 statement error
+ATTACH 'new_encrypted.duckdb' AS db2;
+----
+Catalog Error: Cannot open encrypted database "new_encrypted.duckdb" without a password
+
+statement error
 ATTACH 'new_encrypted.duckdb' AS db2 (ENCRYPTION_KEY 'xxx');
 ----
 IO Error: Wrong encryption key used to open the database file

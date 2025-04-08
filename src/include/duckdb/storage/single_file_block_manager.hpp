@@ -29,7 +29,10 @@ struct StorageManagerOptions {
 	optional_idx block_alloc_size;
 	optional_idx storage_version;
 	optional_idx version_number;
+
+	//!
 	string encryption_key;
+	string cipher;
 
 	bool NeedsEncryption() const {
 		return !encryption_key.empty();
@@ -37,6 +40,20 @@ struct StorageManagerOptions {
 
 	string GetEncryptionKey() const {
 		return encryption_key;
+	}
+
+	enum class CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
+
+	CipherType GetCipher() const {
+
+		if (cipher == "gcm") {
+			return CipherType::GCM;
+		} else if (cipher == "ctr") {
+			return CipherType::CTR;
+		} else if (cipher == "cbc") {
+			return CipherType::CBC;
+		}
+		return CipherType::UNKNOWN;
 	}
 };
 

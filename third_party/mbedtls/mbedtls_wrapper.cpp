@@ -221,7 +221,14 @@ bool MbedTlsWrapper::AESGCMStateMBEDTLS::IsOpenSSL() {
 
 
 void MbedTlsWrapper::AESGCMStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+
+#ifdef DEBUG
+	// for reproducibility, we fix the seed when debugging
+	duckdb::RandomEngine random_engine(1);
+#else
 	duckdb::RandomEngine random_engine(duckdb::Timestamp::GetCurrentTimestamp().value);
+#endif
+
 	while (len != 0) {
 		const auto random_integer = random_engine.NextRandomInteger();
 		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));
