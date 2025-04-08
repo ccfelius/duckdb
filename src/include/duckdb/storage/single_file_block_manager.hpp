@@ -30,9 +30,11 @@ struct StorageManagerOptions {
 	optional_idx storage_version;
 	optional_idx version_number;
 
-	//!
+	//! key and cipher for encryption
 	string encryption_key;
 	string cipher;
+
+	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
 
 	bool NeedsEncryption() const {
 		return !encryption_key.empty();
@@ -41,8 +43,6 @@ struct StorageManagerOptions {
 	string GetEncryptionKey() const {
 		return encryption_key;
 	}
-
-	enum class CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
 
 	CipherType GetCipher() const {
 
