@@ -59,37 +59,31 @@ void MainHeader::CheckMagicBytes(FileHandle &handle) {
 	}
 }
 
-void MainHeader::EncryptCanary(uint64_t *header_flags, uint64_t canary,
-                               const shared_ptr<EncryptionState> &encryption_state, const string *derived_key) {
-
+void MainHeader::EncryptCanary(const shared_ptr<EncryptionState> &encryption_state, const string *derived_key) {
 	// for now just zero-out the iv
 	uint8_t iv[16];
 	memset(iv, 0, sizeof(iv));
-
-	// Encrypt the canary
+	auto canary = MainHeader::CANARY;
 	encryption_state->InitializeEncryption(iv, 16, derived_key);
 	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(&canary), sizeof(uint64_t),
-	                          reinterpret_cast<data_ptr_t>(&header_flags[1]), sizeof(uint64_t));
+	                          reinterpret_cast<data_ptr_t>(&flags[1]), sizeof(uint64_t));
 }
 
-void MainHeader::DecryptCanary(uint64_t *header_flags, const shared_ptr<EncryptionState> &encryption_state,
-                               const string *derived_key) {
-
+void MainHeader::DecryptCanary(const shared_ptr<EncryptionState> &encryption_state, const string *derived_key) {
 	// for now just zero-out the iv
 	uint8_t iv[16];
 	memset(iv, 0, sizeof(iv));
 	uint64_t canary;
-
 	// Decrypt the canary
 	encryption_state->InitializeDecryption(iv, 16, derived_key);
-	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(&header_flags[1]), sizeof(uint64_t),
+	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(&flags[1]), sizeof(uint64_t),
 	                          reinterpret_cast<data_ptr_t>(&canary), sizeof(uint64_t));
 
 	if (!(canary == MainHeader::CANARY)) {
 		throw IOException("Wrong encryption key used to open the database file");
 	}
 
-	memcpy(&header_flags[1], &canary, sizeof(uint64_t));
+	memcpy(&flags[1], &canary, sizeof(uint64_t));
 }
 
 MainHeader MainHeader::Read(ReadStream &source) {
@@ -286,13 +280,12 @@ void SingleFileBlockManager::CreateNewDatabase() {
 		auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState();
 
 		// Encrypt or decrypt canary with derived key (+ todo, salt)
-		MainHeader::EncryptCanary(main_file_header.flags, MainHeader::CANARY, encryption_state, &derived_key);
+		MainHeader::EncryptCanary(encryption_state, &derived_key);
 		main_file_header.flags[2] = static_cast<uint64_t>(options.GetCipher());
 
 #ifdef DEBUG
-		MainHeader::DecryptCanary(main_file_header.flags, GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
-		MainHeader::EncryptCanary(main_file_header.flags, MainHeader::CANARY,
-		                          GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
+		MainHeader::DecryptCanary(GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
+		MainHeader::EncryptCanary(GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
 #endif
 		// move this do the block header and not the main file header
 		encryption_state->GenerateRandomData(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN);
@@ -368,7 +361,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		throw CatalogException("Cannot open encrypted database \"%s\" without a password", path);
 	} else if (main_file_header.IsEncrypted()) {
 		auto derived_key = DeriveKey(options.encryption_key);
-		MainHeader::DecryptCanary(main_file_header.flags, GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
+		MainHeader::DecryptCanary(GetEncryptionUtil(db)->CreateEncryptionState(), &derived_key);
 	}
 
 	// MainHeader main_header = DeserializeMainHeader(header_buffer.buffer);
