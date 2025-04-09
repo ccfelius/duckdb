@@ -387,16 +387,6 @@ struct DebugWindowModeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct DefaultBlockHeaderSetting {
-	using RETURN_TYPE = idx_t;
-	static constexpr const char *Name = "default_block_header_size";
-	static constexpr const char *Description = "The default block header size";
-	static constexpr const char *InputType = "UBIGINT";
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
-	static Value GetSetting(const ClientContext &context);
-};
-
 struct DefaultBlockSizeSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "default_block_size";

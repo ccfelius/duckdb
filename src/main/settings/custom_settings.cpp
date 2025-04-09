@@ -387,24 +387,6 @@ void CustomUserAgentSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config)
 }
 
 //===----------------------------------------------------------------------===//
-// Default Block Header Size
-//===----------------------------------------------------------------------===//
-void DefaultBlockHeaderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	auto block_alloc_size = input.GetValue<uint64_t>();
-	Storage::VerifyBlockAllocSize(block_alloc_size);
-	config.options.default_block_header_size = block_alloc_size;
-}
-
-void DefaultBlockHeaderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.default_block_header_size = DBConfig().options.default_block_alloc_size;
-}
-
-Value DefaultBlockHeaderSetting::GetSetting(const ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::UBIGINT(config.options.default_block_header_size);
-}
-
-//===----------------------------------------------------------------------===//
 // Default Block Size
 //===----------------------------------------------------------------------===//
 void DefaultBlockSizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
