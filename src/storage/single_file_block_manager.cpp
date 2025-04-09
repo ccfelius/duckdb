@@ -42,7 +42,12 @@ void MainHeader::Write(WriteStream &ser) {
 		ser.Write<uint64_t>(flags[i]);
 	}
 	if (flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+		// todo, remove this and place in block headers
 		ser.WriteData(aes_encryption_iv, AES_IV_LEN);
+		// todo; write salt, canary and cipher
+		// ser.WriteData(salt, SALT_LEN);
+		// ser.WriteData(canary, CANARY_LEN);
+		// ser.Write<uint8_t>(cipher);
 	}
 	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
 	SerializeVersionNumber(ser, DuckDB::SourceID());
@@ -115,12 +120,18 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		    "See the storage page for migration strategy and more information: https://duckdb.org/internals/storage",
 		    header.version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
 	}
+
 	// read the flags
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
 	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
 		source.ReadData(header.aes_encryption_iv, AES_IV_LEN);
+		// todo; fix accordingly
+//		source.ReadData(header.salt, SALT_LEN);
+//		source.ReadData(header.canary, CANARY_LEN);
+//		header.cipher = source.Read<uint8_t>();
+		// TODO; check if this is still under 4KB (page size)
 	}
 
 	DeserializeVersionNumber(source, header.library_git_desc);
@@ -145,10 +156,12 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 	header.free_list = source.Read<idx_t>();
 	header.block_count = source.Read<uint64_t>();
 	header.block_alloc_size = source.Read<idx_t>();
+	header.block_header_size = source.Read<idx_t>();
 
 	// backwards compatibility
 	if (!header.block_alloc_size) {
 		header.block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
+		header.block_header_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	}
 
 	header.vector_size = source.Read<idx_t>();
@@ -189,9 +202,11 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
                                                const StorageManagerOptions &options)
-    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size), db(db), path(path_p),
+    // here we need to also pass the block header size to the blockmanager
+    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db), path(path_p),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                    Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
+                    // why is the user_size 4kb - 8 bytes?
+                    Storage::FILE_HEADER_SIZE - DUCKDB_BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
 }
 
@@ -278,7 +293,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 		auto derived_key = DeriveKey(encryption_key);
 		auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState();
 
-		// Encrypt or decrypt canary with derived key (+ todo, salt)
+		// Encrypt or decrypt canary with derived key (+ todo, salt?)
 		EncryptCanary(main_file_header.flags, encryption_state, &derived_key);
 		main_file_header.flags[2] = static_cast<uint64_t>(options.GetCipher());
 
@@ -299,6 +314,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 	SerializeHeaderStructure<MainHeader>(main_file_header, header_buffer.buffer);
 	// now write the header to the file
+	// bool skip encryption is true because the main header needs to be plaintext
 	ChecksumAndWrite(header_buffer, 0, true);
 	header_buffer.Clear();
 
@@ -479,6 +495,9 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		    path, GetBlockAllocSize(), header.block_alloc_size);
 	}
 	SetBlockAllocSize(header.block_alloc_size);
+
+	// set a different block size for header if encryption is used
+	SetBlockHeaderSize(header.block_alloc_size);
 }
 
 void SingleFileBlockManager::LoadFreeList() {
@@ -722,7 +741,7 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 		// compute the checksum
 		auto start_ptr = ptr + i * GetBlockAllocSize();
 		auto stored_checksum = Load<uint64_t>(start_ptr);
-		uint64_t computed_checksum = Checksum(start_ptr + Storage::DEFAULT_BLOCK_HEADER_SIZE, GetBlockSize());
+		uint64_t computed_checksum = Checksum(start_ptr + DUCKDB_BLOCK_HEADER_SIZE, GetBlockSize());
 		// verify the checksum
 		if (stored_checksum != computed_checksum) {
 			throw IOException(
