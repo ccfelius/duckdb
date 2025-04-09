@@ -134,7 +134,8 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 
 void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	if (InMemory()) {
-		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE, DEFAULT_BLOCK_HEADER_SIZE);
+		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
+		                                                DEFAULT_BLOCK_HEADER_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		return;
 	}

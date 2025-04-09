@@ -128,9 +128,9 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
 		source.ReadData(header.aes_encryption_iv, AES_IV_LEN);
 		// todo; fix accordingly
-//		source.ReadData(header.salt, SALT_LEN);
-//		source.ReadData(header.canary, CANARY_LEN);
-//		header.cipher = source.Read<uint8_t>();
+		//		source.ReadData(header.salt, SALT_LEN);
+		//		source.ReadData(header.canary, CANARY_LEN);
+		//		header.cipher = source.Read<uint8_t>();
 		// TODO; check if this is still under 4KB (page size)
 	}
 
@@ -203,10 +203,10 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
                                                const StorageManagerOptions &options)
     // here we need to also pass the block header size to the blockmanager
-    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db), path(path_p),
-      header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                    // why is the user_size 4kb - 8 bytes?
-                    Storage::FILE_HEADER_SIZE - DUCKDB_BLOCK_HEADER_SIZE),
+    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db),
+      path(path_p), header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
+                                  // why is the user_size 4kb - 8 bytes?
+                                  Storage::FILE_HEADER_SIZE - DUCKDB_BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
 }
 

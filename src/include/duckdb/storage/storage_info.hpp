@@ -37,7 +37,6 @@ struct FileHandle;
 #define DUCKDB_BLOCK_HEADER_SIZE DEFAULT_BLOCK_HEADER_SIZE
 #endif
 
-
 using block_id_t = int64_t;
 
 struct Storage {

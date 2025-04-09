@@ -28,7 +28,8 @@ class MetadataManager;
 class BlockManager {
 public:
 	BlockManager() = delete;
-	BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p, const optional_idx block_header_size_p);
+	BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p,
+	             const optional_idx block_header_size_p);
 	virtual ~BlockManager() = default;
 
 	//! The buffer manager

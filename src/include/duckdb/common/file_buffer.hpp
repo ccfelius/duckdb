@@ -27,7 +27,8 @@ public:
 	//! (typically 8 bytes). On return, this->AllocSize() >= this->size >= user_size.
 	//! Our allocation size will always be page-aligned, which is necessary to support
 	//! DIRECT_IO
-	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, uint64_t custom_header_size = DEFAULT_BLOCK_HEADER_SIZE);
+	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size,
+	           uint64_t custom_header_size = DEFAULT_BLOCK_HEADER_SIZE);
 	FileBuffer(FileBuffer &source, FileBufferType type);
 
 	virtual ~FileBuffer();
