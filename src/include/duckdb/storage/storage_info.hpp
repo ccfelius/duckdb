@@ -58,6 +58,8 @@ struct Storage {
 
 	//! Ensures that a user-provided block allocation size matches all requirements.
 	static void VerifyBlockAllocSize(const idx_t block_alloc_size);
+	//! Ensures that a user-provided block header size matches all requirements.
+	static void VerifyBlockHeaderSize(const idx_t block_header_size);
 };
 
 //! The version number default, lower and upper bounds of the database storage format

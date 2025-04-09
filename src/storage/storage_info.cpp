@@ -206,4 +206,13 @@ void Storage::VerifyBlockAllocSize(const idx_t block_alloc_size) {
 	}
 }
 
+void Storage::VerifyBlockHeaderSize(const idx_t block_header_size) {
+	// block header sizes should be either 8 bytes (plain), 36 bytes (gcm), 20 bytes (ctr), or 24 bytes (cbc)
+	// todo; do we need to make this 8 byte-aligned?
+	// todo; refactor
+	if (block_header_size != 8 && block_header_size != 20 && block_header_size != 24 && block_header_size != 36) {
+		throw InvalidInputException("The block header size must be 8, 20, or 24 bytes, got %llu", block_header_size);
+	}
+}
+
 } // namespace duckdb
