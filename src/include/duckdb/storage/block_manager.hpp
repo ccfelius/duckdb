@@ -28,7 +28,8 @@ class MetadataManager;
 class BlockManager {
 public:
 	BlockManager() = delete;
-	BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p);
+	BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p,
+	             const optional_idx block_header_size_p);
 	virtual ~BlockManager() = default;
 
 	//! The buffer manager
@@ -101,13 +102,22 @@ public:
 	inline idx_t GetBlockAllocSize() const {
 		return block_alloc_size.GetIndex();
 	}
+	//! Returns the block header size of this block manager
+	inline idx_t GetBlockHeaderSize() const {
+		return block_header_size.GetIndex();
+	}
 	//! Returns the possibly invalid block allocation size of this block manager.
 	inline optional_idx GetOptionalBlockAllocSize() const {
 		return block_alloc_size;
 	}
+	//! Returns the possibly invalid block allocation size of this block manager.
+	inline optional_idx GetOptionalBlockHeaderSize() const {
+		return block_header_size;
+	}
 	//! Returns the block size of this block manager.
 	inline idx_t GetBlockSize() const {
-		return block_alloc_size.GetIndex() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+		return block_alloc_size.GetIndex() - block_header_size.GetIndex();
+		;
 	}
 	//! Sets the block allocation size. This should only happen when initializing an existing database.
 	//! When initializing an existing database, we construct the block manager before reading the file header,
@@ -117,6 +127,12 @@ public:
 			throw InternalException("the block allocation size must be set once");
 		}
 		block_alloc_size = block_alloc_size_p.GetIndex();
+	}
+	void SetBlockHeaderSize(const optional_idx block_header_size_p) {
+		if (block_header_size.IsValid()) {
+			throw InternalException("the block header size must be set once");
+		}
+		block_header_size = block_header_size_p.GetIndex();
 	}
 
 	//! Verify the block usage count
@@ -134,5 +150,8 @@ private:
 	//! for in-memory block managers. Default to default_block_alloc_size for file-backed block managers.
 	//! This is NOT the actual memory available on a block (block_size).
 	optional_idx block_alloc_size;
+	//! The allocation size of blocks managed by this block manager. Defaults to DEFAULT_BLOCK_HEADER_SIZE
+	//! for in-memory block managers. Default to default_block_header_size for file-backed block managers.
+	optional_idx block_header_size;
 };
 } // namespace duckdb

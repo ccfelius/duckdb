@@ -12,6 +12,7 @@
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/storage_extension.hpp"
@@ -133,7 +134,8 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 
 void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	if (InMemory()) {
-		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
+		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
+		                                                DEFAULT_BLOCK_HEADER_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		return;
 	}
@@ -182,6 +184,12 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_alloc_size = config.options.default_block_alloc_size;
+		}
+		// Set the block header size for the new database file.
+		if (storage_options.block_header_size.IsValid()) {
+			options.block_header_size = storage_options.block_header_size;
+		} else {
+			options.block_header_size = config.options.default_block_header_size;
 		}
 		if (!options.storage_version.IsValid()) {
 			// when creating a new database we default to the serialization version specified in the config

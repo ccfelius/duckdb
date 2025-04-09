@@ -16,6 +16,8 @@ namespace duckdb {
 struct StorageOptions {
 	//! The allocation size of blocks for this attached database file (if any)
 	optional_idx block_alloc_size;
+	//! The size of block headers for this attached database file (if any)
+	optional_idx block_header_size;
 	//! The row group size for this attached database (if any)
 	optional_idx row_group_size;
 	//! Target storage version (if any)

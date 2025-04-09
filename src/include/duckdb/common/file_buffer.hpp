@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/enums/debug_initialize.hpp"
 
 namespace duckdb {
@@ -26,7 +27,8 @@ public:
 	//! (typically 8 bytes). On return, this->AllocSize() >= this->size >= user_size.
 	//! Our allocation size will always be page-aligned, which is necessary to support
 	//! DIRECT_IO
-	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size);
+	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size,
+	           uint64_t custom_header_size = DEFAULT_BLOCK_HEADER_SIZE);
 	FileBuffer(FileBuffer &source, FileBufferType type);
 
 	virtual ~FileBuffer();
@@ -52,7 +54,7 @@ public:
 
 	// Same rules as the constructor. We add room for a header, in addition to
 	// the requested user bytes. We then sector-align the result.
-	void Resize(uint64_t user_size);
+	void Resize(uint64_t user_size, uint64_t header_size = DEFAULT_BLOCK_HEADER_SIZE);
 
 	uint64_t AllocSize() const {
 		return internal_size;
@@ -69,7 +71,7 @@ public:
 		idx_t header_size;
 	};
 
-	MemoryRequirement CalculateMemory(uint64_t user_size);
+	MemoryRequirement CalculateMemory(uint64_t user_size, uint64_t header_size = DEFAULT_BLOCK_HEADER_SIZE);
 	void Initialize(DebugInitialize info);
 
 protected:

@@ -27,6 +27,7 @@ struct StorageManagerOptions {
 	bool use_direct_io = false;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	optional_idx block_alloc_size;
+	optional_idx block_header_size;
 	optional_idx storage_version;
 	optional_idx version_number;
 };
@@ -93,7 +94,8 @@ private:
 	void LoadFreeList();
 	//! Initializes the database header. We pass the provided block allocation size as a parameter
 	//!	to detect inconsistencies with the file header.
-	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
+	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size,
+	                const optional_idx block_header_size);
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;
