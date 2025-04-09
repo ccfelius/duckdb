@@ -398,11 +398,10 @@ struct DefaultBlockSizeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct DefaultBlockHeaderSizeSetting {
+struct DefaultBlockHeaderSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "default_block_header_size";
-	static constexpr const char *Description =
-	    "The default block header size for new duckdb database files (new as-in, they do not yet exist).";
+	static constexpr const char *Description = "The default block header size";
 	static constexpr const char *InputType = "UBIGINT";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
