@@ -133,7 +133,8 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 
 void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	if (InMemory()) {
-		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
+		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
+		                                                DEFAULT_BLOCK_METADATA_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		return;
 	}
@@ -188,6 +189,15 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		if (!options.storage_version.IsValid()) {
 			// when creating a new database we default to the serialization version specified in the config
 			options.storage_version = config.options.serialization_compatibility.serialization_version;
+		}
+
+		// Set the block header size for the new database file.
+		if (storage_options.block_header_size.IsValid()) {
+			// Use the option provided by the user.
+			options.block_header_size = storage_options.block_header_size;
+		} else {
+			// No explicit option provided: use the default option.
+			options.block_header_size = config.options.default_block_header_size;
 		}
 
 		// Initialize the block manager before creating a new database.

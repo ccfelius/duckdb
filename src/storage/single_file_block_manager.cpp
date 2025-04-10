@@ -189,9 +189,9 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
                                                const StorageManagerOptions &options)
-    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size), db(db), path(path_p),
-      header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                    Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
+    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db),
+      path(path_p), header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
+                                  Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
 }
 
@@ -722,8 +722,8 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 		// compute the checksum
 		auto start_ptr = ptr + i * GetBlockAllocSize();
 		auto stored_checksum = Load<uint64_t>(start_ptr);
-		uint64_t computed_checksum = Checksum(
-		    start_ptr + Storage::DEFAULT_BLOCK_HEADER_SIZE + Storage::DEFAULT_BLOCK_METADATA_SIZE, GetBlockSize());
+		uint64_t computed_checksum =
+		    Checksum(start_ptr + Storage::DEFAULT_BLOCK_HEADER_SIZE + GetBlockMetadataSize(), GetBlockSize());
 		// verify the checksum
 		if (stored_checksum != computed_checksum) {
 			throw IOException(

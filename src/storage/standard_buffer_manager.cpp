@@ -63,7 +63,7 @@ StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
     : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_uniq<BufferAllocatorData>(*this)) {
-	temp_block_manager = make_uniq<InMemoryBlockManager>(*this, DEFAULT_BLOCK_ALLOC_SIZE);
+	temp_block_manager = make_uniq<InMemoryBlockManager>(*this, DEFAULT_BLOCK_ALLOC_SIZE, DEFAULT_BLOCK_METADATA_SIZE);
 	temporary_directory.path = std::move(tmp);
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		evicted_data_per_tag[i] = 0;
@@ -106,6 +106,10 @@ optional_idx StandardBufferManager::GetMaxSwap() const {
 
 idx_t StandardBufferManager::GetBlockAllocSize() const {
 	return temp_block_manager->GetBlockAllocSize();
+}
+
+idx_t StandardBufferManager::GetBlockMetadataSize() const {
+	return temp_block_manager->GetBlockMetadataSize();
 }
 
 idx_t StandardBufferManager::GetBlockSize() const {
@@ -371,8 +375,7 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	unique_ptr<FileBuffer> replacement_buffer;
 	auto &allocator = Allocator::Get(db);
-	auto alloc_size =
-	    handle->GetMemoryUsage() - Storage::DEFAULT_BLOCK_HEADER_SIZE - Storage::DEFAULT_BLOCK_METADATA_SIZE;
+	auto alloc_size = handle->GetMemoryUsage() - Storage::DEFAULT_BLOCK_HEADER_SIZE - block_metadata_size;
 	auto &buffer = handle->GetBuffer(lock);
 	if (handle->GetBufferType() == FileBufferType::BLOCK) {
 		auto block = reinterpret_cast<Block *>(buffer.get());

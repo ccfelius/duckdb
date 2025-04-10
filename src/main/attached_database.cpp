@@ -109,13 +109,13 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 
 			//! for encryption, different block sizes are necessary
 			if (cipher == "gcm") {
-				config.options.default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE + 28;
+				config.options.default_block_header_size = 28;
 			}
 			if (cipher == "ctr") {
-				config.options.default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE + 12;
+				config.options.default_block_header_size = 12;
 			}
 			if (cipher == "cbc") {
-				config.options.default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE + 16;
+				config.options.default_block_header_size = 16;
 			} else {
 				throw BinderException("No cipher \"%s\" exists. Only GCM, CTR and CBC are supported",
 				                      entry.second.ToString());

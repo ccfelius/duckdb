@@ -270,6 +270,8 @@ struct DBConfigOptions {
 	string cipher = "gcm";
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
+	//! The default header size (used for encryption)
+	idx_t default_block_header_size = 0;
 	//!  Whether or not to abort if a serialization exception is thrown during WAL playback (when reading truncated WAL)
 	bool abort_on_wal_failure = false;
 	//! The index_scan_percentage sets a threshold for index scans.

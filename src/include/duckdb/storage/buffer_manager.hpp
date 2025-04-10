@@ -52,6 +52,8 @@ public:
 	virtual optional_idx GetMaxSwap() const = 0;
 	//! Returns the block allocation size for buffer-managed blocks.
 	virtual idx_t GetBlockAllocSize() const = 0;
+	//! Returns the block allocation size for buffer-managed blocks.
+	virtual idx_t GetBlockMetadataSize() const = 0;
 	//! Returns the block size for buffer-managed blocks.
 	virtual idx_t GetBlockSize() const = 0;
 
@@ -89,9 +91,9 @@ public:
 	DUCKDB_API static const BufferManager &GetBufferManager(const ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
-	static idx_t GetAllocSize(const idx_t block_size) {
+	static idx_t GetAllocSize(const idx_t block_size, const idx_t block_metadata_size = 0) {
 		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE +
-		                                               Storage::DEFAULT_BLOCK_METADATA_SIZE);
+		                                               block_metadata_size);
 	}
 	//! Returns the maximum available memory for a given query
 	idx_t GetQueryMaxMemory() const;

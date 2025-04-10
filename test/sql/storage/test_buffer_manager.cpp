@@ -157,7 +157,7 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	auto block_size = config->options.default_block_alloc_size - Storage::DEFAULT_BLOCK_HEADER_SIZE -
-	                  Storage::DEFAULT_BLOCK_METADATA_SIZE;
+	                  config->options.default_block_header_size;
 	idx_t requested_size = block_size;
 	auto handle = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false);
 	auto block = handle.GetBlockHandle();
@@ -209,7 +209,7 @@ TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 	auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false);
 	auto block = pin.GetBlockHandle();
 	CHECK(buffer_manager.GetUsedMemory() >=
-	      requested_size + Storage::DEFAULT_BLOCK_HEADER_SIZE + Storage::DEFAULT_BLOCK_METADATA_SIZE);
+	      requested_size + Storage::DEFAULT_BLOCK_HEADER_SIZE + config->options.default_block_header_size);
 
 	pin.Destroy();
 	block.reset();

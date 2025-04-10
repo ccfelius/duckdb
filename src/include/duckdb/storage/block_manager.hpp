@@ -28,7 +28,8 @@ class MetadataManager;
 class BlockManager {
 public:
 	BlockManager() = delete;
-	BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p);
+	BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p,
+	             const optional_idx block_header_size_p);
 	virtual ~BlockManager() = default;
 
 	//! The buffer manager
@@ -107,7 +108,11 @@ public:
 	}
 	//! Returns the block size of this block manager.
 	inline idx_t GetBlockSize() const {
-		return block_alloc_size.GetIndex() - Storage::DEFAULT_BLOCK_HEADER_SIZE - Storage::DEFAULT_BLOCK_METADATA_SIZE;
+		return block_alloc_size.GetIndex() - Storage::DEFAULT_BLOCK_HEADER_SIZE - block_metadata_size.GetIndex();
+	}
+	//! Returns the block size of this block manager.
+	inline idx_t GetBlockMetadataSize() const {
+		return block_metadata_size.GetIndex();
 	}
 	//! Sets the block allocation size. This should only happen when initializing an existing database.
 	//! When initializing an existing database, we construct the block manager before reading the file header,
@@ -134,5 +139,6 @@ private:
 	//! for in-memory block managers. Default to default_block_alloc_size for file-backed block managers.
 	//! This is NOT the actual memory available on a block (block_size).
 	optional_idx block_alloc_size;
+	optional_idx block_metadata_size;
 };
 } // namespace duckdb

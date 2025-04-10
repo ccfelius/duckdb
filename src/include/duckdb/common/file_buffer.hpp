@@ -69,7 +69,7 @@ public:
 		idx_t header_size;
 	};
 
-	MemoryRequirement CalculateMemory(uint64_t user_size);
+	MemoryRequirement CalculateMemory(uint64_t user_size, uint64_t block_metadata_size = 0);
 	void Initialize(DebugInitialize info);
 
 protected:

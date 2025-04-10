@@ -21,8 +21,9 @@ public:
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
 		auto size = MaxValue<idx_t>(buffer_manager.GetBlockSize(), capacity * entry_size);
 		auto buffer_handle = buffer_manager.Allocate(tag, size, false);
+		auto metadata_size = buffer_manager.GetBlockMetadataSize();
 		block = buffer_handle.GetBlockHandle();
-		D_ASSERT(BufferManager::GetAllocSize(size) == block->GetMemoryUsage());
+		D_ASSERT(BufferManager::GetAllocSize(size, metadata_size) == block->GetMemoryUsage());
 	}
 
 	explicit RowDataBlock(idx_t entry_size) : entry_size(entry_size) {

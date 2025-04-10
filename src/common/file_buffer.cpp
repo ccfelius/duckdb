@@ -62,7 +62,7 @@ void FileBuffer::ReallocBuffer(idx_t new_size) {
 	size = 0;
 }
 
-FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
+FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size, uint64_t block_metadata_size) {
 	FileBuffer::MemoryRequirement result;
 
 	if (type == FileBufferType::TINY_BUFFER) {
@@ -70,7 +70,7 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
 		result.header_size = 0;
 		result.alloc_size = user_size;
 	} else {
-		result.header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE + Storage::DEFAULT_BLOCK_METADATA_SIZE;
+		result.header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE + block_metadata_size;
 		result.alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(result.header_size + user_size);
 	}
 	return result;

@@ -29,6 +29,7 @@ struct StorageManagerOptions {
 	optional_idx block_alloc_size;
 	optional_idx storage_version;
 	optional_idx version_number;
+	optional_idx block_header_size;
 
 	//! key and cipher for encryption
 	string encryption_key;

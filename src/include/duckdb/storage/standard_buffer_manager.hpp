@@ -57,6 +57,8 @@ public:
 	optional_idx GetMaxSwap() const final;
 	//! Returns the block allocation size for buffer-managed blocks.
 	idx_t GetBlockAllocSize() const final;
+	//! Returns the block metadata size for block headers.
+	idx_t GetBlockMetadataSize() const final;
 	//! Returns the block size for buffer-managed blocks.
 	idx_t GetBlockSize() const final;
 
