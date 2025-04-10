@@ -247,7 +247,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h2.block_count = 0;
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h2.block_alloc_size = GetBlockAllocSize();
-	h2.block_alloc_size = GetBlockHeaderSize();
+	h2.block_header_size = GetBlockHeaderSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	h2.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
