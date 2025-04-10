@@ -1,0 +1,14 @@
+# name: test/sql/attach/attach_encryption_cipher.test
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH 'new_encrypted.duckdb' AS db1 (ENCRYPTION_KEY 'asdf', CIPHER 'gcm');
+
+statement ok
+CREATE TABLE db1.test AS SELECT 1 AS value FROM range(10000);
+
+statement ok
+CHECKPOINT;

@@ -1,0 +1,14 @@
+# name: test/sql/attach/attach_encryption_plain.test
+# group: [attach]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH 'new.duckdb' AS db1;
+
+statement ok
+CREATE TABLE db1.test AS SELECT 1 AS value FROM range(10000);
+
+statement ok
+CHECKPOINT;

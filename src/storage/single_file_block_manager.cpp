@@ -434,7 +434,6 @@ void SingleFileBlockManager::ChecksumAndWriteDatabaseHeader(FileBuffer &block, u
 	block.Write(*handle, location);
 }
 
-
 void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location, bool skip_encryption) const {
 	uint64_t block_metadata_size = options.block_header_size.GetIndex();
 
