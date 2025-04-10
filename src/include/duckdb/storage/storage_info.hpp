@@ -48,6 +48,8 @@ struct Storage {
 	constexpr static idx_t MAX_BLOCK_ALLOC_SIZE = 262144ULL;
 	//! The default block header size for blocks written to storage.
 	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(idx_t);
+	//! The default metadata header size for blocks written to storage.
+	constexpr static idx_t DEFAULT_BLOCK_METADATA_SIZE = 28ULL;
 	//! The default block size.
 	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 

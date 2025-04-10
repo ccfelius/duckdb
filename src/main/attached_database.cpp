@@ -107,13 +107,20 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 			auto &config = DBConfig::GetConfig(db);
 			auto cipher = StringUtil::Lower(entry.second.ToString());
 
-			if (cipher == "gcm" || cipher == "ctr" || cipher == "cbc") {
-				config.options.cipher = cipher;
+			//! for encryption, different block sizes are necessary
+			if (cipher == "gcm") {
+				config.options.default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE + 28;
+			}
+			if (cipher == "ctr") {
+				config.options.default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE + 12;
+			}
+			if (cipher == "cbc") {
+				config.options.default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE + 16;
 			} else {
 				throw BinderException("No cipher \"%s\" exists. Only GCM, CTR and CBC are supported",
 				                      entry.second.ToString());
 			}
-
+			config.options.cipher = cipher;
 			continue;
 		}
 		if (StringUtil::CIEquals(entry.first, "block_size")) {

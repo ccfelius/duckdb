@@ -371,7 +371,8 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	unique_ptr<FileBuffer> replacement_buffer;
 	auto &allocator = Allocator::Get(db);
-	auto alloc_size = handle->GetMemoryUsage() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	auto alloc_size =
+	    handle->GetMemoryUsage() - Storage::DEFAULT_BLOCK_HEADER_SIZE - Storage::DEFAULT_BLOCK_METADATA_SIZE;
 	auto &buffer = handle->GetBuffer(lock);
 	if (handle->GetBufferType() == FileBufferType::BLOCK) {
 		auto block = reinterpret_cast<Block *>(buffer.get());

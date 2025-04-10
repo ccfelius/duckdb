@@ -722,7 +722,8 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 		// compute the checksum
 		auto start_ptr = ptr + i * GetBlockAllocSize();
 		auto stored_checksum = Load<uint64_t>(start_ptr);
-		uint64_t computed_checksum = Checksum(start_ptr + Storage::DEFAULT_BLOCK_HEADER_SIZE, GetBlockSize());
+		uint64_t computed_checksum = Checksum(
+		    start_ptr + Storage::DEFAULT_BLOCK_HEADER_SIZE + Storage::DEFAULT_BLOCK_METADATA_SIZE, GetBlockSize());
 		// verify the checksum
 		if (stored_checksum != computed_checksum) {
 			throw IOException(
