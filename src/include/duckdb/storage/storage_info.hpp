@@ -95,6 +95,8 @@ struct MainHeader {
 	//! optional aes encryption initialization vector (iv)
 	//! only used if encryption flag is set
 	static constexpr idx_t AES_IV_LEN = 16;
+	static constexpr idx_t AES_TAG_LEN = 16;
+	static constexpr idx_t AES_NONCE_LEN = 12;
 	data_t aes_encryption_iv[AES_IV_LEN];
 
 	static void CheckMagicBytes(FileHandle &handle);

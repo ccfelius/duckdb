@@ -124,7 +124,6 @@ private:
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_encryption = false) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_encryption = false) const;
-	void ChecksumAndWriteDatabaseHeader(FileBuffer &block, uint64_t location) const;
 
 	idx_t GetBlockLocation(block_id_t block_id);
 

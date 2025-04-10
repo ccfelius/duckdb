@@ -28,10 +28,15 @@ void FileBuffer::Init() {
 FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p, uint64_t block_metadata_size)
     : allocator(source.allocator), type(type_p), block_metadata_size(block_metadata_size) {
 	// take over the structures of the source buffer
-	buffer = source.buffer + block_metadata_size;
-	size = source.size - block_metadata_size;
+	buffer = source.buffer;
+	size = source.size;
 	internal_buffer = source.internal_buffer;
 	internal_size = source.internal_size;
+
+	if (type == FileBufferType::BLOCK && block_metadata_size > 0) {
+		buffer += block_metadata_size;
+		size -= block_metadata_size;
+	}
 
 	source.Init();
 }
@@ -71,9 +76,15 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
 		result.header_size = 0;
 		result.alloc_size = user_size;
 	} else {
-		result.header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE + block_metadata_size;
+		result.header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE;
+		if (type == FileBufferType::BLOCK && block_metadata_size > 0) {
+			//! Blocks may contain extra metadata for encryption.
+			result.header_size += block_metadata_size;
+			// user_size -= block_metadata_size;
+		}
 		result.alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(result.header_size + user_size);
 	}
+
 	return result;
 }
 

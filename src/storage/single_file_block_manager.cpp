@@ -190,12 +190,8 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db),
-      // user_size is a number
-      // block_header_size an optional index
       path(path_p), header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                                  Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE -
-                                      options.block_header_size.GetIndexOrZero(),
-                                  options.block_header_size.GetIndexOrZero()),
+                                  Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
       iteration_count(0), options(options) {
 }
 
@@ -303,7 +299,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 	SerializeHeaderStructure<MainHeader>(main_file_header, header_buffer.buffer);
 	// now write the main header to the file
-	ChecksumAndWriteDatabaseHeader(header_buffer, 0);
+	ChecksumAndWrite(header_buffer, 0, true);
 	header_buffer.Clear();
 
 	// write the database headers
@@ -320,7 +316,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	h1.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
-	ChecksumAndWriteDatabaseHeader(header_buffer, Storage::FILE_HEADER_SIZE);
+	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE, true);
 
 	// header 2
 	DatabaseHeader h2;
@@ -333,7 +329,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	h2.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
-	ChecksumAndWriteDatabaseHeader(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL, true);
 
 	// ensure that writing to disk is completed before returning
 	handle->Sync();
@@ -372,11 +368,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	// read the database headers from disk
 	DatabaseHeader h1;
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
+	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE, true);
 	h1 = DeserializeDatabaseHeader(main_file_header, header_buffer.buffer);
 
 	DatabaseHeader h2;
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL, true);
 	h2 = DeserializeDatabaseHeader(main_file_header, header_buffer.buffer);
 
 	// check the header with the highest iteration count
@@ -426,44 +422,48 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	}
 }
 
-void SingleFileBlockManager::ChecksumAndWriteDatabaseHeader(FileBuffer &block, uint64_t location) const {
-	// compute the checksum and write it to the start of the buffer (if not temp buffer)
-	uint64_t checksum = Checksum(block.buffer, block.Size());
-	Store<uint64_t>(checksum, block.InternalBuffer());
-	// now write the buffer
-	block.Write(*handle, location);
-}
-
 void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location, bool skip_encryption) const {
-	uint64_t block_metadata_size = options.block_header_size.GetIndex();
+	uint64_t block_metadata_size = 0;
 
-	// for the main database header(s), we skip the encryption and force header metadata to 0
-	if (options.NeedsEncryption() && skip_encryption) {
-		block_metadata_size = 0;
+	if (block.GetBufferType() == FileBufferType::BLOCK) {
+		block_metadata_size = options.block_header_size.GetIndexOrZero();
 	}
 
-	// compute the checksum and write it to the start of the buffer (if not temp buffer)
+	// Compute the checksum and write it to the start of the buffer (if not temp buffer)
 	uint64_t checksum = Checksum(block.buffer, block.Size());
 	Store<uint64_t>(checksum, block.InternalBuffer() + block_metadata_size);
 
 	// encrypt if required
 	if (options.NeedsEncryption() && !skip_encryption) {
+		uint8_t tag[16];
+		uint8_t iv[16];
+
 		auto encryption_util = GetEncryptionUtil(db);
 		auto encryption_state = encryption_util->CreateEncryptionState();
 		auto derived_key = DeriveKey(options.encryption_key);
 
-		// todo; the iv needs to differ per block
-		// generate an IV here
-
-		encryption_state->InitializeEncryption(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN,
-		                                       &derived_key);
+		//! For every encrypted block, a unique nonce is generated
+		encryption_state->GenerateRandomData(iv, MainHeader::AES_NONCE_LEN);
+		//! write the nonce at the start of the buffer
+		memcpy(block.InternalBuffer(), iv, MainHeader::AES_NONCE_LEN);
+		//! For GCM and CTR, we set the last 4 bytes to 0
+		memset(iv + MainHeader::AES_NONCE_LEN, 0, 4);
+		encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, &derived_key);
 
 		auto aes_res = encryption_state->Process(block.InternalBuffer() + block_metadata_size, block.size,
-		                                         block.InternalBuffer(), block.size);
+		                                         block.InternalBuffer() + block_metadata_size, block.size);
+
+		encryption_state->Finalize(block.InternalBuffer() + block_metadata_size, block.size, tag,
+		                           MainHeader::AES_TAG_LEN);
+
+		// write the tag right after the nonce
+		memcpy(block.InternalBuffer() + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
+
 		if (aes_res != block.size) {
 			throw IOException("Encryption failure");
 		}
 	}
+
 	// now write the buffer
 	block.Write(*handle, location);
 }
@@ -714,7 +714,8 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize());
+		result =
+		    make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize(), options.block_header_size.GetIndexOrZero());
 	}
 	result->Initialize(options.debug_initialize);
 	return result;
