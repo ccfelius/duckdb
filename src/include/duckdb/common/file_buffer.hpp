@@ -26,8 +26,8 @@ public:
 	//! (typically 8 bytes). On return, this->AllocSize() >= this->size >= user_size.
 	//! Our allocation size will always be page-aligned, which is necessary to support
 	//! DIRECT_IO
-	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size);
-	FileBuffer(FileBuffer &source, FileBufferType type);
+	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, const uint64_t block_metadata_size = 0);
+	FileBuffer(FileBuffer &source, FileBufferType type, const uint64_t block_metadata_size = 0);
 
 	virtual ~FileBuffer();
 
@@ -35,7 +35,7 @@ public:
 	//! The buffer that users can write to
 	data_ptr_t buffer;
 	//! The user-facing size of the buffer.
-	//! This is equivalent to internal_size - BLOCK_HEADER_SIZE.
+	//! This is equivalent to internal_size - BLOCK_HEADER_SIZE - block_metadata_size.
 	uint64_t size;
 
 public:
@@ -69,18 +69,20 @@ public:
 		idx_t header_size;
 	};
 
-	MemoryRequirement CalculateMemory(uint64_t user_size, uint64_t block_metadata_size = 0);
+	MemoryRequirement CalculateMemory(uint64_t user_size);
 	void Initialize(DebugInitialize info);
 
 protected:
 	//! The type of the buffer.
 	FileBufferType type;
 	//! The pointer to the internal buffer that will be read from or written to.
-	//! This includes the buffer header.
+	//! This includes the buffer header and metadata size.
 	data_ptr_t internal_buffer;
 	//! The aligned size as passed to the constructor.
 	//! This is the size that is read from or written to disk.
 	uint64_t internal_size;
+	//! block_metadata_size is the size of (potential) metadata
+	uint64_t block_metadata_size = 0;
 
 	void ReallocBuffer(idx_t new_size);
 	void Init();

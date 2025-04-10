@@ -107,14 +107,11 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 			auto &config = DBConfig::GetConfig(db);
 			auto cipher = StringUtil::Lower(entry.second.ToString());
 
-			//! for encryption, different block sizes are necessary
+			//! for encryption, different block (header) sizes are necessary
+			// we set to the closest 8-byte aligned value
 			if (cipher == "gcm") {
-				config.options.default_block_header_size = 28;
-			}
-			if (cipher == "ctr") {
-				config.options.default_block_header_size = 12;
-			}
-			if (cipher == "cbc") {
+				config.options.default_block_header_size = 32;
+			} else if (cipher == "ctr" || cipher == "cbc") {
 				config.options.default_block_header_size = 16;
 			} else {
 				throw BinderException("No cipher \"%s\" exists. Only GCM, CTR and CBC are supported",

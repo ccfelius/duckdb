@@ -108,11 +108,11 @@ public:
 	}
 	//! Returns the block size of this block manager.
 	inline idx_t GetBlockSize() const {
-		return block_alloc_size.GetIndex() - Storage::DEFAULT_BLOCK_HEADER_SIZE - block_metadata_size.GetIndex();
+		return block_alloc_size.GetIndex() - Storage::DEFAULT_BLOCK_HEADER_SIZE - block_metadata_size.GetIndexOrZero();
 	}
 	//! Returns the block size of this block manager.
 	inline idx_t GetBlockMetadataSize() const {
-		return block_metadata_size.GetIndex();
+		return block_metadata_size.GetIndexOrZero();
 	}
 	//! Sets the block allocation size. This should only happen when initializing an existing database.
 	//! When initializing an existing database, we construct the block manager before reading the file header,

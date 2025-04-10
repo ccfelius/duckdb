@@ -201,6 +201,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		}
 
 		// Initialize the block manager before creating a new database.
+		// TODO; block manager needs first to be initialized with metadata_header =0
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);

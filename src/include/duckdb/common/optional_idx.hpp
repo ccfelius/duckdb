@@ -43,6 +43,13 @@ public:
 		return index;
 	}
 
+	idx_t GetIndexOrZero() const {
+		if (index == INVALID_INDEX) {
+			return 0;
+		}
+		return index;
+	}
+
 	inline bool operator==(const optional_idx &rhs) const {
 		return index == rhs.index;
 	}

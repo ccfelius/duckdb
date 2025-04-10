@@ -10,8 +10,8 @@
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size)
-    : allocator(allocator), type(type) {
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, uint64_t block_metadata_size)
+    : allocator(allocator), type(type), block_metadata_size(block_metadata_size) {
 	Init();
 	if (user_size) {
 		Resize(user_size);
@@ -25,10 +25,11 @@ void FileBuffer::Init() {
 	internal_size = 0;
 }
 
-FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(source.allocator), type(type_p) {
+FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p, uint64_t block_metadata_size)
+    : allocator(source.allocator), type(type_p), block_metadata_size(block_metadata_size) {
 	// take over the structures of the source buffer
-	buffer = source.buffer;
-	size = source.size;
+	buffer = source.buffer + block_metadata_size;
+	size = source.size - block_metadata_size;
 	internal_buffer = source.internal_buffer;
 	internal_size = source.internal_size;
 
@@ -62,7 +63,7 @@ void FileBuffer::ReallocBuffer(idx_t new_size) {
 	size = 0;
 }
 
-FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size, uint64_t block_metadata_size) {
+FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
 	FileBuffer::MemoryRequirement result;
 
 	if (type == FileBufferType::TINY_BUFFER) {

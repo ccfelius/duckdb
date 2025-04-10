@@ -190,8 +190,12 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db),
+      // user_size is a number
+      // block_header_size an optional index
       path(path_p), header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                                  Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
+                                  Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE -
+                                      options.block_header_size.GetIndexOrZero(),
+                                  options.block_header_size.GetIndexOrZero()),
       iteration_count(0), options(options) {
 }
 
@@ -298,8 +302,8 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	// MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 	SerializeHeaderStructure<MainHeader>(main_file_header, header_buffer.buffer);
-	// now write the header to the file
-	ChecksumAndWrite(header_buffer, 0, true);
+	// now write the main header to the file
+	ChecksumAndWriteDatabaseHeader(header_buffer, 0);
 	header_buffer.Clear();
 
 	// write the database headers
@@ -316,7 +320,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h1.vector_size = STANDARD_VECTOR_SIZE;
 	h1.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
-	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE);
+	ChecksumAndWriteDatabaseHeader(header_buffer, Storage::FILE_HEADER_SIZE);
 
 	// header 2
 	DatabaseHeader h2;
@@ -329,7 +333,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h2.vector_size = STANDARD_VECTOR_SIZE;
 	h2.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
-	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
+	ChecksumAndWriteDatabaseHeader(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
 	// ensure that writing to disk is completed before returning
 	handle->Sync();
@@ -390,6 +394,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 }
 
 void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_encryption) const {
+
 	// read the buffer from disk
 	block.Read(*handle, location);
 
@@ -421,10 +426,26 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	}
 }
 
-void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location, bool skip_encryption) const {
+void SingleFileBlockManager::ChecksumAndWriteDatabaseHeader(FileBuffer &block, uint64_t location) const {
 	// compute the checksum and write it to the start of the buffer (if not temp buffer)
 	uint64_t checksum = Checksum(block.buffer, block.Size());
 	Store<uint64_t>(checksum, block.InternalBuffer());
+	// now write the buffer
+	block.Write(*handle, location);
+}
+
+
+void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location, bool skip_encryption) const {
+	uint64_t block_metadata_size = options.block_header_size.GetIndex();
+
+	// for the main database header(s), we skip the encryption and force header metadata to 0
+	if (options.NeedsEncryption() && skip_encryption) {
+		block_metadata_size = 0;
+	}
+
+	// compute the checksum and write it to the start of the buffer (if not temp buffer)
+	uint64_t checksum = Checksum(block.buffer, block.Size());
+	Store<uint64_t>(checksum, block.InternalBuffer() + block_metadata_size);
 
 	// encrypt if required
 	if (options.NeedsEncryption() && !skip_encryption) {
@@ -433,11 +454,13 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 		auto derived_key = DeriveKey(options.encryption_key);
 
 		// todo; the iv needs to differ per block
+		// generate an IV here
+
 		encryption_state->InitializeEncryption(main_file_header.aes_encryption_iv, MainHeader::AES_IV_LEN,
 		                                       &derived_key);
 
-		auto aes_res =
-		    encryption_state->Process(block.InternalBuffer(), block.size, block.InternalBuffer(), block.size);
+		auto aes_res = encryption_state->Process(block.InternalBuffer() + block_metadata_size, block.size,
+		                                         block.InternalBuffer(), block.size);
 		if (aes_res != block.size) {
 			throw IOException("Encryption failure");
 		}
@@ -684,7 +707,7 @@ bool SingleFileBlockManager::IsRemote() {
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
-	return make_uniq<Block>(source_buffer, block_id);
+	return make_uniq<Block>(source_buffer, block_id, options.block_header_size.GetIndexOrZero());
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
