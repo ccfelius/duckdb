@@ -33,7 +33,9 @@ FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p, uint64_t block
 	internal_buffer = source.internal_buffer;
 	internal_size = source.internal_size;
 
-	if (type == FileBufferType::BLOCK && block_metadata_size > 0) {
+	// todo; this might also be for managed buffers... change user-size (a bit earlier)
+	//  Except the main database header file!
+	if (type != FileBufferType::TINY_BUFFER && block_metadata_size > 0) {
 		buffer += block_metadata_size;
 		size -= block_metadata_size;
 	}
@@ -77,10 +79,9 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
 		result.alloc_size = user_size;
 	} else {
 		result.header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE;
-		if (type == FileBufferType::BLOCK && block_metadata_size > 0) {
+		if (block_metadata_size > 0) {
 			//! Blocks may contain extra metadata for encryption.
 			result.header_size += block_metadata_size;
-			// user_size -= block_metadata_size;
 		}
 		result.alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(result.header_size + user_size);
 	}

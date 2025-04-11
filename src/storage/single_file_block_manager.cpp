@@ -446,7 +446,7 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 		encryption_state->GenerateRandomData(iv, MainHeader::AES_NONCE_LEN);
 		//! write the nonce at the start of the buffer
 		memcpy(block.InternalBuffer(), iv, MainHeader::AES_NONCE_LEN);
-		//! For GCM and CTR, we set the last 4 bytes to 0
+		//! For GCM and CTR, we set the last 4 bytes (counter) to 0
 		memset(iv + MainHeader::AES_NONCE_LEN, 0, 4);
 		encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, &derived_key);
 

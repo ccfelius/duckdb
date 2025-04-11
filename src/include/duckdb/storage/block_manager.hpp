@@ -107,6 +107,10 @@ public:
 		return block_alloc_size;
 	}
 	//! Returns the block size of this block manager.
+//	inline idx_t GetBlockSize() const {
+//		return block_alloc_size.GetIndex() - Storage::DEFAULT_BLOCK_HEADER_SIZE - block_metadata_size.GetIndexOrZero();
+//	}
+	//! Returns the block size of this block manager.
 	inline idx_t GetBlockSize() const {
 		return block_alloc_size.GetIndex() - Storage::DEFAULT_BLOCK_HEADER_SIZE - block_metadata_size.GetIndexOrZero();
 	}
