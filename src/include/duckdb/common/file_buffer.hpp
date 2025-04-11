@@ -52,7 +52,7 @@ public:
 
 	// Same rules as the constructor. We add room for a header, in addition to
 	// the requested user bytes. We then sector-align the result.
-	void Resize(uint64_t user_size);
+	void Resize(uint64_t user_size, uint64_t block_header_size = 8);
 
 	uint64_t AllocSize() const {
 		return internal_size;
@@ -69,7 +69,7 @@ public:
 		idx_t header_size;
 	};
 
-	MemoryRequirement CalculateMemory(uint64_t user_size);
+	MemoryRequirement CalculateMemory(uint64_t user_size, uint64_t block_header_size = 8);
 	void Initialize(DebugInitialize info);
 
 protected:

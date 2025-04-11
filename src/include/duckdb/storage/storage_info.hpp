@@ -40,7 +40,6 @@ struct Storage {
 	constexpr static idx_t FILE_HEADER_SIZE = 4096U;
 	//! The maximum row group size
 	constexpr static const idx_t MAX_ROW_GROUP_SIZE = 1ULL << 30ULL;
-
 	//! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 	constexpr static idx_t MIN_BLOCK_ALLOC_SIZE = 16384ULL;
 	//! The maximum block allocation size. This is the maximum size currently supported by duckdb.
@@ -71,12 +70,16 @@ struct MainHeader {
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
 	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
+	static constexpr uint64_t ENCRYPTED_DATABASE_FLAG = 1;
 	//! The magic bytes in front of the file should be "DUCK"
 	static const char MAGIC_BYTES[];
 	//! The version of the database
 	uint64_t version_number;
 	//! The set of flags used by the database
 	uint64_t flags[FLAG_COUNT];
+	//! Initial block header size (can change for encryption)
+	uint64_t block_header_size = 8;
+
 	static void CheckMagicBytes(FileHandle &handle);
 
 	string LibraryGitDesc() {
@@ -84,6 +87,9 @@ struct MainHeader {
 	}
 	string LibraryGitHash() {
 		return string(char_ptr_cast(library_git_hash), 0, MAX_VERSION_SIZE);
+	}
+	bool IsEncrypted() {
+		return flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
 
 	void Write(WriteStream &ser);

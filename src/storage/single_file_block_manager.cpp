@@ -85,6 +85,11 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
+	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+		// change header size of blocks
+		header.block_header_size = 40;
+	}
+
 	DeserializeVersionNumber(source, header.library_git_desc);
 	DeserializeVersionNumber(source, header.library_git_hash);
 	return header;
@@ -202,15 +207,23 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	auto &fs = FileSystem::Get(db);
 	handle = fs.OpenFile(path, flags);
 
-	// if we create a new file, we fill the metadata of the file
-	// first fill in the new header
-	header_buffer.Clear();
-
 	options.version_number = GetVersionNumber();
 	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+#ifdef DEBUG
+	// set database header to encrypted to force different header size
+	main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+#endif
+	// if we create a new file, we fill the metadata of the file
+	// first fill in the new header
+	if (main_header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+		// resize the buffer
+		header_buffer.Resize(Storage::FILE_HEADER_SIZE - main_header.block_header_size, main_header.block_header_size);
+	}
+	header_buffer.Clear();
+
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
 	ChecksumAndWrite(header_buffer, 0);
