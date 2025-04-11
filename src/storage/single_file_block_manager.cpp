@@ -85,6 +85,8 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
+
+	// check if database is encrypted
 	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
 		// change header size of blocks
 		header.block_header_size = 40;
@@ -216,7 +218,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 	// set database header to encrypted to force different header size
-	main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+	// main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
 	ChecksumAndWrite(header_buffer, 0);
