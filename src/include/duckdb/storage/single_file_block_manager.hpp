@@ -29,6 +29,7 @@ struct StorageManagerOptions {
 	optional_idx block_alloc_size;
 	optional_idx storage_version;
 	optional_idx version_number;
+	uint64_t block_header_size = 8;
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file

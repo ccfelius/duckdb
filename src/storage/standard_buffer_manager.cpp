@@ -41,7 +41,8 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	}
 	if (source) {
 		auto tmp = std::move(source);
-		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size));
+		// fix this assert
+		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size, tmp->AllocSize() - tmp->Size()));
 		result = make_uniq<FileBuffer>(*tmp, type);
 	} else {
 		// no re-usable buffer: allocate a new buffer
@@ -112,6 +113,10 @@ idx_t StandardBufferManager::GetBlockSize() const {
 	return temp_block_manager->GetBlockSize();
 }
 
+uint64_t StandardBufferManager::GetBlockHeaderSize() const {
+	return temp_block_manager->GetBlockHeaderSize();
+}
+
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta,
                                                                     unique_ptr<FileBuffer> *buffer, ARGS... args) {
@@ -157,7 +162,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy) {
-	auto alloc_size = GetAllocSize(block_size);
+	auto alloc_size = GetAllocSize(block_size, GetBlockHeaderSize());
 
 	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;

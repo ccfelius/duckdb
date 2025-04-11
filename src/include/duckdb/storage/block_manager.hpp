@@ -105,9 +105,13 @@ public:
 	inline optional_idx GetOptionalBlockAllocSize() const {
 		return block_alloc_size;
 	}
-	//! Returns the block size of this block manager.
+	//! Size of the block available for the user
 	inline idx_t GetBlockSize() const {
-		return block_alloc_size.GetIndex() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+		return block_alloc_size.GetIndex() - block_header_size;
+	}
+	//! Block header size including the 8-byte checksum
+	inline uint64_t GetBlockHeaderSize() const {
+		return block_header_size;
 	}
 	//! Sets the block allocation size. This should only happen when initializing an existing database.
 	//! When initializing an existing database, we construct the block manager before reading the file header,
@@ -118,7 +122,6 @@ public:
 		}
 		block_alloc_size = block_alloc_size_p.GetIndex();
 	}
-
 	//! Verify the block usage count
 	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
 	}
@@ -134,5 +137,6 @@ private:
 	//! for in-memory block managers. Default to default_block_alloc_size for file-backed block managers.
 	//! This is NOT the actual memory available on a block (block_size).
 	optional_idx block_alloc_size;
+	uint64_t block_header_size = 8;
 };
 } // namespace duckdb

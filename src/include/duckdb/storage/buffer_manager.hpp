@@ -54,6 +54,8 @@ public:
 	virtual idx_t GetBlockAllocSize() const = 0;
 	//! Returns the block size for buffer-managed blocks.
 	virtual idx_t GetBlockSize() const = 0;
+	//! Returns the block header size for buffer-managed blocks.
+	virtual idx_t GetBlockHeaderSize() const = 0;
 
 	//! Returns a new block of transient memory.
 	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, const idx_t block_size);
@@ -89,9 +91,10 @@ public:
 	DUCKDB_API static const BufferManager &GetBufferManager(const ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
-	static idx_t GetAllocSize(const idx_t block_size) {
-		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	static idx_t GetAllocSize(const idx_t block_size, const uint64_t block_header_size) {
+		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + block_header_size);
 	}
+
 	//! Returns the maximum available memory for a given query
 	idx_t GetQueryMaxMemory() const;
 
