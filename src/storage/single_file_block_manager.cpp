@@ -86,12 +86,6 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		header.flags[i] = source.Read<uint64_t>();
 	}
 
-	// check if database is encrypted
-	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
-		// change header size of blocks
-		header.block_header_size = 40;
-	}
-
 	DeserializeVersionNumber(source, header.library_git_desc);
 	DeserializeVersionNumber(source, header.library_git_hash);
 	return header;
@@ -158,11 +152,9 @@ DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr
 
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
                                                const StorageManagerOptions &options)
-    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size), db(db), path(path_p),
-      //      header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-      //                    Storage::FILE_HEADER_SIZE - Storage::DEFAULT_BLOCK_HEADER_SIZE),
-      header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                    Storage::FILE_HEADER_SIZE - options.block_header_size),
+    : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db),
+      path(path_p), header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
+                                  Storage::FILE_HEADER_SIZE - options.block_header_size),
       iteration_count(0), options(options) {
 }
 
@@ -227,8 +219,8 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// first fill in the new header
 	if (main_header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
 		// resize the buffer
-		main_header.block_header_size = 40;
-		header_buffer.Resize(Storage::FILE_HEADER_SIZE - main_header.block_header_size, main_header.block_header_size);
+		options.block_header_size = Storage::ENCRYPTED_BLOCK_HEADER_SIZE;
+		header_buffer.Resize(Storage::FILE_HEADER_SIZE - options.block_header_size, options.block_header_size);
 		header_buffer.Clear();
 	}
 
@@ -247,6 +239,10 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h1.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE);
+
+#ifdef debug
+	auto bh_size = GetBlockHeaderSize();
+#endif
 
 	// header 2
 	DatabaseHeader h2;
@@ -288,8 +284,8 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	if (main_header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
 		// resize the buffer
-		main_header.block_header_size = 40;
-		header_buffer.Resize(Storage::FILE_HEADER_SIZE - main_header.block_header_size, main_header.block_header_size);
+		options.block_header_size = Storage::ENCRYPTED_BLOCK_HEADER_SIZE;
+		header_buffer.Resize(Storage::FILE_HEADER_SIZE - options.block_header_size, options.block_header_size);
 		header_buffer.Clear();
 	}
 

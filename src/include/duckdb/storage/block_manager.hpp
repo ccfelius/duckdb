@@ -28,7 +28,9 @@ class MetadataManager;
 class BlockManager {
 public:
 	BlockManager() = delete;
-	BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p);
+	// TODO: adding block_header_size here too
+	BlockManager(BufferManager &buffer_manager, const optional_idx block_alloc_size_p,
+	             const uint64_t block_header_size_p = 8);
 	virtual ~BlockManager() = default;
 
 	//! The buffer manager
@@ -137,6 +139,7 @@ private:
 	//! for in-memory block managers. Default to default_block_alloc_size for file-backed block managers.
 	//! This is NOT the actual memory available on a block (block_size).
 	optional_idx block_alloc_size;
-	uint64_t block_header_size = 8;
+	// we need to force this to 8 if not explicitly set
+	uint64_t block_header_size;
 };
 } // namespace duckdb

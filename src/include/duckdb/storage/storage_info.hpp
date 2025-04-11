@@ -46,6 +46,8 @@ struct Storage {
 	constexpr static idx_t MAX_BLOCK_ALLOC_SIZE = 262144ULL;
 	//! The default block header size for blocks written to storage.
 	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(idx_t);
+	//! Block header size for encrypted blocks (40 bytes)
+	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 40ULL;
 	//! The default block size.
 	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 
@@ -77,8 +79,6 @@ struct MainHeader {
 	uint64_t version_number;
 	//! The set of flags used by the database
 	uint64_t flags[FLAG_COUNT];
-	//! Initial block header size (can change for encryption)
-	uint64_t block_header_size = 8;
 
 	static void CheckMagicBytes(FileHandle &handle);
 
