@@ -10,11 +10,12 @@
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size)
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, uint64_t block_header_size)
     : allocator(allocator), type(type) {
+	//! add here the block header size
 	Init();
 	if (user_size) {
-		Resize(user_size);
+		Resize(user_size, block_header_size);
 	}
 }
 

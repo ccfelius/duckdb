@@ -154,7 +154,7 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
                                                const StorageManagerOptions &options)
     : BlockManager(BufferManager::GetBufferManager(db), options.block_alloc_size, options.block_header_size), db(db),
       path(path_p), header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
-                                  Storage::FILE_HEADER_SIZE - options.block_header_size),
+                                  Storage::FILE_HEADER_SIZE - options.block_header_size, options.block_header_size),
       iteration_count(0), options(options) {
 }
 
@@ -210,7 +210,9 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 	// set database header to encrypted to force different header size
-	// main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+
+	// this should only be set upon if there is a key given
+	main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
 	ChecksumAndWrite(header_buffer, 0);
@@ -239,10 +241,6 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h1.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE);
-
-#ifdef debug
-	auto bh_size = GetBlockHeaderSize();
-#endif
 
 	// header 2
 	DatabaseHeader h2;
@@ -302,11 +300,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	if (h1.iteration > h2.iteration) {
 		// h1 is active header
 		active_header = 0;
-		Initialize(h1, GetOptionalBlockAllocSize());
+		Initialize(h1, GetOptionalBlockAllocSize(), options.block_header_size);
 	} else {
 		// h2 is active header
 		active_header = 1;
-		Initialize(h2, GetOptionalBlockAllocSize());
+		Initialize(h2, GetOptionalBlockAllocSize(), options.block_header_size);
 	}
 	AddStorageVersionTag();
 	LoadFreeList();
@@ -336,7 +334,8 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	block.Write(*handle, location);
 }
 
-void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
+void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size,
+                                        const uint64_t block_header_size) {
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
@@ -368,7 +367,9 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		    "size: %llu, file block size: %llu",
 		    path, GetBlockAllocSize(), header.block_alloc_size);
 	}
+	// here, set also the block_header_size
 	SetBlockAllocSize(header.block_alloc_size);
+	SetBlockHeaderSize(block_header_size);
 }
 
 void SingleFileBlockManager::LoadFreeList() {
@@ -574,7 +575,7 @@ bool SingleFileBlockManager::IsRemote() {
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
-	return make_uniq<Block>(source_buffer, block_id);
+	return make_uniq<Block>(source_buffer, block_id, options.block_header_size);
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
@@ -582,7 +583,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize());
+		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize(), options.block_header_size);
 	}
 	result->Initialize(options.debug_initialize);
 	return result;

@@ -94,7 +94,8 @@ private:
 	void LoadFreeList();
 	//! Initializes the database header. We pass the provided block allocation size as a parameter
 	//!	to detect inconsistencies with the file header.
-	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
+	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size,
+	                const uint64_t block_header_size);
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;

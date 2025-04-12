@@ -99,6 +99,7 @@ void StorageManager::Initialize(StorageOptions options) {
 	}
 
 	// Create or load the database from disk, if not in-memory mode.
+	//! These options do not contain yet the block header size
 	LoadDatabase(options);
 }
 

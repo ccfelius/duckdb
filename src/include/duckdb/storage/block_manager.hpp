@@ -124,6 +124,11 @@ public:
 		}
 		block_alloc_size = block_alloc_size_p.GetIndex();
 	}
+	//! Sets the block header size. Idem as above.
+	//! This is only set once upon initialization of the database
+	void SetBlockHeaderSize(const uint64_t block_header_size_p) {
+		block_alloc_size = block_header_size_p;
+	}
 	//! Verify the block usage count
 	virtual void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) {
 	}
@@ -139,7 +144,7 @@ private:
 	//! for in-memory block managers. Default to default_block_alloc_size for file-backed block managers.
 	//! This is NOT the actual memory available on a block (block_size).
 	optional_idx block_alloc_size;
-	// we need to force this to 8 if not explicitly set
+	//! If not explicitly set, this will default to 8 bytes.
 	uint64_t block_header_size;
 };
 } // namespace duckdb
