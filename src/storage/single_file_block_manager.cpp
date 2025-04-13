@@ -211,20 +211,14 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 	// set database header to encrypted to force different header size
 
-	// this should only be set upon if there is a key given
+	//! this should only be set upon if there is a key given
+	//! we now enable this for testing purposes
+	//! remove this for the PR
 	main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
-	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
-	// now write the header to the file
-	ChecksumAndWrite(header_buffer, 0);
 
-	// if we create a new file, we fill the metadata of the file
-	// first fill in the new header
-	if (main_header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
-		// resize the buffer
-		options.block_header_size = Storage::ENCRYPTED_BLOCK_HEADER_SIZE;
-		header_buffer.Resize(Storage::FILE_HEADER_SIZE - options.block_header_size, options.block_header_size);
-		header_buffer.Clear();
-	}
+	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
+	//! the main database header is written
+	ChecksumAndWrite(header_buffer, 0, true);
 
 	// write the database headers
 	// initialize meta_block and free_list to INVALID_BLOCK because the database file does not contain any actual
@@ -276,16 +270,14 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	MainHeader::CheckMagicBytes(*handle);
 	// otherwise, we check the metadata of the file
-	ReadAndChecksum(header_buffer, 0);
-	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer);
-	options.version_number = main_header.version_number;
-
-	if (main_header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
-		// resize the buffer
-		options.block_header_size = Storage::ENCRYPTED_BLOCK_HEADER_SIZE;
-		header_buffer.Resize(Storage::FILE_HEADER_SIZE - options.block_header_size, options.block_header_size);
-		header_buffer.Clear();
+	ReadAndChecksum(header_buffer, 0, true);
+	// the buffer needs to be also previous the buffer internally needs te be adapted...
+	uint64_t residue = 0;
+	if (GetBlockHeaderSize() > DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
+		residue = GetBlockHeaderSize() - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	}
+	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - residue);
+	options.version_number = main_header.version_number;
 
 	// read the database headers from disk
 	DatabaseHeader h1;
@@ -310,13 +302,21 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	LoadFreeList();
 }
 
-void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location) const {
+void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_block_header) const {
+	uint64_t residue = 0;
+
 	// read the buffer from disk
 	block.Read(*handle, location);
 
+	if (skip_block_header) {
+		// This happens ONLY for the main database header
+		residue = GetBlockHeaderSize() - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+	}
+
 	// compute the checksum
+	// internal buffer here is null?
 	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
-	auto computed_checksum = Checksum(block.buffer, block.Size());
+	auto computed_checksum = Checksum(block.buffer - residue, block.Size() + residue);
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
@@ -326,10 +326,19 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	}
 }
 
-void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location) const {
-	// compute the checksum and write it to the start of the buffer (if not temp buffer)
-	uint64_t checksum = Checksum(block.buffer, block.Size());
+void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location, bool skip_header) const {
+	uint64_t residue = 0;
+
+	if (skip_header) {
+		//! This happens only for the Main Database Header
+		residue = GetBlockHeaderSize() - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+		memmove(block.InternalBuffer() + DEFAULT_BLOCK_HEADER_STORAGE_SIZE, block.buffer, block.Size());
+		memset(block.InternalBuffer() + block.Size() + DEFAULT_BLOCK_HEADER_STORAGE_SIZE, 0, residue);
+	}
+
+	uint64_t checksum = Checksum(block.buffer - residue, block.Size() + residue);
 	Store<uint64_t>(checksum, block.InternalBuffer());
+
 	// now write the buffer
 	block.Write(*handle, location);
 }
@@ -369,7 +378,8 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	}
 	// here, set also the block_header_size
 	SetBlockAllocSize(header.block_alloc_size);
-	SetBlockHeaderSize(block_header_size);
+	auto block_alloc_size_p = GetBlockAllocSize();
+	// SetBlockHeaderSize(block_header_size);
 }
 
 void SingleFileBlockManager::LoadFreeList() {
@@ -575,7 +585,7 @@ bool SingleFileBlockManager::IsRemote() {
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
-	return make_uniq<Block>(source_buffer, block_id, options.block_header_size);
+	return make_uniq<Block>(source_buffer, block_id);
 }
 
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
@@ -583,7 +593,7 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	if (source_buffer) {
 		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize(), options.block_header_size);
+		result = make_uniq<Block>(Allocator::Get(db), block_id, GetBlockSize(), GetBlockHeaderSize());
 	}
 	result->Initialize(options.debug_initialize);
 	return result;

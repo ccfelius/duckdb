@@ -34,6 +34,7 @@ struct BufferAllocatorData : PrivateAllocatorData {
 };
 
 unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
+                                                                     const uint64_t block_header_size,
                                                                      FileBufferType type) {
 	unique_ptr<FileBuffer> result;
 	if (type == FileBufferType::BLOCK) {
@@ -41,12 +42,11 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	}
 	if (source) {
 		auto tmp = std::move(source);
-		// fix this assert
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size, tmp->AllocSize() - tmp->Size()));
 		result = make_uniq<FileBuffer>(*tmp, type);
 	} else {
-		// no re-usable buffer: allocate a new buffer
-		result = make_uniq<FileBuffer>(Allocator::Get(db), type, size, GetBlockHeaderSize());
+		// non re-usable buffer: allocate a new buffer
+		result = make_uniq<FileBuffer>(Allocator::Get(db), type, size, block_header_size);
 	}
 	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
 	return result;
@@ -64,7 +64,8 @@ StandardBufferManager::StandardBufferManager(DatabaseInstance &db, string tmp)
     : BufferManager(), db(db), buffer_pool(db.GetBufferPool()), temporary_id(MAXIMUM_BLOCK),
       buffer_allocator(BufferAllocatorAllocate, BufferAllocatorFree, BufferAllocatorRealloc,
                        make_uniq<BufferAllocatorData>(*this)) {
-	temp_block_manager = make_uniq<InMemoryBlockManager>(*this, DEFAULT_BLOCK_ALLOC_SIZE);
+	temp_block_manager =
+	    make_uniq<InMemoryBlockManager>(*this, DEFAULT_BLOCK_ALLOC_SIZE, DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 	temporary_directory.path = std::move(tmp);
 	for (idx_t i = 0; i < MEMORY_TAG_COUNT; i++) {
 		evicted_data_per_tag[i] = 0;
@@ -130,7 +131,8 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 	return std::move(r.reservation);
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size) {
+shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size,
+                                                                       const uint64_t block_header_size) {
 	D_ASSERT(size <= block_size);
 
 	// This comparison is the reason behind passing block_size through transient memory creation.
@@ -139,8 +141,8 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx
 	if (size < block_size) {
 		return RegisterSmallMemory(MemoryTag::IN_MEMORY_TABLE, size);
 	}
-
-	auto buffer_handle = Allocate(MemoryTag::IN_MEMORY_TABLE, size, false);
+	//! add block_header_size here
+	auto buffer_handle = Allocate(MemoryTag::IN_MEMORY_TABLE, size, block_header_size, false);
 	return buffer_handle.GetBlockHandle();
 }
 
@@ -149,7 +151,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 	auto reservation = EvictBlocksOrThrow(tag, size, nullptr, "could not allocate block of size %s%s",
 	                                      StringUtil::BytesToHumanReadableString(size));
 
-	auto buffer = ConstructManagedBuffer(size, nullptr, FileBufferType::TINY_BUFFER);
+	auto buffer = ConstructManagedBuffer(size, nullptr, GetBlockHeaderSize(), FileBufferType::TINY_BUFFER);
 
 	// Create a new block pointer for this block.
 	auto result = make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
@@ -161,8 +163,9 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 	return result;
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, bool can_destroy) {
-	auto alloc_size = GetAllocSize(block_size, GetBlockHeaderSize());
+shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size,
+                                                              const uint64_t block_header_size, bool can_destroy) {
+	auto alloc_size = GetAllocSize(block_size, block_header_size);
 
 	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;
@@ -170,14 +173,17 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
 	// Create a new buffer and a block to hold the buffer.
-	auto buffer = ConstructManagedBuffer(block_size, std::move(reusable_buffer));
+	//! Buffer creation here did not go well!!!
+	auto buffer = ConstructManagedBuffer(block_size, std::move(reusable_buffer), block_header_size);
+	//! FIX BUFFER, now it returns NULL
 	DestroyBufferUpon destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
 	                                    destroy_buffer_upon, alloc_size, std::move(res));
 }
 
-BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy) {
-	auto block = RegisterMemory(tag, block_size, can_destroy);
+BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, const uint64_t block_header_size,
+                                             bool can_destroy) {
+	auto block = RegisterMemory(tag, block_size, block_header_size, can_destroy);
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
@@ -234,7 +240,8 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 #endif
 
 	// allocate a buffer to hold the data of all of the blocks
-	auto intermediate_buffer = Allocate(MemoryTag::BASE_TABLE, block_count * block_manager.GetBlockSize());
+	auto intermediate_buffer =
+	    Allocate(MemoryTag::BASE_TABLE, block_count * block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
 	// perform a batch read of the blocks into the buffer
 	block_manager.ReadBlocks(intermediate_buffer.GetFileBuffer(), first_block, block_count);
 
@@ -444,7 +451,8 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBufferInternal(Buffer
                                                                           FileHandle &handle, idx_t position,
                                                                           idx_t size,
                                                                           unique_ptr<FileBuffer> reusable_buffer) {
-	auto buffer = buffer_manager.ConstructManagedBuffer(size, std::move(reusable_buffer));
+	auto buffer =
+	    buffer_manager.ConstructManagedBuffer(size, std::move(reusable_buffer), buffer_manager.GetBlockHeaderSize());
 	buffer->Read(handle, position);
 	return buffer;
 }

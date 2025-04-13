@@ -97,8 +97,8 @@ private:
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size,
 	                const uint64_t block_header_size);
 
-	void ReadAndChecksum(FileBuffer &handle, uint64_t location) const;
-	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;
+	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
+	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_header = false) const;
 
 	idx_t GetBlockLocation(block_id_t block_id);
 

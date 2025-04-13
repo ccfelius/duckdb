@@ -81,7 +81,8 @@ block_id_t MetadataManager::AllocateNewBlock() {
 	auto new_block_id = GetNextBlockId();
 
 	MetadataBlock new_block;
-	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(), false);
+	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(),
+	                                      block_manager.GetBlockHeaderSize(), false);
 	new_block.block = handle.GetBlockHandle();
 	new_block.block_id = new_block_id;
 	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
@@ -174,13 +175,13 @@ idx_t MetadataManager::BlockCount() {
 }
 
 void MetadataManager::Flush() {
-	const idx_t total_metadata_size = GetMetadataBlockSize() * MetadataManager::METADATA_BLOCK_COUNT;
+	const idx_t total_metadata_size = GetMetadataBlockSize() * METADATA_BLOCK_COUNT;
 
 	// write the blocks of the metadata manager to disk
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		auto handle = buffer_manager.Pin(block.block);
-		// there are a few bytes left-over at the end of the block, zero-initialize them
+		// zero-initialize the few leftover bytes
 		memset(handle.Ptr() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
 		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
@@ -221,6 +222,7 @@ void MetadataBlock::Write(WriteStream &sink) {
 	sink.Write<idx_t>(FreeBlocksToInteger());
 }
 
+//! Don't get this fully?
 idx_t MetadataManager::GetMetadataBlockSize() const {
 	return AlignValueFloor(block_manager.GetBlockSize() / METADATA_BLOCK_COUNT);
 }

@@ -133,8 +133,10 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 }
 
 void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
+
 	if (InMemory()) {
-		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
+		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
+		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		return;
 	}
@@ -189,6 +191,13 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			options.storage_version = config.options.serialization_compatibility.serialization_version;
 		}
 
+//		//! remove this!!!
+//		bool encrypted = true;
+//
+//		if (encrypted) {
+//			options.block_header_size = 40;
+//		}
+
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
@@ -199,6 +208,13 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// Either the file exists, or we are in read-only mode, so we
 		// try to read the existing file on disk.
 
+		//! remove this!!!
+//		bool encrypted = true;
+//
+//		if (encrypted) {
+//			options.block_header_size = 40;
+//		}
+		
 		// Initialize the block manager while loading the database file.
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
