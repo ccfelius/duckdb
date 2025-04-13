@@ -387,7 +387,8 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 		auto block = reinterpret_cast<Block *>(buffer.get());
 		replacement_buffer = make_uniq<Block>(allocator, block->id, alloc_size, GetBlockHeaderSize());
 	} else {
-		replacement_buffer = make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), alloc_size, GetBlockHeaderSize());
+		replacement_buffer =
+		    make_uniq<FileBuffer>(allocator, buffer->GetBufferType(), alloc_size, GetBlockHeaderSize());
 	}
 	memcpy(replacement_buffer->buffer, buffer->buffer, buffer->size);
 	WriteGarbageIntoBuffer(lock, *handle);
