@@ -214,7 +214,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	//! this should only be set upon if there is a key given
 	//! we now enable this for testing purposes
 	//! remove this for the PR
-	main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+	// main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	//! the main database header is written

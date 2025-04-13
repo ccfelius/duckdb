@@ -191,12 +191,12 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			options.storage_version = config.options.serialization_compatibility.serialization_version;
 		}
 
-//		//! remove this!!!
-//		bool encrypted = true;
-//
-//		if (encrypted) {
-//			options.block_header_size = 40;
-//		}
+		//		//! remove this!!!
+		//		bool encrypted = true;
+		//
+		//		if (encrypted) {
+		//			options.block_header_size = 40;
+		//		}
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
@@ -209,12 +209,12 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// try to read the existing file on disk.
 
 		//! remove this!!!
-//		bool encrypted = true;
-//
-//		if (encrypted) {
-//			options.block_header_size = 40;
-//		}
-		
+		//		bool encrypted = true;
+		//
+		//		if (encrypted) {
+		//			options.block_header_size = 40;
+		//		}
+
 		// Initialize the block manager while loading the database file.
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
