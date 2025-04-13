@@ -416,7 +416,8 @@ void ReplayIndexData(AttachedDatabase &db, BinaryDeserializer &deserializer, Ind
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
 
 			// Read the data into a buffer handle.
-			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(), false);
+			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager->GetBlockSize(),
+			                                             block_manager->GetBlockHeaderSize(), false);
 			auto block_handle = buffer_handle.GetBlockHandle();
 			auto data_ptr = buffer_handle.Ptr();
 

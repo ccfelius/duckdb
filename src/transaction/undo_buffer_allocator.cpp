@@ -48,7 +48,8 @@ UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
 			entry->block = buffer_manager.RegisterSmallMemory(MemoryTag::TRANSACTION, capacity);
 			handle = buffer_manager.Pin(entry->block);
 		} else {
-			handle = buffer_manager.Allocate(MemoryTag::TRANSACTION, capacity, false);
+			handle =
+			    buffer_manager.Allocate(MemoryTag::TRANSACTION, capacity, buffer_manager.GetBlockHeaderSize(), false);
 			entry->block = handle.GetBlockHandle();
 		}
 		entry->capacity = capacity;
