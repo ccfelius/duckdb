@@ -303,20 +303,22 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 }
 
 void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_block_header) const {
-	uint64_t residue = 0;
+	//! calculate residual bytes (if any)
+	uint64_t residual = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	// read the buffer from disk
 	block.Read(*handle, location);
 
-	if (skip_block_header) {
+	uint64_t stored_checksum;
+
+	if (skip_block_header && residual) {
 		// This happens ONLY for the main database header
-		residue = GetBlockHeaderSize() - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+		stored_checksum = Load<uint64_t>(block.InternalBuffer());
+	} else {
+		stored_checksum = Load<uint64_t>(block.InternalBuffer() + residual);
 	}
 
-	// compute the checksum
-	// internal buffer here is null?
-	auto stored_checksum = Load<uint64_t>(block.InternalBuffer());
-	auto computed_checksum = Checksum(block.buffer - residue, block.Size() + residue);
+	auto computed_checksum = Checksum(block.buffer - residual, block.Size() + residual);
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
@@ -327,17 +329,21 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 }
 
 void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location, bool skip_header) const {
-	uint64_t residue = 0;
+	auto residual = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
-	if (skip_header) {
+	uint64_t checksum;
+	if (skip_header && residual > 0) {
 		//! This happens only for the Main Database Header
-		residue = GetBlockHeaderSize() - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
-		memmove(block.InternalBuffer() + DEFAULT_BLOCK_HEADER_STORAGE_SIZE, block.buffer, block.Size());
-		memset(block.InternalBuffer() + block.Size() + DEFAULT_BLOCK_HEADER_STORAGE_SIZE, 0, residue);
+		memmove(block.InternalBuffer() + Storage::DEFAULT_BLOCK_HEADER_SIZE, block.buffer, block.Size());
+		//! zero out the last bytes of the block
+		memset(block.InternalBuffer() + block.Size() + Storage::DEFAULT_BLOCK_HEADER_SIZE, 0, residual);
+		checksum = Checksum(block.buffer - residual, block.Size() + residual);
+		residual = 0;
+	} else {
+		checksum = Checksum(block.buffer, block.Size());
 	}
 
-	uint64_t checksum = Checksum(block.buffer - residue, block.Size() + residue);
-	Store<uint64_t>(checksum, block.InternalBuffer());
+	Store<uint64_t>(checksum, block.InternalBuffer() + residual);
 
 	// now write the buffer
 	block.Write(*handle, location);
