@@ -43,7 +43,6 @@ struct MetadataHandle {
 class MetadataManager {
 public:
 	//! The amount of metadata blocks per storage block
-	//! Can we change this?
 	static constexpr const idx_t METADATA_BLOCK_COUNT = 64;
 
 public:
