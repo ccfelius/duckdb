@@ -42,7 +42,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	}
 	if (source) {
 		auto tmp = std::move(source);
-		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size, tmp->AllocSize() - tmp->Size()));
+		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size, block_header_size));
 		result = make_uniq<FileBuffer>(*tmp, type);
 	} else {
 		// non re-usable buffer: allocate a new buffer
@@ -173,9 +173,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
 	// Create a new buffer and a block to hold the buffer.
-	//! Buffer creation here did not go well!!!
 	auto buffer = ConstructManagedBuffer(block_size, std::move(reusable_buffer), block_header_size);
-	//! FIX BUFFER, now it returns NULL
 	DestroyBufferUpon destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
 	                                    destroy_buffer_upon, alloc_size, std::move(res));

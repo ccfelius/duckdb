@@ -209,13 +209,6 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
-	// set database header to encrypted to force different header size
-
-	//! this should only be set upon if there is a key given
-	//! we now enable this for testing purposes
-	//! remove this for the PR
-	// main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
-
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	//! the main database header is written
 	ChecksumAndWrite(header_buffer, 0, true);
@@ -272,11 +265,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	// otherwise, we check the metadata of the file
 	ReadAndChecksum(header_buffer, 0, true);
 	// the buffer needs to be also previous the buffer internally needs te be adapted...
-	uint64_t residue = 0;
+	uint64_t residual = 0;
 	if (GetBlockHeaderSize() > DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
-		residue = GetBlockHeaderSize() - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+		residual = GetBlockHeaderSize() - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 	}
-	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - residue);
+	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - residual);
 	options.version_number = main_header.version_number;
 
 	// read the database headers from disk
