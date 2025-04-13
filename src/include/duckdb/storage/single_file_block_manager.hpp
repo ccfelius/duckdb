@@ -29,7 +29,7 @@ struct StorageManagerOptions {
 	optional_idx block_alloc_size;
 	optional_idx storage_version;
 	optional_idx version_number;
-	uint64_t block_header_size = 8;
+	uint64_t block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -94,8 +94,7 @@ private:
 	void LoadFreeList();
 	//! Initializes the database header. We pass the provided block allocation size as a parameter
 	//!	to detect inconsistencies with the file header.
-	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size,
-	                const uint64_t block_header_size);
+	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_header = false) const;

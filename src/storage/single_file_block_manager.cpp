@@ -292,11 +292,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	if (h1.iteration > h2.iteration) {
 		// h1 is active header
 		active_header = 0;
-		Initialize(h1, GetOptionalBlockAllocSize(), options.block_header_size);
+		Initialize(h1, GetOptionalBlockAllocSize());
 	} else {
 		// h2 is active header
 		active_header = 1;
-		Initialize(h2, GetOptionalBlockAllocSize(), options.block_header_size);
+		Initialize(h2, GetOptionalBlockAllocSize());
 	}
 	AddStorageVersionTag();
 	LoadFreeList();
@@ -343,8 +343,7 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	block.Write(*handle, location);
 }
 
-void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size,
-                                        const uint64_t block_header_size) {
+void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
 	free_list_id = header.free_list;
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
@@ -376,10 +375,8 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		    "size: %llu, file block size: %llu",
 		    path, GetBlockAllocSize(), header.block_alloc_size);
 	}
-	// here, set also the block_header_size
+
 	SetBlockAllocSize(header.block_alloc_size);
-	auto block_alloc_size_p = GetBlockAllocSize();
-	// SetBlockHeaderSize(block_header_size);
 }
 
 void SingleFileBlockManager::LoadFreeList() {
