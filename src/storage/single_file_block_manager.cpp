@@ -303,22 +303,22 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 }
 
 void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_block_header) const {
-	//! calculate residual bytes (if any)
-	uint64_t residual = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
+	//! calculate residual header bytes (if any)
+	uint64_t residual = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	// read the buffer from disk
 	block.Read(*handle, location);
-
 	uint64_t stored_checksum;
+	uint64_t computed_checksum;
 
-	if (skip_block_header && residual) {
+	if (skip_block_header && residual > 0) {
 		// This happens ONLY for the main database header
 		stored_checksum = Load<uint64_t>(block.InternalBuffer());
+		computed_checksum = Checksum(block.buffer - residual, block.Size() + residual);
 	} else {
 		stored_checksum = Load<uint64_t>(block.InternalBuffer() + residual);
+		Checksum(block.buffer, block.Size());
 	}
-
-	auto computed_checksum = Checksum(block.buffer - residual, block.Size() + residual);
 
 	// verify the checksum
 	if (stored_checksum != computed_checksum) {
