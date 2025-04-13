@@ -64,7 +64,8 @@ public:
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
-	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, const uint64_t block_header_size,
+	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size,
+	                                 const uint64_t block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE,
 	                                 bool can_destroy = true) final;
 
 	//! Reallocate an in-memory buffer that is pinned.
