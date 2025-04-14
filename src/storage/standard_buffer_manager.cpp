@@ -199,7 +199,7 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 	D_ASSERT(handle_memory_usage == handle->GetBuffer(lock)->AllocSize());
 	D_ASSERT(handle_memory_usage == handle->GetMemoryCharge(lock).size);
 
-	auto req = handle->GetBuffer(lock)->CalculateMemory(block_size);
+	auto req = handle->GetBuffer(lock)->CalculateMemory(block_size, GetBlockHeaderSize());
 	int64_t memory_delta = NumericCast<int64_t>(req.alloc_size) - NumericCast<int64_t>(handle_memory_usage);
 
 	if (memory_delta == 0) {
