@@ -29,6 +29,31 @@ struct StorageManagerOptions {
 	optional_idx block_alloc_size;
 	optional_idx storage_version;
 	optional_idx version_number;
+	optional_idx block_header_size;
+	string encryption_key;
+	string cipher;
+
+	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
+
+	bool NeedsEncryption() const {
+		return !encryption_key.empty();
+	}
+
+	string GetEncryptionKey() const {
+		return encryption_key;
+	}
+
+	CipherType GetCipher() const {
+
+		if (cipher == "gcm") {
+			return CipherType::GCM;
+		} else if (cipher == "ctr") {
+			return CipherType::CTR;
+		} else if (cipher == "cbc") {
+			return CipherType::CBC;
+		}
+		return CipherType::UNKNOWN;
+	}
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file

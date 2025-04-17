@@ -23,6 +23,8 @@ struct FileHandle;
 //! The maximum block id is 2^62
 #define MAXIMUM_BLOCK 4611686018427388000LL
 
+//! Block header size for database encryption
+#define DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE 40ULL
 //! The default block allocation size.
 #define DEFAULT_BLOCK_ALLOC_SIZE 262144ULL
 //! The configurable block allocation size.
