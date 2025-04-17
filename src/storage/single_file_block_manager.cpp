@@ -2,6 +2,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "mbedtls_wrapper.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -18,6 +20,9 @@
 namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
+const char MainHeader::CANARY[] = "DUCKEY";
+
+using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	data_t version[MainHeader::MAX_VERSION_SIZE];
@@ -50,6 +55,39 @@ void MainHeader::CheckMagicBytes(FileHandle &handle) {
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
 		throw IOException("The file \"%s\" exists, but it is not a valid DuckDB database file!", handle.path);
 	}
+}
+
+void MainHeader::EncryptCanary(uint64_t *flags, const shared_ptr<EncryptionState> &encryption_state,
+                               const string *derived_key) {
+	// We zero-out the IV
+	uint8_t iv[16];
+	memset(iv, 0, sizeof(iv));
+	auto canary = CANARY;
+	encryption_state->InitializeEncryption(iv, 16, derived_key);
+	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(&canary), CANARY_SIZE,
+	                          reinterpret_cast<data_ptr_t>(&flags[1]), CANARY_SIZE);
+
+	//! todo; do not put this in flags, but rather in the main header?
+}
+
+void MainHeader::DecryptCanary(uint64_t *flags, const shared_ptr<EncryptionState> &encryption_state,
+                               const string *derived_key) {
+
+	// for now just zero-out the iv
+	uint8_t iv[16];
+	memset(iv, 0, sizeof(iv));
+	const char *canary[CANARY_SIZE];
+
+	// Decrypt the canary
+	encryption_state->InitializeDecryption(iv, 16, derived_key);
+	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(&flags[1]), CANARY_SIZE,
+	                          reinterpret_cast<data_ptr_t>(&canary), CANARY_SIZE);
+
+	if (memcmp(canary, CANARY, CANARY_SIZE) != 0) {
+		throw IOException("Wrong encryption key used to open the database file");
+	}
+
+	memcpy(&flags[1], &canary, sizeof(uint64_t));
 }
 
 MainHeader MainHeader::Read(ReadStream &source) {
@@ -193,6 +231,31 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 	main_header.version_number = version_number;
 	memset(main_header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
 	return main_header;
+}
+
+shared_ptr<EncryptionUtil> SingleFileBlockManager::GetEncryptionUtil(AttachedDatabase &db) {
+	auto encryption_util = db.GetDatabase().config.encryption_util;
+
+	if (encryption_util) {
+		encryption_util = db.GetDatabase().config.encryption_util;
+	} else {
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
+	}
+
+	return encryption_util;
+}
+
+string SingleFileBlockManager::DeriveKey(const string &user_key, data_ptr_t salt = nullptr) {
+	// todo: sha 256 is not recommended
+	// use a proper key derivation function (kdf)
+	SHA256State state;
+	// todo; use generated salt
+	state.AddString("IBd2nLfyDoWYZy6R81DVYxxdM7CAsOcX"); // random salt
+	state.AddString(user_key);
+	auto derived_key = state.Finalize();
+	// hardcode now to 32
+	D_ASSERT(derived_key.length() == 32);
+	return derived_key;
 }
 
 void SingleFileBlockManager::CreateNewDatabase() {

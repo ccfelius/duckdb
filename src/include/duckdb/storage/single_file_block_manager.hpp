@@ -112,6 +112,10 @@ public:
 	idx_t FreeBlocks() override;
 	//! Whether or not the attached database is a remote file
 	bool IsRemote() override;
+	//! Derive key if an encryption key is given
+	string DeriveKey(const string &user_key, data_ptr_t salt = nullptr);
+	//! Get the encryption util
+	shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db);
 
 private:
 	//! Loads the free list of the file.

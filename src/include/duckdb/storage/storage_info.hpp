@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
@@ -71,6 +72,7 @@ vector<string> GetSerializationCandidates();
 struct MainHeader {
 	static constexpr idx_t MAX_VERSION_SIZE = 32;
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
+	static constexpr idx_t CANARY_SIZE = 6;
 	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
 	//! The magic bytes in front of the file should be "DUCK"
@@ -79,7 +81,18 @@ struct MainHeader {
 	uint64_t version_number;
 	//! The set of flags used by the database
 	uint64_t flags[FLAG_COUNT];
+	//! Indicates whether database is encrypted
+	static constexpr uint64_t ENCRYPTED_DATABASE_FLAG = 1;
+	//! Canary used for early wrong-key detection
+	static const char CANARY[];
+	//! Encryption key length
+	static constexpr uint64_t ENCRYPTION_KEY_LENGTH = 32;
+
 	static void CheckMagicBytes(FileHandle &handle);
+	static void EncryptCanary(uint64_t *flags, const shared_ptr<EncryptionState> &encryption_state,
+	                          const string *derived_key);
+	static void DecryptCanary(uint64_t *flags, const shared_ptr<EncryptionState> &encryption_state,
+	                          const string *derived_key);
 
 	string LibraryGitDesc() {
 		return string(char_ptr_cast(library_git_desc), 0, MAX_VERSION_SIZE);
