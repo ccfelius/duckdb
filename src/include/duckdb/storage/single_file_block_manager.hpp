@@ -37,11 +37,7 @@ struct StorageEncryptionConfig {
 	//! key derivation function (kdf) used
 	KeyDerivationFunction kdf = KeyDerivationFunction::SHA256;
 	//! Key Length
-	uint32_t key_length = 32;
-
-	bool NeedsEncryption() const {
-		return encryption_enabled;
-	}
+	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 
 	string CipherToString(CipherType cipher_p) const {
 		switch (cipher_p) {
