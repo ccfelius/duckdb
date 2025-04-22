@@ -29,6 +29,11 @@ Wrong encryption key used to open the database file
 statement ok
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
+statement error
+ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEX');
+----
+Wrong encryption key used to open the database file
+
 statement ok
 ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY');
 

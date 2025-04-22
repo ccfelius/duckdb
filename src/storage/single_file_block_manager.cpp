@@ -83,7 +83,7 @@ void DecryptCanary(data_ptr_t encrypted_canary, const shared_ptr<EncryptionState
 	                          MainHeader::CANARY_BYTE_SIZE);
 
 	//! compare if the decrypted canary is correct
-	if (memcmp(decrypted_canary, MainHeader::CANARY, MainHeader::CANARY_BYTE_SIZE)) {
+	if (memcmp(decrypted_canary, MainHeader::CANARY, MainHeader::CANARY_BYTE_SIZE) != 0) {
 		throw IOException("Wrong encryption key used to open the database file");
 	}
 }
