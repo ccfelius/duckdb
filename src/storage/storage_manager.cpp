@@ -227,6 +227,10 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
 			options.storage_version = storage_options.storage_version;
+
+			// Set encryption to true and derive encryption key
+			options.encryption_config.encryption_enabled = true;
+			options.encryption_config.derived_key = DeriveKey(storage_options.encryption_key);
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_header_size = config.options.default_block_header_size;
@@ -473,7 +477,7 @@ string SingleFileStorageManager::DeriveKey(const string &user_key, data_ptr_t sa
 	auto derived_key = state.Finalize();
 
 	//! key_length is hardcoded to 32 bytes
-	D_ASSERT(derived_key.length() == 32);
+	D_ASSERT(derived_key.length() == MainHeader::ENCRYPTION_KEY_LENGTH);
 	return derived_key;
 }
 

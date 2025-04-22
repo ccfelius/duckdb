@@ -83,6 +83,7 @@ struct MainHeader {
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
 	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
+	static constexpr idx_t ENCRYPTION_KEY_LENGTH = 32;
 	//! Indicates whether database is encrypted
 	static constexpr uint64_t ENCRYPTED_DATABASE_FLAG = 1;
 	//! Encryption key length

@@ -59,8 +59,8 @@ void EncryptCanary(data_ptr_t encrypted_canary, const shared_ptr<EncryptionState
 	// we zero-out the iv and the (not yet) encrypted canary
 	uint8_t iv[16];
 	memset(iv, 0, sizeof(iv));
-
 	memset(encrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
+
 	encryption_state->InitializeEncryption(iv, 16, derived_key);
 	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
 	                          encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
@@ -68,12 +68,14 @@ void EncryptCanary(data_ptr_t encrypted_canary, const shared_ptr<EncryptionState
 
 void DecryptCanary(data_ptr_t encrypted_canary, const shared_ptr<EncryptionState> &encryption_state,
                    const string *derived_key) {
-	// for now just zero-out the iv
+
+	// just zero-out the iv
 	uint8_t iv[16];
 	memset(iv, 0, sizeof(iv));
 
 	//! allocate a buffer for the decrypted canary
-	static data_t decrypted_canary[MainHeader::CANARY_BYTE_SIZE];
+	data_t decrypted_canary[MainHeader::CANARY_BYTE_SIZE];
+	memset(decrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
 
 	//! Decrypt the canary
 	encryption_state->InitializeDecryption(iv, 16, derived_key);
@@ -92,6 +94,12 @@ void MainHeader::Write(WriteStream &ser) {
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
+
+	if (flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+		ser.WriteData(encrypted_canary, CANARY_BYTE_SIZE);
+		ser.WriteData(encryption_metadata, ENCRYPTION_METADATA_LEN);
+	}
+
 	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
 	SerializeVersionNumber(ser, DuckDB::SourceID());
 }
@@ -139,6 +147,11 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	// read the flags
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		header.flags[i] = source.Read<uint64_t>();
+	}
+
+	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
+		source.ReadData(header.encrypted_canary, CANARY_BYTE_SIZE);
+		source.ReadData(header.encryption_metadata, ENCRYPTION_METADATA_LEN);
 	}
 
 	DeserializeVersionNumber(source, header.library_git_desc);
@@ -366,6 +379,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	if (!main_header.IsEncrypted() && options.encryption_config.NeedsEncryption()) {
 		// database is not encrypted, but is tried to be opened with a key
 		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
+	} else if (main_header.IsEncrypted()) {
+		auto derived_key = options.encryption_config.derived_key;
+		//! Check if the correct key is used to decrypt the database
+		DecryptCanary(main_header.encrypted_canary, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key),
+		              &derived_key);
 	}
 
 	options.version_number = main_header.version_number;
