@@ -477,7 +477,7 @@ string SingleFileStorageManager::DeriveKey(const string &user_key, data_ptr_t sa
 	auto derived_key = state.Finalize();
 
 	//! key_length is hardcoded to 32 bytes
-	D_ASSERT(derived_key.length() == MainHeader::ENCRYPTION_KEY_LENGTH);
+	D_ASSERT(derived_key.length() == MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	return derived_key;
 }
 

@@ -22,13 +22,6 @@ namespace duckdb {
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 const char MainHeader::CANARY[] = "DUCKKEY";
 
-void SerializeEncryptionMetadata(WriteStream &ser, const char &encryption_metadata) {
-	data_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
-	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
-	memcpy(metadata, &encryption_metadata, MainHeader::ENCRYPTION_METADATA_LEN);
-	ser.WriteData(metadata, MainHeader::ENCRYPTION_METADATA_LEN);
-}
-
 void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	data_t version[MainHeader::MAX_VERSION_SIZE];
 	memset(version, 0, MainHeader::MAX_VERSION_SIZE);
