@@ -56,6 +56,7 @@ public:
 	// the requested user bytes. We then sector-align the result.
 	void Resize(uint64_t user_size, BlockManager &block_manager);
 	void Resize(BlockManager &block_manager);
+	void Resize(const BlockManager &block_manager);
 
 	uint64_t AllocSize() const {
 		return internal_size;

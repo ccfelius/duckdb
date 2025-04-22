@@ -35,9 +35,9 @@ statement ok
 ATTACH '__TEST_DIR__/unencrypted.duckdb' AS unencrypted;
 
 statement ok
-CREATE OR REPLACE TABLE encrypted_write.tbl AS SELECT * FROM range(10) t(i);
+CREATE OR REPLACE TABLE unencrypted.tbl AS SELECT * FROM range(10) t(i);
 
 query I
-SELECT SUM(i) FROM encrypted_write.tbl
+SELECT SUM(i) FROM unencrypted.tbl
 ----
 45

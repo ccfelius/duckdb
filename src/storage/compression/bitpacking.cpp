@@ -660,9 +660,6 @@ public:
 	//! It also loads any metadata at the start of a compressed buffer (e.g. the width, for, or constant value)
 	//! depending on the bitpacking mode of that group.
 	void LoadNextGroup() {
-		auto tmp1 = bitpacking_metadata_ptr;
-		auto tmp2 = handle.Ptr() + current_segment.GetBlockOffset();
-		auto tmp4 = current_segment.GetBlockManager().GetBlockSize();
 		D_ASSERT(bitpacking_metadata_ptr > handle.Ptr() &&
 		         (bitpacking_metadata_ptr < handle.Ptr() + current_segment.GetBlockManager().GetBlockSize()));
 		current_group_offset = 0;
