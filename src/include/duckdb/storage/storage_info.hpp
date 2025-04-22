@@ -83,13 +83,29 @@ struct MainHeader {
 	static constexpr idx_t MAGIC_BYTE_SIZE = 4;
 	static constexpr idx_t MAGIC_BYTE_OFFSET = Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	static constexpr idx_t FLAG_COUNT = 4;
+	//! Indicates whether database is encrypted
 	static constexpr uint64_t ENCRYPTED_DATABASE_FLAG = 1;
+	//! Encryption key length
+	static constexpr uint64_t DEFAULT_ENCRYPTION_KEY_LENGTH = 32;
 	//! The magic bytes in front of the file should be "DUCK"
 	static const char MAGIC_BYTES[];
+	//! The canary should be "DUCKKEY"
+	static const char CANARY[];
 	//! The version of the database
 	uint64_t version_number;
 	//! The set of flags used by the database
 	uint64_t flags[FLAG_COUNT];
+
+	//! optional metadata for encryption
+	//! only used if encryption flag is set
+	static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
+	data_t encryption_metadata[ENCRYPTION_METADATA_LEN];
+
+	//! The canary is  a known plaintext
+	//! this is used for early detection of a wrong key
+	static constexpr idx_t CANARY_BYTE_SIZE = 8;
+	data_t encrypted_canary[CANARY_BYTE_SIZE];
+
 	static void CheckMagicBytes(FileHandle &handle);
 
 	string LibraryGitDesc() {

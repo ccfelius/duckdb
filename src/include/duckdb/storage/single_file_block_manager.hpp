@@ -22,6 +22,73 @@ namespace duckdb {
 class DatabaseInstance;
 struct MetadataHandle;
 
+struct StorageEncryptionConfig {
+	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
+	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
+
+	//! indicates whether the db is encrypted
+	bool encryption_enabled = false;
+
+	//! derived encryption key
+	string derived_key;
+	//! Cipher used for encryption
+	CipherType cipher;
+
+	//! key derivation function (kdf) used
+	KeyDerivationFunction kdf = KeyDerivationFunction::SHA256;
+	//! Key Length
+	uint32_t key_length = 32;
+
+	bool NeedsEncryption() const {
+		return encryption_enabled;
+	}
+
+	string CipherToString(CipherType cipher_p) const {
+		switch (cipher_p) {
+		case GCM:
+			return "gcm";
+		case CTR:
+			return "ctr";
+		case CBC:
+			return "cbc";
+		default:
+			return "unknown";
+		}
+	}
+
+	string KDFToString(KeyDerivationFunction kdf_p) const {
+		switch (kdf_p) {
+		case SHA256:
+			return "sha256";
+		case PBKDF2:
+			return "pbkdf2";
+		default:
+			return "default";
+		}
+	}
+
+	KeyDerivationFunction StringToKDF(const string &key_derivation_function) const {
+		if (key_derivation_function == "sha256") {
+			return KeyDerivationFunction::SHA256;
+		} else if (key_derivation_function == "pbkdf2") {
+			return KeyDerivationFunction::PBKDF2;
+		} else {
+			return KeyDerivationFunction::DEFAULT;
+		}
+	}
+
+	CipherType StringToCipher(const string &encryption_cipher) const {
+		if (encryption_cipher == "gcm") {
+			return CipherType::GCM;
+		} else if (encryption_cipher == "ctr") {
+			return CipherType::CTR;
+		} else if (encryption_cipher == "cbc") {
+			return CipherType::CBC;
+		}
+		return CipherType::UNKNOWN;
+	}
+};
+
 struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
@@ -31,12 +98,7 @@ struct StorageManagerOptions {
 	optional_idx version_number;
 	optional_idx block_header_size;
 
-	//! indicates whether db is encrypted
-	bool encryption = false;
-
-	bool NeedsEncryption() const {
-		return encryption;
-	}
+	StorageEncryptionConfig encryption_config;
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file

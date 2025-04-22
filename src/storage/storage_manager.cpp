@@ -16,8 +16,11 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
+
+using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_only)
     : db(db), path(std::move(path_p)), read_only(read_only) {
@@ -149,6 +152,12 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 
+	if (storage_options.encryption) {
+		options.encryption_config.encryption_enabled = true;
+		options.encryption_config.cipher = options.encryption_config.StringToCipher(storage_options.encryption_cipher);
+		options.encryption_config.derived_key = DeriveKey(storage_options.encryption_key);
+	}
+
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
 	if (storage_options.row_group_size.IsValid()) {
 		row_group_size = storage_options.row_group_size.GetIndex();
@@ -192,7 +201,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			// Use the header size for the corresponding encryption algorithm.
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
-			options.encryption = storage_options.encryption;
 			options.storage_version = storage_options.storage_version;
 		} else {
 			// No encryption; use the default option.
@@ -218,7 +226,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		if (storage_options.block_header_size.IsValid()) {
 			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
 			options.block_header_size = storage_options.block_header_size;
-			options.encryption = storage_options.encryption;
 			options.storage_version = storage_options.storage_version;
 		} else {
 			// No explicit option provided: use the default option.
@@ -452,6 +459,22 @@ shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCrea
 
 BlockManager &SingleFileStorageManager::GetBlockManager() {
 	return *block_manager;
+}
+
+string SingleFileStorageManager::DeriveKey(const string &user_key, data_ptr_t salt) {
+	//! For now, we are only using SHA256 for key derivation
+	SHA256State state;
+
+	if (!salt) {
+		state.AddString("IBd2nLfyDoWYZy6R81DVYxxdM7CAsOcX"); // random salt
+	}
+
+	state.AddString(user_key);
+	auto derived_key = state.Finalize();
+
+	//! key_length is hardcoded to 32 bytes
+	D_ASSERT(derived_key.length() == 32);
+	return derived_key;
 }
 
 } // namespace duckdb

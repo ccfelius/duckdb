@@ -22,8 +22,13 @@ struct StorageOptions {
 	optional_idx storage_version;
 	//! Block header size (only used for encryption)
 	optional_idx block_header_size;
+
 	//! Whether the database is encrypted
 	bool encryption = false;
+	//! Encryption algorithm (default = GCM)
+	string encryption_cipher = "gcm";
+	//! encryption key
+	string encryption_key;
 };
 
 } // namespace duckdb
