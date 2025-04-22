@@ -1,0 +1,43 @@
+# name: test/sql/copy/encryption/encrypt_database.test
+# group: [encryption]
+
+require noforcestorage
+
+# workaround - alternative verify always forces the latest storage
+require no_alternative_verify
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+
+statement ok
+CREATE OR REPLACE TABLE unencrypted.tbl AS SELECT * FROM range(10) t(i);
+
+# copy from unencrypted to encrypted
+statement ok
+COPY FROM DATABASE unencrypted TO encrypted;
+
+statement ok
+DETACH unencrypted
+
+statement ok
+DETACH encrypted
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/unencrypted.duckdb' AS unencrypted;
+
+statement ok
+CREATE OR REPLACE TABLE encrypted_write.tbl AS SELECT * FROM range(10) t(i);
+
+query I
+SELECT SUM(i) FROM encrypted_write.tbl
+----
+45
