@@ -1,0 +1,41 @@
+# name: test/sql/copy/encryption/plain_to_encrypted_direct_query.test
+# group: [encryption]
+
+require noforcestorage
+
+# workaround - alternative verify always forces the latest storage
+require no_alternative_verify
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement ok
+ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
+
+statement ok
+USE unencrypted;
+
+statement ok
+CALL dbgen(sf=0.1);
+
+statement ok
+COPY FROM DATABASE unencrypted to encrypted;
+
+query I
+SELECT l_suppkey FROM encrypted.lineitem limit 10;
+----
+785
+732
+371
+465
+160
+67
+138
+181
+658
+370

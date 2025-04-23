@@ -161,6 +161,9 @@ private:
 	//!	to detect inconsistencies with the file header.
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
+	void EncryptBuffer(FileBuffer &block, uint64_t delta) const;
+	void DecryptBuffer(FileBuffer &block, uint64_t delta) const;
+
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
 

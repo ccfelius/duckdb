@@ -407,6 +407,88 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	LoadFreeList();
 }
 
+void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, uint64_t delta) const {
+	data_ptr_t block_offset_internal = block.InternalBuffer();
+
+#if 0
+	//!  maybe we should only resize once?
+	encryption_buffer->Resize(*this);
+	// block_offset_internal = encryption_buffer->InternalBuffer();
+#endif
+
+	const auto derived_key = options.encryption_config.derived_key;
+	auto encryption_util = GetEncryptionUtil(db);
+	auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
+
+	uint8_t tag[MainHeader::AES_TAG_LEN];
+	memset(tag, 0, MainHeader::AES_TAG_LEN);
+
+	//! a nonce is randomly generated for every block
+	uint8_t nonce[MainHeader::AES_IV_LEN];
+	memset(nonce, 0, MainHeader::AES_NONCE_LEN);
+	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), 12);
+
+	//! store the nonce at the start of the block
+	memcpy(block_offset_internal, nonce, MainHeader::AES_NONCE_LEN);
+	encryption_state->InitializeEncryption(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN, &derived_key);
+
+	auto checksum_offset = block.InternalBuffer() + delta;
+	auto encryption_checksum_offset = block_offset_internal + delta;
+	auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
+
+#if 0
+	//! safe original data in a temp buffer
+	memcpy(encryption_buffer->InternalBuffer() + delta, checksum_offset, size);
+#endif
+
+	//! encrypt the data including the checksum
+	auto aes_res = encryption_state->Process(checksum_offset, size, encryption_checksum_offset, size);
+
+	if (aes_res != size) {
+		throw IOException("Encryption failure: in- and output size differ");
+	}
+
+	//! Finalize and extract the tag
+	aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
+	                                     MainHeader::AES_TAG_LEN);
+
+	//! store the generated tag after consequetively the nonce
+	memcpy(block_offset_internal + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
+}
+
+void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) const {
+	const auto derived_key = options.encryption_config.derived_key;
+	//! initialize encryption state
+	auto encryption_util = GetEncryptionUtil(db);
+	auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
+
+	//! load the stored nonce
+	uint8_t nonce[MainHeader::AES_IV_LEN];
+	memset(nonce, 0, MainHeader::AES_IV_LEN);
+	memcpy(nonce, block.InternalBuffer(), MainHeader::AES_IV_LEN);
+
+	//! load the tag for verification
+	uint8_t tag[MainHeader::AES_TAG_LEN];
+	memcpy(tag, block.InternalBuffer() + MainHeader::AES_NONCE_LEN, MainHeader::AES_TAG_LEN);
+
+	//! Initialize the decryption
+	encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, &derived_key);
+
+	auto checksum_offset = block.InternalBuffer() + delta;
+	auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
+
+	//! decrypt the block including the checksum
+	auto aes_res = encryption_state->Process(checksum_offset, size, checksum_offset, size);
+
+	if (aes_res != block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE) {
+		throw IOException("Encryption failure: in- and output size differ");
+	}
+
+	//! check the tag
+	aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
+	                                     MainHeader::AES_TAG_LEN);
+}
+
 void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_block_header) const {
 	// read the buffer from disk
 	block.Read(*handle, location);
@@ -415,46 +497,18 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	if (options.encryption_config.encryption_enabled && !skip_block_header) {
-		const auto derived_key = options.encryption_config.derived_key;
-		//! initialize encryption state
-		auto encryption_util = GetEncryptionUtil(db);
-		auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
-
-		//! load the stored nonce
-		uint8_t nonce[MainHeader::AES_IV_LEN];
-		memset(nonce, 0, MainHeader::AES_IV_LEN);
-		memcpy(nonce, block.InternalBuffer(), MainHeader::AES_IV_LEN);
-
-		//! load the tag for verification
-		uint8_t tag[MainHeader::AES_TAG_LEN];
-		memcpy(tag, block.InternalBuffer() + MainHeader::AES_NONCE_LEN, MainHeader::AES_TAG_LEN);
-
-		//! Initialize the decryption
-		encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, &derived_key);
-
-		auto checksum_offset = block.InternalBuffer() + delta;
-		auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
-
-		//! decrypt the block including the checksum
-		auto aes_res = encryption_state->Process(checksum_offset, size, checksum_offset, size);
-
-		if (aes_res != block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE) {
-			throw IOException("Encryption failure: in- and output size differ");
-		}
-
-		//! check the tag
-		aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
-		                                     MainHeader::AES_TAG_LEN);
+		DecryptBuffer(block, delta);
 	}
 
 	uint64_t stored_checksum;
 	uint64_t computed_checksum;
 
 	if (skip_block_header && delta > 0) {
-		// This happens ONLY for the main database header
+		//! Even with encryption enabled, the main header should be plaintext
 		stored_checksum = Load<uint64_t>(block.InternalBuffer());
 		computed_checksum = Checksum(block.buffer - delta, block.Size() + delta);
 	} else {
+		//! We do have to decrypt other headers
 		stored_checksum = Load<uint64_t>(block.InternalBuffer() + delta);
 		computed_checksum = Checksum(block.buffer, block.Size());
 	}
@@ -472,7 +526,8 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 
 	uint64_t checksum;
 	if (skip_block_header && delta > 0) {
-		//! This happens only for the Main Database Header
+		//! This happens only for the main database header
+		//! We do not encrypt the main database header
 		memmove(block.InternalBuffer() + Storage::DEFAULT_BLOCK_HEADER_SIZE, block.buffer, block.Size());
 		//! zero out the last bytes of the block
 		memset(block.InternalBuffer() + block.Size() + Storage::DEFAULT_BLOCK_HEADER_SIZE, 0, delta);
@@ -486,55 +541,30 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 
 	// encrypt if required
 	if (options.encryption_config.encryption_enabled && !skip_block_header) {
-
-		data_ptr_t block_offset_internal = block.InternalBuffer();
-
-		if (block.GetBufferType() == FileBufferType::BLOCK) {
-			encryption_buffer->Resize(*this);
-			block_offset_internal = encryption_buffer->InternalBuffer();
-		}
-
-		const auto derived_key = options.encryption_config.derived_key;
-		auto encryption_util = GetEncryptionUtil(db);
-		auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
-
-		uint8_t tag[MainHeader::AES_TAG_LEN];
-		memset(tag, 0, MainHeader::AES_TAG_LEN);
-
-		//! a nonce is randomly generated for every block
-		uint8_t nonce[MainHeader::AES_IV_LEN];
-		memset(nonce, 0, MainHeader::AES_NONCE_LEN);
-		encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), 12);
-
-		//! store the nonce at the start of the block
-		memcpy(block_offset_internal, nonce, MainHeader::AES_NONCE_LEN);
-		encryption_state->InitializeEncryption(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN, &derived_key);
-
-		auto checksum_offset = block.InternalBuffer() + delta;
-		auto encryption_checksum_offset = block_offset_internal + delta;
-		auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
-
-		//! encrypt the data including the checksum
-		auto aes_res = encryption_state->Process(checksum_offset, size, encryption_checksum_offset, size);
-
-		if (aes_res != size) {
-			throw IOException("Encryption failure: in- and output size differ");
-		}
-
-		//! Finalize and extract the tag
-		aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
-		                                     MainHeader::AES_TAG_LEN);
-
-		//! store the generated tag after consequetively the nonce
-		memcpy(block_offset_internal + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
+		EncryptBuffer(block, delta);
 	}
 
+#if 0
 	// now write the (encrypted) buffer
-	if (options.encryption_config.encryption_enabled && block.GetBufferType() == FileBufferType::BLOCK) {
+	if (options.encryption_config.encryption_enabled && !skip_block_header) {
 		encryption_buffer->Write(*handle, location);
 	} else {
 		block.Write(*handle, location);
 	}
+#endif
+	block.Write(*handle, location);
+
+#if 0
+	// clear the file buffer such that we do not read garbage data
+	// after writing copy data back into the buffer?
+	if (options.encryption_config.encryption_enabled && !skip_block_header) {
+		auto checksum_offset = block.InternalBuffer() + delta;
+		auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
+
+		//! copy original data back
+		memcpy(checksum_offset, encryption_buffer->InternalBuffer() + delta, size);
+	}
+#endif
 }
 
 void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
