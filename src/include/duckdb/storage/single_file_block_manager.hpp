@@ -161,7 +161,7 @@ private:
 	//!	to detect inconsistencies with the file header.
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
-	void EncryptBuffer(FileBuffer &block, uint64_t delta) const;
+	void EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const;
 	void DecryptBuffer(FileBuffer &block, uint64_t delta) const;
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
@@ -191,8 +191,9 @@ private:
 	unique_ptr<FileHandle> handle;
 	//! The buffer used to read/write to the headers
 	FileBuffer header_buffer;
-	//! Encryption (temp) Buffer
-	unique_ptr<FileBuffer> encryption_buffer;
+	//! Temp Buffers used for Encryption
+	unique_ptr<FileBuffer> temp_block_buffer;
+	unique_ptr<FileBuffer> temp_managed_buffer;
 	//! The list of free blocks that can be written to currently
 	set<block_id_t> free_list;
 	//! The list of blocks that were freed since the last checkpoint.

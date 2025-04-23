@@ -18,14 +18,6 @@ CREATE OR REPLACE TABLE unencrypted.tbl AS SELECT * FROM range(244880) t(i);
 statement ok
 ATTACH '__TEST_DIR__/encrypted.duckdb' as encrypted (ENCRYPTION_KEY 'asdf');
 
-# statement  ok
-# CREATE OR REPLACE TABLE v_0_10_2.tbl AS SELECT * FROM range(10) t(i);
-#
-# query I
-# SELECT SUM(i) FROM unencrypted.tbl
-# ----
-# 45
-
 # copy from unencrypted to encrypted
 statement ok
 COPY FROM DATABASE unencrypted TO encrypted;

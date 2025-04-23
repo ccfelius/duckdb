@@ -219,8 +219,11 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
                                   options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
 
-	encryption_buffer = make_uniq<FileBuffer>(Allocator::Get(db), FileBufferType::BLOCK, DEFAULT_BLOCK_ALLOC_SIZE,
-	                                          DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
+	temp_managed_buffer = make_uniq<FileBuffer>(Allocator::Get(db), FileBufferType::MANAGED_BUFFER, DEFAULT_BLOCK_ALLOC_SIZE - options.block_header_size.GetIndex(),
+					  options.block_header_size.GetIndex());
+
+	temp_block_buffer = make_uniq<FileBuffer>(Allocator::Get(db), FileBufferType::BLOCK, DEFAULT_BLOCK_ALLOC_SIZE - options.block_header_size.GetIndex(),
+	                                          options.block_header_size.GetIndex());
 }
 
 FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
@@ -407,14 +410,8 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	LoadFreeList();
 }
 
-void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, uint64_t delta) const {
-	data_ptr_t block_offset_internal = block.InternalBuffer();
-
-#if 0
-	//!  maybe we should only resize once?
-	encryption_buffer->Resize(*this);
-	// block_offset_internal = encryption_buffer->InternalBuffer();
-#endif
+void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const {
+	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
 
 	const auto derived_key = options.encryption_config.derived_key;
 	auto encryption_util = GetEncryptionUtil(db);
@@ -435,11 +432,6 @@ void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, uint64_t delta) co
 	auto checksum_offset = block.InternalBuffer() + delta;
 	auto encryption_checksum_offset = block_offset_internal + delta;
 	auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
-
-#if 0
-	//! safe original data in a temp buffer
-	memcpy(encryption_buffer->InternalBuffer() + delta, checksum_offset, size);
-#endif
 
 	//! encrypt the data including the checksum
 	auto aes_res = encryption_state->Process(checksum_offset, size, encryption_checksum_offset, size);
@@ -525,6 +517,7 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	auto delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	uint64_t checksum;
+
 	if (skip_block_header && delta > 0) {
 		//! This happens only for the main database header
 		//! We do not encrypt the main database header
@@ -540,32 +533,20 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	Store<uint64_t>(checksum, block.InternalBuffer() + delta);
 
 	// encrypt if required
+	unique_ptr<FileBuffer> temp_buffer_manager;
 	if (options.encryption_config.encryption_enabled && !skip_block_header) {
-		EncryptBuffer(block, delta);
+		temp_buffer_manager = make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
+		EncryptBuffer(block, *temp_buffer_manager, delta);
 	}
 
-#if 0
-	// now write the (encrypted) buffer
 	if (options.encryption_config.encryption_enabled && !skip_block_header) {
-		encryption_buffer->Write(*handle, location);
+		//! we write from a temp buffer which holds the encrypted data
+		temp_buffer_manager->Write(*handle, location);
 	} else {
 		block.Write(*handle, location);
 	}
-#endif
-	block.Write(*handle, location);
-
-#if 0
-	// clear the file buffer such that we do not read garbage data
-	// after writing copy data back into the buffer?
-	if (options.encryption_config.encryption_enabled && !skip_block_header) {
-		auto checksum_offset = block.InternalBuffer() + delta;
-		auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
-
-		//! copy original data back
-		memcpy(checksum_offset, encryption_buffer->InternalBuffer() + delta, size);
-	}
-#endif
 }
+
 
 void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
 	free_list_id = header.free_list;
