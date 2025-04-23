@@ -218,12 +218,6 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
                                   Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
                                   options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
-
-	temp_managed_buffer = make_uniq<FileBuffer>(Allocator::Get(db), FileBufferType::MANAGED_BUFFER, DEFAULT_BLOCK_ALLOC_SIZE - options.block_header_size.GetIndex(),
-					  options.block_header_size.GetIndex());
-
-	temp_block_buffer = make_uniq<FileBuffer>(Allocator::Get(db), FileBufferType::BLOCK, DEFAULT_BLOCK_ALLOC_SIZE - options.block_header_size.GetIndex(),
-	                                          options.block_header_size.GetIndex());
 }
 
 FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
@@ -535,7 +529,8 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 	// encrypt if required
 	unique_ptr<FileBuffer> temp_buffer_manager;
 	if (options.encryption_config.encryption_enabled && !skip_block_header) {
-		temp_buffer_manager = make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
+		temp_buffer_manager =
+		    make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptBuffer(block, *temp_buffer_manager, delta);
 	}
 
@@ -546,7 +541,6 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 		block.Write(*handle, location);
 	}
 }
-
 
 void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size) {
 	free_list_id = header.free_list;

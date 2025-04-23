@@ -191,9 +191,6 @@ private:
 	unique_ptr<FileHandle> handle;
 	//! The buffer used to read/write to the headers
 	FileBuffer header_buffer;
-	//! Temp Buffers used for Encryption
-	unique_ptr<FileBuffer> temp_block_buffer;
-	unique_ptr<FileBuffer> temp_managed_buffer;
 	//! The list of free blocks that can be written to currently
 	set<block_id_t> free_list;
 	//! The list of blocks that were freed since the last checkpoint.
