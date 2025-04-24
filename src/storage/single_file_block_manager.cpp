@@ -329,7 +329,8 @@ void DeserializeEncryptionMetadata(data_ptr_t encryption_metadata, EncryptionOpt
 	SetKeyLength(encryption_options, key_length);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(StorageOptions storage_options, EncryptionOptions encryption_options) {
+void SingleFileBlockManager::CreateNewDatabase(const StorageOptions &storage_options,
+                                               EncryptionOptions encryption_options) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -398,7 +399,7 @@ void SingleFileBlockManager::CreateNewDatabase(StorageOptions storage_options, E
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase(StorageOptions storage_options,
+void SingleFileBlockManager::LoadExistingDatabase(const StorageOptions &storage_options,
                                                   EncryptionOptions encryption_options) {
 	auto flags = GetFileFlags(false);
 
