@@ -330,7 +330,7 @@ void DeserializeEncryptionMetadata(data_ptr_t encryption_metadata, EncryptionOpt
 }
 
 void SingleFileBlockManager::CreateNewDatabase(const StorageOptions &storage_options,
-                                               EncryptionOptions encryption_options) {
+                                               EncryptionOptions &encryption_options) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -400,7 +400,7 @@ void SingleFileBlockManager::CreateNewDatabase(const StorageOptions &storage_opt
 }
 
 void SingleFileBlockManager::LoadExistingDatabase(const StorageOptions &storage_options,
-                                                  EncryptionOptions encryption_options) {
+                                                  EncryptionOptions &encryption_options) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle

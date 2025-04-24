@@ -115,10 +115,10 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase(const StorageOptions &storage_options, EncryptionOptions encryption_options);
+	void CreateNewDatabase(const StorageOptions &storage_options, EncryptionOptions &encryption_options);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase(const StorageOptions &storage_options, EncryptionOptions encryption_options);
+	void LoadExistingDatabase(const StorageOptions &storage_options, EncryptionOptions &encryption_options);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
