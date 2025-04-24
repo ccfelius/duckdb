@@ -46,6 +46,10 @@ shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db) {
 	return encryption_util;
 }
 
+void GenerateSalt(uint8_t *salt, const shared_ptr<EncryptionState> &encryption_state) {
+	encryption_state->GenerateRandomData(salt, 16);
+}
+
 void EncryptCanary(data_ptr_t encrypted_canary, const shared_ptr<EncryptionState> &encryption_state,
                    const string *derived_key) {
 
@@ -89,8 +93,9 @@ void MainHeader::Write(WriteStream &ser) {
 	}
 
 	if (flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
-		ser.WriteData(encrypted_canary, CANARY_BYTE_SIZE);
 		ser.WriteData(encryption_metadata, ENCRYPTION_METADATA_LEN);
+		ser.WriteData(salt, SALT_LEN);
+		ser.WriteData(encrypted_canary, CANARY_BYTE_SIZE);
 	}
 
 	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
@@ -143,8 +148,9 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	}
 
 	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
-		source.ReadData(header.encrypted_canary, CANARY_BYTE_SIZE);
 		source.ReadData(header.encryption_metadata, ENCRYPTION_METADATA_LEN);
+		source.ReadData(header.salt, SALT_LEN);
+		source.ReadData(header.encrypted_canary, CANARY_BYTE_SIZE);
 	}
 
 	DeserializeVersionNumber(source, header.library_git_desc);
@@ -258,8 +264,13 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 	return main_header;
 }
 
+void StoreSalt(AttachedDatabase &db, data_ptr_t salt, StorageManagerOptions &options) {
+	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&options.encryption_config.derived_key);
+	// Generate a unique salt to has each password
+	GenerateSalt(salt, encryption_state);
+}
+
 void StoreEncryptedCanary(AttachedDatabase &db, data_ptr_t encrypted_canary, StorageManagerOptions &options) {
-	//! initialize encryption state
 	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&options.encryption_config.derived_key);
 
 	// Encrypt or decrypt canary with derived key
@@ -299,8 +310,9 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	if (options.encryption_config.encryption_enabled) {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
-		StoreEncryptedCanary(db, main_header.encrypted_canary, options);
 		StoreEncryptionMetadata(main_header.encryption_metadata, options);
+		StoreSalt(db, main_header.salt, options);
+		StoreEncryptedCanary(db, main_header.encrypted_canary, options);
 	}
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);

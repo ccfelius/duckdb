@@ -3,6 +3,8 @@
 
 require noforcestorage
 
+require skip_reload
+
 # workaround - alternative verify always forces the latest storage
 require no_alternative_verify
 
@@ -30,13 +32,22 @@ statement ok
 USE memory;
 
 statement ok
-DETACH unencrypted
+DETACH reencrypted
 
 statement ok
 DETACH encrypted
 
-statement ok
+statement error
 ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted;
+----
+
+statement error
+ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'asdf');
+----
+Wrong encryption key used to open the database file
+
+statement ok
+ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');
 
 query I
 SELECT l_suppkey FROM reencrypted.lineitem limit 10;
