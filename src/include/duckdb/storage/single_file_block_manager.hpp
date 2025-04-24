@@ -22,7 +22,7 @@ namespace duckdb {
 class DatabaseInstance;
 struct MetadataHandle;
 
-struct StorageEncryptionConfig {
+struct EncryptionOptions {
 	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
 	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
 
@@ -36,6 +36,7 @@ struct StorageEncryptionConfig {
 
 	//! key derivation function (kdf) used
 	KeyDerivationFunction kdf = KeyDerivationFunction::SHA256;
+
 	//! Key Length
 	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 
@@ -61,6 +62,14 @@ struct StorageEncryptionConfig {
 		default:
 			return "default";
 		}
+	}
+
+	void SetKDF(uint8_t kdf_p) {
+		kdf = static_cast<KeyDerivationFunction>(kdf_p);
+	}
+
+	void SetCipher(uint8_t cipher_p) {
+		cipher = static_cast<CipherType>(cipher_p);
 	}
 
 	KeyDerivationFunction StringToKDF(const string &key_derivation_function) const {
@@ -93,8 +102,6 @@ struct StorageManagerOptions {
 	optional_idx storage_version;
 	optional_idx version_number;
 	optional_idx block_header_size;
-
-	StorageEncryptionConfig encryption_config;
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -107,10 +114,10 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase();
+	void CreateNewDatabase(StorageOptions storage_options, EncryptionOptions encryption_options);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase();
+	void LoadExistingDatabase(StorageOptions storage_options, EncryptionOptions encryption_options);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -211,6 +218,8 @@ private:
 	uint64_t iteration_count;
 	//! The storage manager options
 	StorageManagerOptions options;
+	//! Encryption options
+	EncryptionOptions encryption_options;
 	//! Lock for performing various operations in the single file block manager
 	mutex block_lock;
 };

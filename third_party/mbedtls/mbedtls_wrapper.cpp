@@ -129,6 +129,13 @@ void MbedTlsWrapper::SHA256State::AddString(const std::string &str) {
 	}
 }
 
+void MbedTlsWrapper::SHA256State::AddSalt(unsigned char *salt, size_t salt_len) {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+	if (mbedtls_sha256_update(context, salt, salt_len)) {
+		throw std::runtime_error("SHA256 Error");
+	}
+}
+
 std::string MbedTlsWrapper::SHA256State::Finalize() {
 	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
 

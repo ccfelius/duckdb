@@ -46,8 +46,34 @@ shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db) {
 	return encryption_util;
 }
 
-void GenerateSalt(uint8_t *salt, const shared_ptr<EncryptionState> &encryption_state) {
-	encryption_state->GenerateRandomData(salt, 16);
+void SetKDF(EncryptionOptions &encryption_options, uint8_t kdf_p) {
+	encryption_options.SetKDF(kdf_p);
+}
+
+void SetCipher(EncryptionOptions &encryption_options, uint8_t cipher_p) {
+	encryption_options.SetCipher(cipher_p);
+}
+
+void SetKeyLength(EncryptionOptions &encryption_options, uint32_t key_length) {
+	encryption_options.key_length = key_length;
+}
+
+void GenerateSalt(uint8_t *salt) {
+	auto len = MainHeader::SALT_LEN;
+
+#ifdef DEBUG
+	duckdb::RandomEngine random_engine(1);
+#else
+	duckdb::RandomEngine random_engine(duckdb::Timestamp::GetCurrentTimestamp().value);
+#endif
+
+	while (len != 0) {
+		const auto random_integer = random_engine.NextRandomInteger();
+		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));
+		memcpy(salt, duckdb::const_data_ptr_cast(&random_integer), next);
+		salt += next;
+		len -= next;
+	}
 }
 
 void EncryptCanary(data_ptr_t encrypted_canary, const shared_ptr<EncryptionState> &encryption_state,
@@ -264,37 +290,46 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 	return main_header;
 }
 
-void StoreSalt(AttachedDatabase &db, data_ptr_t salt, StorageManagerOptions &options) {
-	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&options.encryption_config.derived_key);
-	// Generate a unique salt to has each password
-	GenerateSalt(salt, encryption_state);
-}
-
-void StoreEncryptedCanary(AttachedDatabase &db, data_ptr_t encrypted_canary, StorageManagerOptions &options) {
-	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&options.encryption_config.derived_key);
-
+void StoreEncryptedCanary(AttachedDatabase &db, data_ptr_t encrypted_canary, EncryptionOptions &encryption_options) {
+	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&encryption_options.derived_key);
 	// Encrypt or decrypt canary with derived key
-	EncryptCanary(encrypted_canary, encryption_state, &options.encryption_config.derived_key);
+	EncryptCanary(encrypted_canary, encryption_state, &encryption_options.derived_key);
 }
 
-void StoreEncryptionMetadata(data_ptr_t encryption_metadata, StorageManagerOptions &options) {
-	auto offset = encryption_metadata;
-
-	//! Zero out the encryption metadata
+void SerializeEncryptionMetadata(data_ptr_t encryption_metadata, EncryptionOptions &encryption_options) {
+	//! zero out the memory
 	memset(encryption_metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
-
+	auto offset = encryption_metadata;
 	//! first byte is the key derivation function used (kdf)
 	//! second byte is for the cipher used
 	//! the subsequent 2 bytes are empty
 	//! the last 4 bytes are the key length
-	Store<uint8_t>(options.encryption_config.kdf, offset);
+	Store<uint8_t>(encryption_options.kdf, offset);
 	offset++;
-	Store<uint8_t>(options.encryption_config.cipher, offset);
+	Store<uint8_t>(encryption_options.cipher, offset);
 	offset += 3;
-	Store<uint32_t>(options.encryption_config.key_length, offset);
+	Store<uint32_t>(encryption_options.key_length, offset);
 }
 
-void SingleFileBlockManager::CreateNewDatabase() {
+void DeserializeEncryptionMetadata(data_ptr_t encryption_metadata, EncryptionOptions &encryption_options) {
+	auto offset = encryption_metadata;
+
+	//! key derivation function used
+	auto kdf_id = Load<uint8_t>(offset);
+	SetKDF(encryption_options, kdf_id);
+
+	//! stored cipher type
+	offset++;
+	auto cipher_id = Load<uint8_t>(offset);
+	SetCipher(encryption_options, cipher_id);
+
+	//! stored key length
+	offset += 3;
+	auto key_length = Load<uint32_t>(offset);
+	SetKeyLength(encryption_options, key_length);
+}
+
+void SingleFileBlockManager::CreateNewDatabase(StorageOptions storage_options, EncryptionOptions encryption_options) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -308,11 +343,18 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 
-	if (options.encryption_config.encryption_enabled) {
+	if (encryption_options.encryption_enabled) {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
-		StoreEncryptionMetadata(main_header.encryption_metadata, options);
-		StoreSalt(db, main_header.salt, options);
-		StoreEncryptedCanary(db, main_header.encrypted_canary, options);
+		//! serialize the kdf, cipher and key length
+		SerializeEncryptionMetadata(main_header.encryption_metadata, encryption_options);
+		//! generate and store a random 16-byte salt value
+		GenerateSalt(main_header.salt);
+		//! derive encryption key
+		encryption_options.derived_key =
+		    SingleFileStorageManager::DeriveKey(storage_options.encryption_key, main_header.salt);
+		//! Encrypt the canary
+		auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&encryption_options.derived_key);
+		EncryptCanary(main_header.encrypted_canary, encryption_state, &encryption_options.derived_key);
 	}
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
@@ -356,7 +398,8 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase() {
+void SingleFileBlockManager::LoadExistingDatabase(StorageOptions storage_options,
+                                                  EncryptionOptions encryption_options) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
@@ -378,17 +421,24 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 
-	if (main_header.IsEncrypted() && !options.encryption_config.encryption_enabled) {
+	if (main_header.IsEncrypted() && !encryption_options.encryption_enabled) {
 		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 	}
-	if (!main_header.IsEncrypted() && options.encryption_config.encryption_enabled) {
+	if (!main_header.IsEncrypted() && encryption_options.encryption_enabled) {
 		// database is not encrypted, but is tried to be opened with a key
 		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
 	} else if (main_header.IsEncrypted()) {
-		auto derived_key = options.encryption_config.derived_key;
+		//! Set the kdf, cipher and key length
+		DeserializeEncryptionMetadata(main_header.encryption_metadata, encryption_options);
+		//! derive key and delete user key
+		encryption_options.derived_key =
+		    SingleFileStorageManager::DeriveKey(storage_options.encryption_key, main_header.salt);
+		memset(&storage_options.encryption_key, 0, storage_options.encryption_key.size());
+
 		//! Check if the correct key is used to decrypt the database
-		DecryptCanary(main_header.encrypted_canary, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key),
-		              &derived_key);
+		DecryptCanary(main_header.encrypted_canary,
+		              GetEncryptionUtil(db)->CreateEncryptionState(&encryption_options.derived_key),
+		              &encryption_options.derived_key);
 	}
 
 	options.version_number = main_header.version_number;
@@ -419,7 +469,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const {
 	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
 
-	const auto derived_key = options.encryption_config.derived_key;
+	const auto derived_key = encryption_options.derived_key;
 	auto encryption_util = GetEncryptionUtil(db);
 	auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
 
@@ -450,12 +500,12 @@ void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_b
 	aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
 	                                     MainHeader::AES_TAG_LEN);
 
-	//! store the generated tag after consequetively the nonce
+	//! store the generated tag after the 12-byte nonce
 	memcpy(block_offset_internal + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
 }
 
 void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) const {
-	const auto derived_key = options.encryption_config.derived_key;
+	const auto derived_key = encryption_options.derived_key;
 	//! initialize encryption state
 	auto encryption_util = GetEncryptionUtil(db);
 	auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
@@ -494,7 +544,7 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
-	if (options.encryption_config.encryption_enabled && !skip_block_header) {
+	if (encryption_options.encryption_enabled && !skip_block_header) {
 		DecryptBuffer(block, delta);
 	}
 
@@ -540,13 +590,13 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 
 	// encrypt if required
 	unique_ptr<FileBuffer> temp_buffer_manager;
-	if (options.encryption_config.encryption_enabled && !skip_block_header) {
+	if (encryption_options.encryption_enabled && !skip_block_header) {
 		temp_buffer_manager =
 		    make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptBuffer(block, *temp_buffer_manager, delta);
 	}
 
-	if (options.encryption_config.encryption_enabled && !skip_block_header) {
+	if (encryption_options.encryption_enabled && !skip_block_header) {
 		//! we write from a temp buffer which holds the encrypted data
 		temp_buffer_manager->Write(*handle, location);
 	} else {
