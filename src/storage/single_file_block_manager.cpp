@@ -430,11 +430,9 @@ void SingleFileBlockManager::LoadExistingDatabase(StorageOptions storage_options
 	} else if (main_header.IsEncrypted()) {
 		//! Set the kdf, cipher and key length
 		DeserializeEncryptionMetadata(main_header.encryption_metadata, encryption_options);
-		//! derive key and delete user key
+		//! derive key
 		encryption_options.derived_key =
 		    SingleFileStorageManager::DeriveKey(storage_options.encryption_key, main_header.salt);
-		memset(&storage_options.encryption_key, 0, storage_options.encryption_key.size());
-
 		//! Check if the correct key is used to decrypt the database
 		DecryptCanary(main_header.encrypted_canary,
 		              GetEncryptionUtil(db)->CreateEncryptionState(&encryption_options.derived_key),
@@ -478,8 +476,8 @@ void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_b
 
 	//! a nonce is randomly generated for every block
 	uint8_t nonce[MainHeader::AES_IV_LEN];
-	memset(nonce, 0, MainHeader::AES_NONCE_LEN);
-	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), 12);
+	memset(nonce, 0, MainHeader::AES_IV_LEN);
+	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
 
 	//! store the nonce at the start of the block
 	memcpy(block_offset_internal, nonce, MainHeader::AES_NONCE_LEN);
@@ -513,7 +511,7 @@ void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) co
 	//! load the stored nonce
 	uint8_t nonce[MainHeader::AES_IV_LEN];
 	memset(nonce, 0, MainHeader::AES_IV_LEN);
-	memcpy(nonce, block.InternalBuffer(), MainHeader::AES_IV_LEN);
+	memcpy(nonce, block.InternalBuffer(), MainHeader::AES_NONCE_LEN);
 
 	//! load the tag for verification
 	uint8_t tag[MainHeader::AES_TAG_LEN];
