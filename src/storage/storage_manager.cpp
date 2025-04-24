@@ -153,9 +153,10 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	options.storage_version = storage_options.storage_version;
 
 	if (storage_options.encryption) {
-		options.encryption_config.encryption_enabled = true;
-		options.encryption_config.cipher = options.encryption_config.StringToCipher(storage_options.encryption_cipher);
-		options.encryption_config.derived_key = DeriveKey(storage_options.encryption_key);
+		options.encryption_options.encryption_enabled = true;
+		options.encryption_options.cipher =
+		    options.encryption_options.StringToCipher(storage_options.encryption_cipher);
+		options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
@@ -229,8 +230,8 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			options.storage_version = storage_options.storage_version;
 
 			// Set encryption to true and derive encryption key
-			options.encryption_config.encryption_enabled = true;
-			options.encryption_config.derived_key = DeriveKey(storage_options.encryption_key);
+			options.encryption_options.encryption_enabled = true;
+			options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_header_size = config.options.default_block_header_size;

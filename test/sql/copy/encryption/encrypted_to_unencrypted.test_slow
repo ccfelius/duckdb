@@ -1,4 +1,4 @@
-# name: test/sql/copy/encryption/encrypted_to_unencrypted.test
+# name: test/sql/copy/encryption/encrypted_to_unencrypted.test_slow
 # group: [encryption]
 
 require noforcestorage
