@@ -17,8 +17,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
 
-#include <sys/mman.h>
-
 namespace duckdb {
 
 class DatabaseInstance;

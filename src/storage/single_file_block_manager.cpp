@@ -19,6 +19,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#else
+#include <sys/mman.h>
 #endif
 
 namespace duckdb {
