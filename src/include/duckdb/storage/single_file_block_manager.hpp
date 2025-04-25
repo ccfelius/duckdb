@@ -93,7 +93,7 @@ struct EncryptionOptions {
 
 	void LockEncryptionKey() {
 #if defined(_WIN32)
-		VirtualLock(reinterpret_cast<LPVOID>(derived_key.data()), derived_key.size());
+		VirtualLock(derived_key.data(), derived_key.size());
 #else
 		mlock(derived_key.data(), derived_key.size());
 #endif
@@ -101,7 +101,7 @@ struct EncryptionOptions {
 
 	void UnlockEncryptionKey() {
 #if defined(_WIN32)
-		VirtualLock(reinterpret_cast<LPVOID>(derived_key.data()), derived_key.size());
+		VirtualLock(derived_key.data(), derived_key.size());
 #else
 		munlock(derived_key.data(), derived_key.size());
 #endif
