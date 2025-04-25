@@ -160,8 +160,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.cipher =
 		    options.encryption_options.StringToCipher(storage_options.encryption_cipher);
-		//! lock the key to avoid swapping
-		options.encryption_options.LockEncryptionKey();
 		options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 	}
 
@@ -221,6 +219,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->CreateNewDatabase();
+		sf_block_manager->LockEncryptionKey();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
@@ -237,8 +236,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 			// Set encryption to true and derive encryption key
 			options.encryption_options.encryption_enabled = true;
-			//! lock the key to avoid swapping
-			options.encryption_options.LockEncryptionKey();
 			options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 		} else {
 			// No explicit option provided: use the default option.
@@ -250,6 +247,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
 		sf_block_manager->LoadExistingDatabase();
+		sf_block_manager->LockEncryptionKey();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 

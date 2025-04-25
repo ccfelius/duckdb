@@ -17,6 +17,10 @@
 #include <algorithm>
 #include <cstring>
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
@@ -222,6 +226,28 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
                                   Storage::FILE_HEADER_SIZE - options.block_header_size.GetIndex(),
                                   options.block_header_size.GetIndex()),
       iteration_count(0), options(options) {
+}
+
+void SingleFileBlockManager::LockEncryptionKey() const {
+	auto derived_key = options.encryption_options.derived_key;
+#if defined(_WIN32)
+	VirtualLock(const_cast<void *>(static_cast<const void *>(derived_key.data())), derived_key.size());
+#else
+	mlock(derived_key.data(), derived_key.size());
+#endif
+}
+
+void SingleFileBlockManager::UnlockEncryptionKey() const {
+	auto derived_key = options.encryption_options.derived_key;
+#if defined(_WIN32)
+	VirtualLock(const_cast<void *>(static_cast<const void *>(derived_key.data())), derived_key.size());
+#else
+	munlock(derived_key.data(), derived_key.size());
+#endif
+	if (!derived_key.empty()) {
+		memset(&derived_key[0], 0, derived_key.size());
+		derived_key.clear();
+	}
 }
 
 FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
