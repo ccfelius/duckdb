@@ -17,6 +17,12 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/mman.h>
+#endif
+
 namespace duckdb {
 
 class DatabaseInstance;
@@ -84,6 +90,25 @@ struct EncryptionOptions {
 		}
 		return CipherType::UNKNOWN;
 	}
+
+#ifdef _WIN32
+	void LockKey() {
+		VirtualLock((LPVOID)derived_key.data(), derived_key.size());
+	}
+
+	void UnlockKey() {
+		VirtualLock((LPVOID)derived_key.data(), derived_key.size());
+	}
+#else
+	void LockKey() {
+		mlock(derived_key.data(), derived_key.size());
+	}
+
+	void UnlockKey() {
+		munlock(derived_key.data(), derived_key.size());
+		//! TODO; memset data to 0?
+	}
+#endif
 };
 
 struct StorageManagerOptions {
