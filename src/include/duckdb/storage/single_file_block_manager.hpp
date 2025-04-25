@@ -90,26 +90,6 @@ struct EncryptionOptions {
 		}
 		return CipherType::UNKNOWN;
 	}
-
-	void LockEncryptionKey() {
-#if defined(_WIN32)
-		VirtualLock(const_cast<void*>(static_cast<const void*>(derived_key.data())), derived_key.size());
-#else
-		mlock(derived_key.data(), derived_key.size());
-#endif
-	}
-
-	void UnlockEncryptionKey() {
-#if defined(_WIN32)
-		VirtualLock(const_cast<void*>(static_cast<const void*>(derived_key.data())), derived_key.size());
-#else
-		munlock(derived_key.data(), derived_key.size());
-#endif
-		if (!derived_key.empty()) {
-			memset(&derived_key[0], 0, derived_key.size());
-			derived_key.clear();
-		}
-	}
 };
 
 struct StorageManagerOptions {
@@ -138,6 +118,10 @@ public:
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
 	void LoadExistingDatabase();
+
+	//! lock and unlock encryption key
+	void LockEncryptionKey() const;
+	void UnlockEncryptionKey() const;
 
 	//! Get Derived Encryption key
 	string &GetDerivedEncryptionKey() override;

@@ -59,13 +59,20 @@ public:
 		deserializer.Set<Catalog &>(catalog);
 	}
 
+	StorageManager& GetStorageManager() {
+		return db.GetStorageManager();
+	}
+
+
 	static WriteAheadLogDeserializer Open(ReplayState &state_p, BufferedFileReader &stream,
 	                                      bool deserialize_only = false) {
 		if (state_p.wal_version == 1) {
 			// old WAL versions do not have checksums
 			return WriteAheadLogDeserializer(state_p, stream, deserialize_only);
 		}
+
 		if (state_p.wal_version == 2) {
+
 		// read the checksum and size
 		auto size = stream.Read<uint64_t>();
 		auto stored_checksum = stream.Read<uint64_t>();
@@ -115,11 +122,16 @@ public:
 
 		//! decrypt
 		//! INPUT THE key?
-		auto encryption_state = GetEncryptionUtil(state_p.db)->CreateEncryptionState();
-		auto derived_key = db.GetStorageManager().GetBlockManager()
-
-		//! fetch the key from somewhere?
+		auto derived_key = state_p.db.GetStorageManager().GetBlockManager().GetDerivedEncryptionKey();
+		auto encryption_state = GetEncryptionUtil(state_p.db)->CreateEncryptionState(&derived_key);
 		encryption_state->InitializeDecryption(nonce, MainHeader::AES_IV_LEN, nullptr);
+
+		//! Allocate a decryption buffer
+		auto buffer = unique_ptr<data_t[]>(new data_t[size]);
+		stream.ReadData(buffer.get(), size);
+
+		encryption_state->Process(buffer.get(), size, buffer.get(), size);
+		encryption_state->Finalize(buffer.get(), size, tag, MainHeader::AES_TAG_LEN);
 
 		//! store the checksum etc.
 		auto stored_checksum = stream.Read<uint64_t>();
