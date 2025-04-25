@@ -105,7 +105,7 @@ void StorageManager::Initialize(StorageOptions options) {
 	LoadDatabase(options);
 
 	if (options.encryption) {
-		ClearEncryptionKey(options.encryption_key);
+		ClearUserKey(options.encryption_key);
 	}
 }
 
@@ -161,7 +161,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		options.encryption_options.cipher =
 		    options.encryption_options.StringToCipher(storage_options.encryption_cipher);
 		//! lock the key to avoid swapping
-		options.encryption_options.LockKey();
+		options.encryption_options.LockEncryptionKey();
 		options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 	}
 
@@ -238,7 +238,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			// Set encryption to true and derive encryption key
 			options.encryption_options.encryption_enabled = true;
 			//! lock the key to avoid swapping
-			options.encryption_options.LockKey();
+			options.encryption_options.LockEncryptionKey();
 			options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 		} else {
 			// No explicit option provided: use the default option.

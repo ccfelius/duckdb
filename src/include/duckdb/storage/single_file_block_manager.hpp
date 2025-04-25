@@ -91,24 +91,25 @@ struct EncryptionOptions {
 		return CipherType::UNKNOWN;
 	}
 
+	void LockEncryptionKey() {
 #ifdef _WIN32
-	void LockKey() {
 		VirtualLock((LPVOID)derived_key.data(), derived_key.size());
-	}
-
-	void UnlockKey() {
-		VirtualLock((LPVOID)derived_key.data(), derived_key.size());
-	}
 #else
-	void LockKey() {
 		mlock(derived_key.data(), derived_key.size());
+#endif
 	}
 
-	void UnlockKey() {
+	void UnlockEncryptionKey() {
+#ifdef _WIN32
+		VirtualLock((LPVOID)derived_key.data(), derived_key.size());
+#else
 		munlock(derived_key.data(), derived_key.size());
-		//! TODO; memset data to 0?
-	}
 #endif
+		if (!derived_key.empty()) {
+			memset(&derived_key[0], 0, derived_key.size());
+			derived_key.clear();
+		}
+	}
 };
 
 struct StorageManagerOptions {
