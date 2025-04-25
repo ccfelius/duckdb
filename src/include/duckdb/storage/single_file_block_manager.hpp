@@ -114,8 +114,8 @@ public:
 	void LoadExistingDatabase();
 
 	//! Lock and unlock encryption key
-	void LockEncryptionKey() const;
-	void UnlockEncryptionKey() const;
+	void LockEncryptionKey();
+	void UnlockEncryptionKey();
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;

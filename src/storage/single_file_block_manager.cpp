@@ -64,7 +64,7 @@ void EncryptCanary(data_ptr_t encrypted_canary, const shared_ptr<EncryptionState
 	memset(iv, 0, sizeof(iv));
 	memset(encrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
 
-	encryption_state->InitializeEncryption(iv, 16, derived_key);
+	encryption_state->InitializeEncryption(iv, MainHeader::AES_NONCE_LEN, derived_key);
 	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
 	                          encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
 }
@@ -81,7 +81,7 @@ void DecryptCanary(data_ptr_t encrypted_canary, const shared_ptr<EncryptionState
 	memset(decrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
 
 	//! Decrypt the canary
-	encryption_state->InitializeDecryption(iv, 16, derived_key);
+	encryption_state->InitializeDecryption(iv, MainHeader::AES_NONCE_LEN, derived_key);
 	encryption_state->Process(encrypted_canary, MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
 	                          MainHeader::CANARY_BYTE_SIZE);
 
@@ -230,8 +230,9 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
       iteration_count(0), options(options) {
 }
 
-void SingleFileBlockManager::LockEncryptionKey() const {
-	auto derived_key = options.encryption_options.derived_key;
+void SingleFileBlockManager::LockEncryptionKey() {
+	auto &derived_key = options.encryption_options.derived_key;
+
 #if defined(_WIN32)
 	VirtualLock(const_cast<void *>(static_cast<const void *>(derived_key.data())), derived_key.size());
 #else
@@ -239,10 +240,11 @@ void SingleFileBlockManager::LockEncryptionKey() const {
 #endif
 }
 
-void SingleFileBlockManager::UnlockEncryptionKey() const {
-	auto derived_key = options.encryption_options.derived_key;
+void SingleFileBlockManager::UnlockEncryptionKey() {
+	auto &derived_key = options.encryption_options.derived_key;
+
 #if defined(_WIN32)
-	VirtualLock(const_cast<void *>(static_cast<const void *>(derived_key.data())), derived_key.size());
+	VirtualUnlock(const_cast<void *>(static_cast<const void *>(derived_key.data())), derived_key.size());
 #else
 	munlock(derived_key.data(), derived_key.size());
 #endif
@@ -404,7 +406,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		// database is not encrypted, but is tried to be opened with a key
 		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
 	} else if (main_header.IsEncrypted()) {
-		auto derived_key = options.encryption_options.derived_key;
+		auto &derived_key = options.encryption_options.derived_key;
 		//! Check if the correct key is used to decrypt the database
 		DecryptCanary(main_header.encrypted_canary, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key),
 		              &derived_key);
@@ -438,7 +440,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const {
 	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
 
-	const auto derived_key = options.encryption_options.derived_key;
+	const auto &derived_key = options.encryption_options.derived_key;
 	auto encryption_util = GetEncryptionUtil(db);
 	auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
 
@@ -474,7 +476,7 @@ void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_b
 }
 
 void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) const {
-	const auto derived_key = options.encryption_options.derived_key;
+	const auto &derived_key = options.encryption_options.derived_key;
 	//! initialize encryption state
 	auto encryption_util = GetEncryptionUtil(db);
 	auto encryption_state = encryption_util->CreateEncryptionState(&derived_key);
