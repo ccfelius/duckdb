@@ -31,11 +31,9 @@ struct StorageOptions {
 	string encryption_key;
 };
 
-inline void ClearEncryptionKey(string &encryption_key) {
+inline void ClearUserKey(string &encryption_key) {
 	if (!encryption_key.empty()) {
-		// Overwrite contents
 		memset(&encryption_key[0], 0, encryption_key.size());
-		// Now clear the string
 		encryption_key.clear();
 	}
 }
