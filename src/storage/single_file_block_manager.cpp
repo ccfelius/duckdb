@@ -94,7 +94,6 @@ void MainHeader::Write(WriteStream &ser) {
 
 	if (flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
 		ser.WriteData(encryption_metadata, ENCRYPTION_METADATA_LEN);
-		ser.WriteData(salt, SALT_LEN);
 		ser.WriteData(encrypted_canary, CANARY_BYTE_SIZE);
 	}
 
@@ -149,7 +148,6 @@ MainHeader MainHeader::Read(ReadStream &source) {
 
 	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
 		source.ReadData(header.encryption_metadata, ENCRYPTION_METADATA_LEN);
-		source.ReadData(header.salt, SALT_LEN);
 		source.ReadData(header.encrypted_canary, CANARY_BYTE_SIZE);
 	}
 
@@ -264,12 +262,6 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 	return main_header;
 }
 
-void StoreSalt(AttachedDatabase &db, data_ptr_t salt, StorageManagerOptions &options) {
-	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&options.encryption_options.derived_key);
-	// Generate a unique salt to has each password
-	GenerateSalt(salt, encryption_state);
-}
-
 void StoreEncryptedCanary(AttachedDatabase &db, data_ptr_t encrypted_canary, StorageManagerOptions &options) {
 	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&options.encryption_options.derived_key);
 
@@ -311,7 +303,6 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	if (options.encryption_options.encryption_enabled) {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 		StoreEncryptionMetadata(main_header.encryption_metadata, options);
-		StoreSalt(db, main_header.salt, options);
 		StoreEncryptedCanary(db, main_header.encrypted_canary, options);
 	}
 
@@ -428,8 +419,8 @@ void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_b
 
 	//! a nonce is randomly generated for every block
 	uint8_t nonce[MainHeader::AES_IV_LEN];
-	memset(nonce, 0, MainHeader::AES_NONCE_LEN);
-	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), 12);
+	memset(nonce, 0, MainHeader::AES_IV_LEN);
+	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
 
 	//! store the nonce at the start of the block
 	memcpy(block_offset_internal, nonce, MainHeader::AES_NONCE_LEN);
@@ -463,7 +454,7 @@ void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) co
 	//! load the stored nonce
 	uint8_t nonce[MainHeader::AES_IV_LEN];
 	memset(nonce, 0, MainHeader::AES_IV_LEN);
-	memcpy(nonce, block.InternalBuffer(), MainHeader::AES_IV_LEN);
+	memcpy(nonce, block.InternalBuffer(), MainHeader::AES_NONCE_LEN);
 
 	//! load the tag for verification
 	uint8_t tag[MainHeader::AES_TAG_LEN];

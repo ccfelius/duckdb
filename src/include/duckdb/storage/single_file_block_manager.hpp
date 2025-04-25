@@ -23,12 +23,13 @@ class DatabaseInstance;
 struct MetadataHandle;
 
 struct EncryptionOptions {
+
 	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
+
 	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
 
 	//! indicates whether the db is encrypted
 	bool encryption_enabled = false;
-
 	//! derived encryption key
 	string derived_key;
 	//! Cipher used for encryption

@@ -1,4 +1,4 @@
-# name: test/sql/copy/encryption/unencrypted_to_encrypted.test_slow
+# name: test/sql/copy/encryption/encrypted_to_unencrypted.test
 # group: [encryption]
 
 require noforcestorage
@@ -20,13 +20,13 @@ statement ok
 ATTACH '__TEST_DIR__/unencrypted.duckdb' as unencrypted;
 
 statement ok
-USE unencrypted;
+USE encrypted;
 
 statement ok
-CALL dbgen(sf=0.1);
+CALL dbgen(sf=0.01);
 
 statement ok
-COPY FROM DATABASE unencrypted to encrypted;
+COPY FROM DATABASE encrypted to unencrypted;
 
 statement ok
 USE memory;
@@ -38,18 +38,18 @@ statement ok
 DETACH encrypted
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+ATTACH '__TEST_DIR__/unencrypted.duckdb' AS unencrypted;
 
 query I
-SELECT l_suppkey FROM encrypted.lineitem limit 10;
+SELECT l_suppkey FROM unencrypted.lineitem limit 10;
 ----
-785
-732
-371
-465
-160
-67
-138
-181
-658
-370
+93
+75
+38
+48
+23
+10
+33
+19
+70
+60
