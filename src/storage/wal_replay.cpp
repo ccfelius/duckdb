@@ -65,10 +65,7 @@ public:
 			// old WAL versions do not have checksums
 			return WriteAheadLogDeserializer(state_p, stream, deserialize_only);
 		}
-		if (state_p.wal_version != 2) {
-			throw IOException("Failed to read WAL of version %llu - can only read version 1 and 2",
-			                  state_p.wal_version);
-		}
+		if (state_p.wal_version == 2) {
 		// read the checksum and size
 		auto size = stream.Read<uint64_t>();
 		auto stored_checksum = stream.Read<uint64_t>();
@@ -93,7 +90,46 @@ public:
 			                  "stored checksum %llu",
 			                  offset, computed_checksum, stored_checksum);
 		}
+
 		return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
+
+		}
+
+		//! if wal_version is 3, this means that the WAL is encrypted
+		// we then first will need to decrypt the WAL
+		//! For encryption, the length field remains plaintext
+		//! Before the length field, we store a nonce (and tag for GCM?)
+		//! a nonce is randomly generated for every block
+
+		uint8_t nonce[MainHeader::AES_IV_LEN];
+		memset(nonce, 0, MainHeader::AES_IV_LEN);
+
+		uint8_t tag[MainHeader::AES_TAG_LEN];
+		memset(tag, 0, MainHeader::AES_TAG_LEN);
+
+		stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
+		stream.ReadData(tag, MainHeader::AES_TAG_LEN);
+
+		// read the size
+		auto size = stream.Read<uint64_t>();
+
+		//! decrypt
+		//! INPUT THE key?
+		auto encryption_state = GetEncryptionUtil(state_p.db)->CreateEncryptionState();
+		auto derived_key = db.GetStorageManager().GetBlockManager()
+
+		//! fetch the key from somewhere?
+		encryption_state->InitializeDecryption(nonce, MainHeader::AES_IV_LEN, nullptr);
+
+		//! store the checksum etc.
+		auto stored_checksum = stream.Read<uint64_t>();
+		auto offset = stream.CurrentOffset();
+		auto file_size = stream.FileSize();
+
+		if (state_p.wal_version != 3) {
+			throw IOException("Failed to read WAL of version %llu - can only read version 1, 2 and 3",
+		  state_p.wal_version);
+		}
 	}
 
 	bool ReplayEntry() {

@@ -93,7 +93,7 @@ struct EncryptionOptions {
 
 	void LockEncryptionKey() {
 #if defined(_WIN32)
-		VirtualLock(derived_key.data(), derived_key.size());
+		VirtualLock(const_cast<void*>(static_cast<const void*>(derived_key.data())), derived_key.size());
 #else
 		mlock(derived_key.data(), derived_key.size());
 #endif
@@ -101,7 +101,7 @@ struct EncryptionOptions {
 
 	void UnlockEncryptionKey() {
 #if defined(_WIN32)
-		VirtualLock(derived_key.data(), derived_key.size());
+		VirtualLock(const_cast<void*>(static_cast<const void*>(derived_key.data())), derived_key.size());
 #else
 		munlock(derived_key.data(), derived_key.size());
 #endif
@@ -138,6 +138,9 @@ public:
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
 	void LoadExistingDatabase();
+
+	//! Get Derived Encryption key
+	string &GetDerivedEncryptionKey() override;
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;

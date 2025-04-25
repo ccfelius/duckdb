@@ -84,6 +84,7 @@ public:
 	virtual void FileSync() = 0;
 	//! Truncate the underlying database file after a checkpoint
 	virtual void Truncate();
+	virtual string &GetDerivedEncryptionKey();
 
 	//! Register a block with the given block id in the base file
 	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
