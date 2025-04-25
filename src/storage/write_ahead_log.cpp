@@ -23,7 +23,8 @@
 
 namespace duckdb {
 
-constexpr uint64_t WAL_VERSION_NUMBER = 2;
+// constexpr uint64_t WAL_VERSION_NUMBER = 2;
+constexpr uint64_t WAL_VERSION_NUMBER = 3;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size,
                              WALInitState init_state)

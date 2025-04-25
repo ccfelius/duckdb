@@ -17,7 +17,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
 
-#ifdef _WIN32
+#if defined(_WIN32)
 #include <windows.h>
 #else
 #include <sys/mman.h>
@@ -92,16 +92,16 @@ struct EncryptionOptions {
 	}
 
 	void LockEncryptionKey() {
-#ifdef _WIN32
-		VirtualLock((LPVOID)derived_key.data(), derived_key.size());
+#if defined(_WIN32)
+		VirtualLock(reinterpret_cast<LPVOID>(derived_key.data()), derived_key.size());
 #else
 		mlock(derived_key.data(), derived_key.size());
 #endif
 	}
 
 	void UnlockEncryptionKey() {
-#ifdef _WIN32
-		VirtualLock((LPVOID)derived_key.data(), derived_key.size());
+#if defined(_WIN32)
+		VirtualLock(reinterpret_cast<LPVOID>(derived_key.data()), derived_key.size());
 #else
 		munlock(derived_key.data(), derived_key.size());
 #endif
