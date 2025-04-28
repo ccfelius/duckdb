@@ -28,18 +28,6 @@ struct EncryptionOptions {
 
 	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
 
-	//! indicates whether the db is encrypted
-	bool encryption_enabled = false;
-	//! derived encryption key
-	string derived_key;
-	//! Cipher used for encryption
-	CipherType cipher;
-
-	//! key derivation function (kdf) used
-	KeyDerivationFunction kdf = KeyDerivationFunction::SHA256;
-	//! Key Length
-	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
-
 	string CipherToString(CipherType cipher_p) const {
 		switch (cipher_p) {
 		case GCM:
@@ -84,6 +72,17 @@ struct EncryptionOptions {
 		}
 		return CipherType::UNKNOWN;
 	}
+
+	//! indicates whether the db is encrypted
+	bool encryption_enabled = false;
+	//! derived encryption key
+	string derived_key;
+	//! Cipher used for encryption
+	CipherType cipher;
+	//! key derivation function (kdf) used
+	KeyDerivationFunction kdf = KeyDerivationFunction::SHA256;
+	//! Key Length
+	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 };
 
 struct StorageManagerOptions {

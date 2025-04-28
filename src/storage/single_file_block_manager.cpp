@@ -334,6 +334,8 @@ void SingleFileBlockManager::CreateNewDatabase() {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 		StoreEncryptionMetadata(main_header.encryption_metadata, options);
 		StoreEncryptedCanary(db, main_header.encrypted_canary, options);
+		//! avoid swapping the key to disk
+		LockEncryptionKey();
 	}
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
@@ -410,6 +412,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		//! Check if the correct key is used to decrypt the database
 		DecryptCanary(main_header.encrypted_canary, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key),
 		              &derived_key);
+		LockEncryptionKey();
 	}
 
 	options.version_number = main_header.version_number;
@@ -565,10 +568,6 @@ void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t locati
 		temp_buffer_manager =
 		    make_uniq<FileBuffer>(Allocator::Get(db), block.GetBufferType(), block.Size(), GetBlockHeaderSize());
 		EncryptBuffer(block, *temp_buffer_manager, delta);
-	}
-
-	if (options.encryption_options.encryption_enabled && !skip_block_header) {
-		//! we write from a temp buffer which holds the encrypted data
 		temp_buffer_manager->Write(*handle, location);
 	} else {
 		block.Write(*handle, location);
