@@ -103,6 +103,10 @@ void StorageManager::Initialize(StorageOptions options) {
 
 	// Create or load the database from disk, if not in-memory mode.
 	LoadDatabase(options);
+
+	if (options.encryption) {
+		ClearUserKey(options.encryption_key);
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -147,17 +151,16 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	auto &config = DBConfig::Get(db);
 
 	StorageManagerOptions options;
-	EncryptionOptions encryption_options;
-
 	options.read_only = read_only;
 	options.use_direct_io = config.options.use_direct_io;
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 
 	if (storage_options.encryption) {
-		encryption_options.encryption_enabled = true;
-		//! if the db file already exists, the cipher could get overwritten
-		encryption_options.cipher = encryption_options.StringToCipher(storage_options.encryption_cipher);
+		options.encryption_options.encryption_enabled = true;
+		options.encryption_options.cipher =
+		    options.encryption_options.StringToCipher(storage_options.encryption_cipher);
+		options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
@@ -173,7 +176,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			    row_group_size, STANDARD_VECTOR_SIZE);
 		}
 	}
-
 	// Check if the database file already exists.
 	// Note: a file can also exist if there was a ROLLBACK on a previous transaction creating that file.
 	if (!read_only && !fs.FileExists(path)) {
@@ -216,7 +218,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->CreateNewDatabase(storage_options, encryption_options);
+		sf_block_manager->CreateNewDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
@@ -232,8 +234,8 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			options.storage_version = storage_options.storage_version;
 
 			// Set encryption to true and derive encryption key
-			encryption_options.encryption_enabled = true;
-			encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
+			options.encryption_options.encryption_enabled = true;
+			options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_header_size = config.options.default_block_header_size;
@@ -243,7 +245,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->LoadExistingDatabase(storage_options, encryption_options);
+		sf_block_manager->LoadExistingDatabase();
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 
@@ -469,13 +471,11 @@ BlockManager &SingleFileStorageManager::GetBlockManager() {
 }
 
 string SingleFileStorageManager::DeriveKey(const string &user_key, data_ptr_t salt) {
-	//! We now only support SHA256 for key derivation
+	//! For now, we are only using SHA256 for key derivation
 	SHA256State state;
 
-	if (salt) {
-		state.AddSalt(salt, MainHeader::SALT_LEN);
-	} else {
-		state.AddString("IBd2nLfyDoWYZy6R81DVYxxdM7CAsOcX"); // use fixed salt
+	if (!salt) {
+		state.AddString("IBd2nLfyDoWYZy6R81DVYxxdM7CAsOcX"); // random salt
 	}
 
 	state.AddString(user_key);

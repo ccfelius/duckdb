@@ -101,11 +101,6 @@ struct MainHeader {
 	static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
 	data_t encryption_metadata[ENCRYPTION_METADATA_LEN];
 
-	//! a salt is used to hash the password
-	//! the salt is 128 bits
-	static constexpr idx_t SALT_LEN = 16;
-	data_t salt[SALT_LEN];
-
 	//! The canary is  a known plaintext
 	//! this is used for early detection of a wrong key
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;

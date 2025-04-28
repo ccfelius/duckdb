@@ -31,4 +31,11 @@ struct StorageOptions {
 	string encryption_key;
 };
 
+inline void ClearUserKey(string &encryption_key) {
+	if (!encryption_key.empty()) {
+		memset(&encryption_key[0], 0, encryption_key.size());
+		encryption_key.clear();
+	}
+}
+
 } // namespace duckdb

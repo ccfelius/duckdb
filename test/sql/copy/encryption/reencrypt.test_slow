@@ -23,7 +23,7 @@ statement ok
 USE encrypted;
 
 statement ok
-CALL dbgen(sf=0.1);
+CALL dbgen(sf=0.01);
 
 statement ok
 COPY FROM DATABASE encrypted to reencrypted;
@@ -52,13 +52,13 @@ ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');
 query I
 SELECT l_suppkey FROM reencrypted.lineitem limit 10;
 ----
-785
-732
-371
-465
-160
-67
-138
-181
-658
-370
+93
+75
+38
+48
+23
+10
+33
+19
+70
+60
