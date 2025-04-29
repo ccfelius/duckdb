@@ -99,13 +99,10 @@ struct MainHeader {
 	//! optional metadata for encryption
 	//! only used if encryption flag is set
 	static constexpr idx_t ENCRYPTION_METADATA_LEN = 8;
-	data_t encryption_metadata[ENCRYPTION_METADATA_LEN];
-
+	static constexpr idx_t SALT_LEN = 16;
 	//! The canary is  a known plaintext
 	//! this is used for early detection of a wrong key
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
-	data_t encrypted_canary[CANARY_BYTE_SIZE];
-
 	//! Nonce, IV (nonce + counter) and tag length
 	static constexpr uint64_t AES_NONCE_LEN = 12;
 	static constexpr uint64_t AES_IV_LEN = 16;
@@ -124,12 +121,42 @@ struct MainHeader {
 		return flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
 
+	void SetEncryptionMetadata(const data_t *source) {
+		memset(encryption_metadata, 0, ENCRYPTION_METADATA_LEN);
+		memcpy(encryption_metadata, source, ENCRYPTION_METADATA_LEN);
+	}
+
+	void SetSalt(const data_t *source) {
+		memset(salt, 0, SALT_LEN);
+		memcpy(salt, source, SALT_LEN);
+	}
+
+	void SetEncryptedCanary(const data_t *source) {
+		memset(encrypted_canary, 0, CANARY_BYTE_SIZE);
+		memcpy(encrypted_canary, source, CANARY_BYTE_SIZE);
+	}
+
+	const data_ptr_t GetEncryptionMetadata() {
+		return encryption_metadata;
+	}
+
+	const data_ptr_t GetSalt() {
+		return salt;
+	}
+
+	const data_ptr_t GetEncryptedCanary() {
+		return encrypted_canary;
+	}
+
 	void Write(WriteStream &ser);
 	static MainHeader Read(ReadStream &source);
 
 private:
 	data_t library_git_desc[MAX_VERSION_SIZE];
 	data_t library_git_hash[MAX_VERSION_SIZE];
+	data_t encryption_metadata[ENCRYPTION_METADATA_LEN];
+	data_t salt[SALT_LEN];
+	data_t encrypted_canary[CANARY_BYTE_SIZE];
 };
 
 //! The DatabaseHeader contains information about the current state of the database. Every storage file has two

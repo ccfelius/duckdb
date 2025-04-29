@@ -24,6 +24,8 @@ struct MetadataHandle;
 
 struct EncryptionOptions {
 
+	enum SaltType : uint8_t { NONE = 0, FIXED = 1, UNIQUE = 2 };
+
 	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
 
 	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
@@ -52,6 +54,17 @@ struct EncryptionOptions {
 		}
 	}
 
+	string SaltToString(SaltType salt_p) const {
+		switch (salt_p) {
+		case FIXED:
+			return "fixed";
+		case UNIQUE:
+			return "unique";
+		default:
+			return "none";
+		}
+	}
+
 	KeyDerivationFunction StringToKDF(const string &key_derivation_function) const {
 		if (key_derivation_function == "sha256") {
 			return KeyDerivationFunction::SHA256;
@@ -73,6 +86,15 @@ struct EncryptionOptions {
 		return CipherType::UNKNOWN;
 	}
 
+	SaltType StringToSalt(const string &salt_p) const {
+		if (salt_p == "fixed") {
+			return SaltType::FIXED;
+		} else if (salt_p == "variable") {
+			return SaltType::UNIQUE;
+		}
+		return SaltType::NONE;
+	}
+
 	//! indicates whether the db is encrypted
 	bool encryption_enabled = false;
 	//! derived encryption key
@@ -81,6 +103,8 @@ struct EncryptionOptions {
 	CipherType cipher;
 	//! key derivation function (kdf) used
 	KeyDerivationFunction kdf = KeyDerivationFunction::SHA256;
+	//! Salt
+	SaltType salt = SaltType::FIXED;
 	//! Key Length
 	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 };
