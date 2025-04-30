@@ -35,11 +35,18 @@ void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
 	ser.WriteData(version, MainHeader::MAX_VERSION_SIZE);
 }
 
-void SerializeEncryptionMetadata(WriteStream &ser, data_ptr_t metadata_str, const idx_t size) {
-	data_t version[size];
-	memset(version, 0, size);
-	memcpy(version, metadata_str, size);
-	ser.WriteData(version, size);
+void SerializeSalt(WriteStream &ser, data_ptr_t salt_p) {
+	data_t salt[MainHeader::SALT_LEN];
+	memset(salt, 0, MainHeader::SALT_LEN);
+	memcpy(salt, salt_p, MainHeader::SALT_LEN);
+	ser.WriteData(salt, MainHeader::SALT_LEN);
+}
+
+void SerializeEncryptionMetadata(WriteStream &ser, data_ptr_t metadata_p) {
+	data_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
+	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
+	memcpy(metadata, metadata_p, MainHeader::ENCRYPTION_METADATA_LEN);
+	ser.WriteData(metadata, MainHeader::ENCRYPTION_METADATA_LEN);
 }
 
 void DeserializeVersionNumber(ReadStream &stream, data_t *dest) {
@@ -64,8 +71,9 @@ shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db) {
 	return encryption_util;
 }
 
-void GenerateSalt(uint8_t *salt, const shared_ptr<EncryptionState> &encryption_state) {
-	encryption_state->GenerateRandomData(salt, 16);
+void GenerateSalt(AttachedDatabase &db, uint8_t *salt, StorageManagerOptions &options) {
+	memset(salt, 0, MainHeader::SALT_LEN);
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(salt, MainHeader::SALT_LEN);
 }
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
@@ -117,8 +125,9 @@ void MainHeader::Write(WriteStream &ser) {
 	SerializeVersionNumber(ser, DuckDB::SourceID());
 
 	if (flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
-		SerializeEncryptionMetadata(ser, encryption_metadata, MainHeader::ENCRYPTION_METADATA_LEN);
-		SerializeEncryptionMetadata(ser, encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
+		SerializeEncryptionMetadata(ser, encryption_metadata);
+		SerializeSalt(ser, salt);
+		SerializeEncryptionMetadata(ser, encrypted_canary);
 	}
 }
 
@@ -314,6 +323,10 @@ void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, Storage
 	EncryptCanary(main_header, encryption_state, &options.encryption_options.derived_key);
 }
 
+void StoreSalt(MainHeader &main_header, data_ptr_t salt) {
+	main_header.SetSalt(salt);
+}
+
 void StoreEncryptionMetadata(MainHeader &main_header, StorageManagerOptions &options) {
 	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
 	data_ptr_t offset = metadata;
@@ -333,7 +346,25 @@ void StoreEncryptionMetadata(MainHeader &main_header, StorageManagerOptions &opt
 	main_header.SetEncryptionMetadata(metadata);
 }
 
-void SingleFileBlockManager::CreateNewDatabase() {
+string SingleFileBlockManager::DeriveKey(const string &user_key, data_ptr_t salt) {
+	//! For now, we are only using SHA256 for key derivation
+	SHA256State state;
+
+	if (salt) {
+		state.AddSalt(salt, MainHeader::SALT_LEN);
+	} else {
+		state.AddString("IBd2nLfyDoWYZy6R81DVYxxdM7CAsOcX");
+	}
+
+	state.AddString(user_key);
+	auto derived_key = state.Finalize();
+
+	//! key_length is hardcoded to 32 bytes
+	D_ASSERT(derived_key.length() == MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	return derived_key;
+}
+
+void SingleFileBlockManager::CreateNewDatabase(string *encryption_key) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -349,7 +380,15 @@ void SingleFileBlockManager::CreateNewDatabase() {
 
 	if (options.encryption_options.encryption_enabled) {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+
+		//! we generate a random salt for each password
+		uint8_t salt[MainHeader::SALT_LEN];
+		GenerateSalt(db, salt, options);
+		options.encryption_options.derived_key = DeriveKey(*encryption_key, salt);
+
+		//! Store all metadata in the main header
 		StoreEncryptionMetadata(main_header, options);
+		StoreSalt(main_header, salt);
 		StoreEncryptedCanary(db, main_header, options);
 		//! avoid swapping the key to disk
 		LockEncryptionKey();
@@ -396,7 +435,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase() {
+void SingleFileBlockManager::LoadExistingDatabase(string *encryption_key) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
@@ -425,6 +464,14 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		// database is not encrypted, but is tried to be opened with a key
 		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
 	} else if (main_header.IsEncrypted()) {
+
+		//! Maybe create a separate method for this
+		uint8_t salt[MainHeader::SALT_LEN];
+		memset(salt, 0, MainHeader::SALT_LEN);
+
+		memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
+
+		options.encryption_options.derived_key = DeriveKey(*encryption_key, salt);
 		auto &derived_key = options.encryption_options.derived_key;
 		//! Check if the correct key is used to decrypt the database
 		DecryptCanary(main_header, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key), &derived_key);

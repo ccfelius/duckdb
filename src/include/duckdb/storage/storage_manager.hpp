@@ -166,8 +166,6 @@ public:
 	shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) override;
 	BlockManager &GetBlockManager() override;
 
-	static string DeriveKey(const string &user_key, data_ptr_t salt = nullptr);
-
 protected:
 	void LoadDatabase(StorageOptions options) override;
 };

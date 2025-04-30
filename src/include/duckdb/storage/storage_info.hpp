@@ -136,15 +136,15 @@ struct MainHeader {
 		memcpy(encrypted_canary, source, CANARY_BYTE_SIZE);
 	}
 
-	const data_ptr_t GetEncryptionMetadata() {
+	data_ptr_t GetEncryptionMetadata() {
 		return encryption_metadata;
 	}
 
-	const data_ptr_t GetSalt() {
+	data_ptr_t GetSalt() {
 		return salt;
 	}
 
-	const data_ptr_t GetEncryptedCanary() {
+	data_ptr_t GetEncryptedCanary() {
 		return encrypted_canary;
 	}
 

@@ -262,7 +262,7 @@ MbedTlsWrapper::AESStateMBEDTLS::~AESStateMBEDTLS() {
 	}
 }
 
-void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(duckdb::data_ptr_t data, duckdb::idx_t len) {
 
 #ifdef DEBUG
 	duckdb::RandomEngine random_engine(1);
@@ -277,6 +277,10 @@ void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data
 		data += next;
 		len -= next;
 	}
+}
+
+void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
+	GenerateRandomDataStatic(data, len);
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) {

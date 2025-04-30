@@ -160,7 +160,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		options.encryption_options.encryption_enabled = true;
 		options.encryption_options.cipher =
 		    options.encryption_options.StringToCipher(storage_options.encryption_cipher);
-		options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
@@ -218,7 +217,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->CreateNewDatabase();
+		sf_block_manager->CreateNewDatabase(&storage_options.encryption_key);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
@@ -235,7 +234,6 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 			// Set encryption to true and derive encryption key
 			options.encryption_options.encryption_enabled = true;
-			options.encryption_options.derived_key = DeriveKey(storage_options.encryption_key);
 		} else {
 			// No explicit option provided: use the default option.
 			options.block_header_size = config.options.default_block_header_size;
@@ -245,7 +243,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->LoadExistingDatabase();
+		sf_block_manager->LoadExistingDatabase(&storage_options.encryption_key);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 
@@ -468,22 +466,6 @@ shared_ptr<TableIOManager> SingleFileStorageManager::GetTableIOManager(BoundCrea
 
 BlockManager &SingleFileStorageManager::GetBlockManager() {
 	return *block_manager;
-}
-
-string SingleFileStorageManager::DeriveKey(const string &user_key, data_ptr_t salt) {
-	//! For now, we are only using SHA256 for key derivation
-	SHA256State state;
-
-	if (!salt) {
-		state.AddString("IBd2nLfyDoWYZy6R81DVYxxdM7CAsOcX"); // random salt
-	}
-
-	state.AddString(user_key);
-	auto derived_key = state.Finalize();
-
-	//! key_length is hardcoded to 32 bytes
-	D_ASSERT(derived_key.length() == MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	return derived_key;
 }
 
 } // namespace duckdb
