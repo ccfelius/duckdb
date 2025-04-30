@@ -54,7 +54,7 @@ void DeserializeVersionNumber(ReadStream &stream, data_t *dest) {
 	stream.ReadData(dest, MainHeader::MAX_VERSION_SIZE);
 }
 
-void DeserializeEncryptionMetadata(ReadStream &stream, data_t *dest, idx_t size) {
+void DeserializeEncryptionData(ReadStream &stream, data_t *dest, idx_t size) {
 	memset(dest, 0, size);
 	stream.ReadData(dest, size);
 }
@@ -180,8 +180,9 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	DeserializeVersionNumber(source, header.library_git_hash);
 
 	if (header.flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG) {
-		DeserializeEncryptionMetadata(source, header.encryption_metadata, MainHeader::ENCRYPTION_METADATA_LEN);
-		DeserializeEncryptionMetadata(source, header.encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
+		DeserializeEncryptionData(source, header.encryption_metadata, MainHeader::ENCRYPTION_METADATA_LEN);
+		DeserializeEncryptionData(source, header.salt, MainHeader::SALT_LEN);
+		DeserializeEncryptionData(source, header.encrypted_canary, MainHeader::CANARY_BYTE_SIZE);
 	}
 	return header;
 }
@@ -329,6 +330,7 @@ void StoreSalt(MainHeader &main_header, data_ptr_t salt) {
 
 void StoreEncryptionMetadata(MainHeader &main_header, StorageManagerOptions &options) {
 	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
+	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
 	data_ptr_t offset = metadata;
 	//! first byte is the key derivation function used (kdf)
 	//! second byte is for the salt type
@@ -337,31 +339,26 @@ void StoreEncryptionMetadata(MainHeader &main_header, StorageManagerOptions &opt
 	//! the last 4 bytes are the key length
 	Store<uint8_t>(options.encryption_options.kdf, offset);
 	offset++;
-	Store<uint8_t>(options.encryption_options.salt, offset);
-	offset++;
 	Store<uint8_t>(options.encryption_options.cipher, offset);
-	offset += 2;
+	offset += 3;
 	Store<uint32_t>(options.encryption_options.key_length, offset);
 
 	main_header.SetEncryptionMetadata(metadata);
 }
 
-string SingleFileBlockManager::DeriveKey(const string &user_key, data_ptr_t salt) {
+string KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt) {
 	//! For now, we are only using SHA256 for key derivation
 	SHA256State state;
-
-	if (salt) {
-		state.AddSalt(salt, MainHeader::SALT_LEN);
-	} else {
-		state.AddString("IBd2nLfyDoWYZy6R81DVYxxdM7CAsOcX");
-	}
-
+	state.AddSalt(salt, MainHeader::SALT_LEN);
 	state.AddString(user_key);
 	auto derived_key = state.Finalize();
-
 	//! key_length is hardcoded to 32 bytes
 	D_ASSERT(derived_key.length() == MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	return derived_key;
+}
+
+string SingleFileBlockManager::DeriveKey(const string &user_key, data_ptr_t salt) {
+	return KeyDerivationFunctionSHA256(user_key, salt);
 }
 
 void SingleFileBlockManager::CreateNewDatabase(string *encryption_key) {
