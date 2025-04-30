@@ -348,7 +348,7 @@ void StoreEncryptionMetadata(MainHeader &main_header, StorageManagerOptions &opt
 
 string KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt) {
 	//! For now, we are only using SHA256 for key derivation
-	SHA256State state;
+	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 	state.AddSalt(salt, MainHeader::SALT_LEN);
 	state.AddString(user_key);
 	auto derived_key = state.Finalize();
