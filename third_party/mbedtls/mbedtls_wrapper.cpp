@@ -9,11 +9,16 @@
 #include "mbedtls/sha1.h"
 #include "mbedtls/sha256.h"
 #include "mbedtls/cipher.h"
+#include "psa/crypto.h"
+#include <cstdio>
+#include <cstring>
 
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
 #include <stdexcept>
+
+#define SHA_256_HASH_SIZE 32
 
 using namespace std;
 using namespace duckdb_mbedtls;
@@ -104,6 +109,57 @@ void MbedTlsWrapper::ToBase16(char *in, char *out, size_t len) {
 		out[j++] = HEX_CODES[(a >> 4) & 0xf];
 		out[j++] = HEX_CODES[a & 0xf];
 	}
+}
+
+void MbedTlsWrapper::PBKDF2(string *user_key, const uint8_t *salt, uint8_t *derived_key) {
+	uint32_t key_length = 32;
+	size_t user_key_length = user_key->size();
+	size_t salt_length = 16;
+
+	psa_status_t status;
+
+	// Initialize PSA Crypto
+	status = psa_crypto_init();
+	if (status != PSA_SUCCESS) {
+		throw runtime_error("PSA crypto initialization failed\n");
+	}
+
+	// Setup the key derivation operation
+	psa_key_derivation_operation_t op = PSA_KEY_DERIVATION_OPERATION_INIT;
+	status = psa_key_derivation_setup(&op, PSA_ALG_PBKDF2_HMAC(PSA_ALG_SHA_256));
+	if (status != PSA_SUCCESS) {
+		throw runtime_error("Failed to setup key derivation operation\n");
+	}
+
+	// Set the input password and salt for PBKDF2
+	status = psa_key_derivation_input_bytes(&op, PSA_KEY_DERIVATION_INPUT_PASSWORD, reinterpret_cast<const uint8_t *>(user_key), user_key_length);
+	if (status != PSA_SUCCESS) {
+		throw runtime_error("Failed to set password input\n");
+	}
+
+	status = psa_key_derivation_input_bytes(&op, PSA_KEY_DERIVATION_INPUT_SALT, salt, salt_length);
+	if (status != PSA_SUCCESS) {
+		throw runtime_error("Failed to set salt input\n");
+	}
+
+	uint32_t iterations = 10000;
+	uint8_t iterations_buf[sizeof(uint32_t)];
+	memcpy(iterations_buf, &iterations, sizeof(iterations_buf));
+
+	// Set the iteration count for PBKDF2
+	status = psa_key_derivation_input_bytes(&op, PSA_KEY_DERIVATION_INPUT_COST, iterations_buf, sizeof(iterations_buf));
+	if (status != PSA_SUCCESS) {
+		throw runtime_error("Failed to set iteration count\n");
+	}
+
+	// Perform the PBKDF2 operation
+	status = psa_key_derivation_output_bytes(&op, derived_key, key_length);
+	if (status != PSA_SUCCESS) {
+		throw runtime_error("Key derivation failed\n");
+	}
+
+	// Cleanup the key derivation operation
+	psa_key_derivation_abort(&op);
 }
 
 MbedTlsWrapper::SHA256State::SHA256State() : sha_context(new mbedtls_sha256_context()) {

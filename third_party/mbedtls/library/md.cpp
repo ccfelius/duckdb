@@ -47,6 +47,8 @@
 #include "psa_util_internal.h"
 #endif
 
+#define PSA_HASH_MAX_SIZE 32
+
 #if defined(MBEDTLS_MD_SOME_PSA)
 #include "psa_crypto_core.h"
 #endif
