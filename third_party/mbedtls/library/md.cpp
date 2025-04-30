@@ -761,14 +761,6 @@ mbedtls_md_type_t mbedtls_md_get_type(const mbedtls_md_info_t *md_info)
     return md_info->type;
 }
 
-#if defined(MBEDTLS_PSA_CRYPTO_CLIENT)
-int mbedtls_md_error_from_psa(psa_status_t status)
-{
-    return PSA_TO_MBEDTLS_ERR_LIST(status, psa_to_md_errors,
-                                   psa_generic_status_to_mbedtls);
-}
-#endif /* MBEDTLS_PSA_CRYPTO_CLIENT */
-
 
 /************************************************************************
  * Functions above this separator are part of MBEDTLS_MD_LIGHT,         *

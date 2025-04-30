@@ -29,7 +29,9 @@ add_library(duckdb_mbedtls STATIC
         library/rsa.cpp
         library/rsa_alt_helpers.cpp
         library/sha1.cpp
-        library/sha256.cpp)
+        library/sha256.cpp
+        library/psa_util.cpp
+        library/psa_crypto.cpp)
 
 install(TARGETS duckdb_mbedtls
         EXPORT "${DUCKDB_EXPORT_SET}"

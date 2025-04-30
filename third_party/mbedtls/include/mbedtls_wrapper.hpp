@@ -27,6 +27,7 @@ public:
 	                                   const std::string &sha256_hash);
 	static void Hmac256(const char *key, size_t key_len, const char *message, size_t message_len, char *out);
 	static void ToBase16(char *in, char *out, size_t len);
+	static void PBKDF2(std::string *user_key, const uint8_t *salt, uint8_t *derived_key);
 
 	static constexpr size_t SHA256_HASH_LENGTH_BYTES = 32;
 	static constexpr size_t SHA256_HASH_LENGTH_TEXT = 64;

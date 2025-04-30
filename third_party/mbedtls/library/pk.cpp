@@ -12,6 +12,9 @@
 #include "pk_wrap.h"
 #include "pkwrite.h"
 #include "pk_internal.h"
+#include "mbedtls/psa_util.h"
+#include "psa/crypto.h"
+#include "md_psa.h"
 
 #include "mbedtls/platform_util.h"
 #include "mbedtls/error.h"
@@ -19,6 +22,7 @@
 #if defined(MBEDTLS_RSA_C)
 #include "mbedtls/rsa.h"
 #include "rsa_internal.h"
+
 #endif
 #if defined(MBEDTLS_PK_HAVE_ECC_KEYS)
 #include "mbedtls/ecp.h"
@@ -329,9 +333,7 @@ int mbedtls_pk_can_do_ext(const mbedtls_pk_context *ctx, psa_algorithm_t alg,
      * Even though we don't officially support using other implementations of PSA
      * Crypto with TLS and X.509 (yet), we try to keep vendor's customizations
      * separated. */
-#if defined(MBEDTLS_PSA_CRYPTO_C)
-    psa_algorithm_t key_alg2 = psa_get_key_enrollment_algorithm(&attributes);
-#endif /* MBEDTLS_PSA_CRYPTO_C */
+
     key_usage = psa_get_key_usage_flags(&attributes);
     psa_reset_key_attributes(&attributes);
 
@@ -349,11 +351,11 @@ int mbedtls_pk_can_do_ext(const mbedtls_pk_context *ctx, psa_algorithm_t alg,
     if (alg == key_alg) {
         return 1;
     }
-#if defined(MBEDTLS_PSA_CRYPTO_C)
-    if (alg == key_alg2) {
-        return 1;
-    }
-#endif /* MBEDTLS_PSA_CRYPTO_C */
+// #if defined(MBEDTLS_PSA_CRYPTO_C)
+//     if (alg == key_alg2) {
+//         return 1;
+//     }
+// #endif /* MBEDTLS_PSA_CRYPTO_C */
 
     /*
      * If key_alg [or key_alg2] is a hash-and-sign with a wildcard for the hash,
@@ -366,13 +368,13 @@ int mbedtls_pk_can_do_ext(const mbedtls_pk_context *ctx, psa_algorithm_t alg,
             (alg & ~PSA_ALG_HASH_MASK) == (key_alg & ~PSA_ALG_HASH_MASK)) {
             return 1;
         }
-#if defined(MBEDTLS_PSA_CRYPTO_C)
-        if (PSA_ALG_IS_SIGN_HASH(key_alg2) &&
-            PSA_ALG_SIGN_GET_HASH(key_alg2) == PSA_ALG_ANY_HASH &&
-            (alg & ~PSA_ALG_HASH_MASK) == (key_alg2 & ~PSA_ALG_HASH_MASK)) {
-            return 1;
-        }
-#endif /* MBEDTLS_PSA_CRYPTO_C */
+// #if defined(MBEDTLS_PSA_CRYPTO_C)
+//         if (PSA_ALG_IS_SIGN_HASH(key_alg2) &&
+//             PSA_ALG_SIGN_GET_HASH(key_alg2) == PSA_ALG_ANY_HASH &&
+//             (alg & ~PSA_ALG_HASH_MASK) == (key_alg2 & ~PSA_ALG_HASH_MASK)) {
+//             return 1;
+//         }
+// #endif /* MBEDTLS_PSA_CRYPTO_C */
     }
 
     return 0;
@@ -385,12 +387,7 @@ static psa_algorithm_t psa_algorithm_for_rsa(const mbedtls_rsa_context *rsa,
                                              int want_crypt)
 {
     if (mbedtls_rsa_get_padding_mode(rsa) == MBEDTLS_RSA_PKCS_V21) {
-        if (want_crypt) {
-            mbedtls_md_type_t md_type = (mbedtls_md_type_t) mbedtls_rsa_get_md_alg(rsa);
-            return PSA_ALG_RSA_OAEP(mbedtls_md_psa_alg_from_type(md_type));
-        } else {
             return PSA_ALG_RSA_PSS_ANY_SALT(PSA_ALG_ANY_HASH);
-        }
     } else {
         if (want_crypt) {
             return PSA_ALG_RSA_PKCS1V15_CRYPT;
@@ -576,14 +573,7 @@ int mbedtls_pk_get_psa_attributes(const mbedtls_pk_context *pk,
     }
 
     psa_set_key_usage_flags(attributes, more_usage);
-    /* Key's enrollment is available only when an Mbed TLS implementation of PSA
-     * Crypto is being used, i.e. when MBEDTLS_PSA_CRYPTO_C is defined.
-     * Even though we don't officially support using other implementations of PSA
-     * Crypto with TLS and X.509 (yet), we try to keep vendor's customizations
-     * separated. */
-#if defined(MBEDTLS_PSA_CRYPTO_C)
-    psa_set_key_enrollment_algorithm(attributes, PSA_ALG_NONE);
-#endif
+
 
     return 0;
 }
@@ -638,7 +628,7 @@ static int copy_into_psa(mbedtls_svc_key_id_t old_key_id,
         }
         status = export_import_into_psa(old_key_id, attributes, new_key_id);
     }
-    return PSA_PK_TO_MBEDTLS_ERR(status);
+    return 0;
 }
 #endif /* MBEDTLS_PK_USE_PSA_EC_DATA || MBEDTLS_USE_PSA_CRYPTO */
 
@@ -663,9 +653,9 @@ static int import_pair_into_psa(const mbedtls_pk_context *pk,
                 return ret;
             }
             size_t key_length = key_end - key_data;
-            ret = PSA_PK_TO_MBEDTLS_ERR(psa_import_key(attributes,
-                                                       key_data, key_length,
-                                                       key_id));
+            // ret = PSA_PK_TO_MBEDTLS_ERR(psa_import_key(attributes,
+            //                                            key_data, key_length,
+            //                                            key_id));
             mbedtls_platform_zeroize(key_data, key_length);
             return ret;
         }
@@ -823,7 +813,7 @@ static int import_public_into_psa(const mbedtls_pk_context *pk,
                                            key_buffer, sizeof(key_buffer),
                                            &key_length);
             if (status != PSA_SUCCESS) {
-                return PSA_PK_TO_MBEDTLS_ERR(status);
+                return 0;
             }
             key_data = key_buffer;
             break;
@@ -834,9 +824,9 @@ static int import_public_into_psa(const mbedtls_pk_context *pk,
             return MBEDTLS_ERR_PK_BAD_INPUT_DATA;
     }
 
-    return PSA_PK_TO_MBEDTLS_ERR(psa_import_key(attributes,
-                                                key_data, key_length,
-                                                key_id));
+    // return PSA_PK_TO_MBEDTLS_ERR(psa_import_key(attributes,
+    //                                             key_data, key_length,
+    //                                             key_id));
 }
 
 int mbedtls_pk_import_into_psa(const mbedtls_pk_context *pk,
@@ -889,7 +879,7 @@ static int copy_from_psa(mbedtls_svc_key_id_t key_id,
         status = psa_export_key(key_id, exp_key, sizeof(exp_key), &exp_key_len);
     }
     if (status != PSA_SUCCESS) {
-        ret = PSA_PK_TO_MBEDTLS_ERR(status);
+        ret = 0;
         goto exit;
     }
 
@@ -920,7 +910,7 @@ static int copy_from_psa(mbedtls_svc_key_id_t key_id,
         psa_algorithm_t alg_type = psa_get_key_algorithm(&key_attr);
         mbedtls_md_type_t md_type = MBEDTLS_MD_NONE;
         if (PSA_ALG_GET_HASH(alg_type) != PSA_ALG_ANY_HASH) {
-            md_type = mbedtls_md_type_from_psa_alg(alg_type);
+            // md_type = mbedtls_md_type_from_psa_alg(alg_type);
         }
 
         if (PSA_ALG_IS_RSA_OAEP(alg_type) || PSA_ALG_IS_RSA_PSS(alg_type)) {
