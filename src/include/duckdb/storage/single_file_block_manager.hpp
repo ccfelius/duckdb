@@ -107,7 +107,7 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase(string *encryption_key = nullptr);
+	void CreateNewDatabase(optional_ptr<string> encryption_key = nullptr);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
 	void LoadExistingDatabase(string *encryption_key = nullptr);
@@ -140,6 +140,9 @@ public:
 	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
 	void Read(Block &block) override;
+	//! Read individual blocks
+	void ReadBlock(Block &block, bool skip_block_header = false) const;
+	void ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header = false) const;
 	//! Read the content of a range of blocks into a buffer
 	void ReadBlocks(FileBuffer &buffer, block_id_t start_block, idx_t block_count) override;
 	//! Write the given block to disk
@@ -169,12 +172,14 @@ private:
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
 	void EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const;
-	void DecryptBuffer(FileBuffer &block, uint64_t delta) const;
+	void DecryptBuffer(data_ptr_t internal_buffer, uint64_t block_size, uint64_t delta) const;
+	void CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta, bool skip_block_header = false) const;
+	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
 
-	idx_t GetBlockLocation(block_id_t block_id);
+	idx_t GetBlockLocation(block_id_t block_id) const;
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();

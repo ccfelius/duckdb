@@ -121,7 +121,7 @@ struct MainHeader {
 		return flags[0] == MainHeader::ENCRYPTED_DATABASE_FLAG;
 	}
 
-	void SetEncryptionMetadata(const data_t *source) {
+	void SetEncryptionMetadata(data_ptr_t source) {
 		memset(encryption_metadata, 0, ENCRYPTION_METADATA_LEN);
 		memcpy(encryption_metadata, source, ENCRYPTION_METADATA_LEN);
 	}

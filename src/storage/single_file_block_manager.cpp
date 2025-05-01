@@ -16,9 +16,10 @@
 
 #include <algorithm>
 #include <cstring>
+#include <__filesystem/file_type.h>
 
 #if defined(_WIN32)
-#include <windows.h>
+#include "duckdb/common/windows.hpp"
 #else
 #include <sys/mman.h>
 #endif
@@ -361,7 +362,7 @@ string SingleFileBlockManager::DeriveKey(const string &user_key, data_ptr_t salt
 	return KeyDerivationFunctionSHA256(user_key, salt);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(string *encryption_key) {
+void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_key) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -538,7 +539,9 @@ void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_b
 	memcpy(block_offset_internal + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
 }
 
-void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) const {
+// Everything is just block.internalbuffer, we should change that
+// void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) const {
+void SingleFileBlockManager::DecryptBuffer(data_ptr_t internal_buffer, uint64_t block_size, uint64_t delta) const {
 	const auto &derived_key = options.encryption_options.derived_key;
 	//! initialize encryption state
 	auto encryption_util = GetEncryptionUtil(db);
@@ -547,41 +550,55 @@ void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) co
 	//! load the stored nonce
 	uint8_t nonce[MainHeader::AES_IV_LEN];
 	memset(nonce, 0, MainHeader::AES_IV_LEN);
-	memcpy(nonce, block.InternalBuffer(), MainHeader::AES_NONCE_LEN);
+	memcpy(nonce, internal_buffer, MainHeader::AES_NONCE_LEN);
 
 	//! load the tag for verification
 	uint8_t tag[MainHeader::AES_TAG_LEN];
-	memcpy(tag, block.InternalBuffer() + MainHeader::AES_NONCE_LEN, MainHeader::AES_TAG_LEN);
+	memcpy(tag, internal_buffer + MainHeader::AES_NONCE_LEN, MainHeader::AES_TAG_LEN);
 
 	//! Initialize the decryption
 	encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, &derived_key);
 
-	auto checksum_offset = block.InternalBuffer() + delta;
-	auto size = block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	auto checksum_offset = internal_buffer + delta;
+	//! we need to use here block.size..
+	auto size = block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	//! decrypt the block including the checksum
 	auto aes_res = encryption_state->Process(checksum_offset, size, checksum_offset, size);
 
-	if (aes_res != block.size + Storage::DEFAULT_BLOCK_HEADER_SIZE) {
+	if (aes_res != block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE) {
 		throw IOException("Encryption failure: in- and output size differ");
 	}
 
 	//! check the tag
-	aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
-	                                     MainHeader::AES_TAG_LEN);
+	aes_res =
+	    encryption_state->Finalize(internal_buffer + delta, 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
 }
 
-void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_block_header) const {
-	// read the buffer from disk
-	block.Read(*handle, location);
+void SingleFileBlockManager::CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header) const {
+	uint64_t stored_checksum;
+	uint64_t computed_checksum;
 
-	//! calculate delta header bytes (if any)
-	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
-
-	if (options.encryption_options.encryption_enabled && !skip_block_header) {
-		DecryptBuffer(block, delta);
+	if (skip_block_header && delta > 0) {
+		//! Even with encryption enabled, the main header should be plaintext
+		stored_checksum = Load<uint64_t>(start_ptr);
+		computed_checksum = Checksum(start_ptr + DEFAULT_BLOCK_HEADER_STORAGE_SIZE, GetBlockSize() + delta);
+	} else {
+		//! We do have to decrypt other headers
+		stored_checksum = Load<uint64_t>(start_ptr + delta);
+		computed_checksum = Checksum(start_ptr + GetBlockHeaderSize(), GetBlockSize());
 	}
 
+	// verify the checksum
+	if (stored_checksum != computed_checksum) {
+		throw IOException("Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
+		                  "at location %llu",
+		                  computed_checksum, stored_checksum, start_ptr);
+	}
+}
+
+void SingleFileBlockManager::CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta,
+                                           bool skip_block_header) const {
 	uint64_t stored_checksum;
 	uint64_t computed_checksum;
 
@@ -603,9 +620,22 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 	}
 }
 
+void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t location, bool skip_block_header) const {
+	// read the buffer from disk
+	block.Read(*handle, location);
+
+	//! calculate delta header bytes (if any)
+	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+
+	if (options.encryption_options.encryption_enabled && !skip_block_header) {
+		DecryptBuffer(block.InternalBuffer(), block.Size(), delta);
+	}
+
+	CheckChecksum(block, location, delta, skip_block_header);
+}
+
 void SingleFileBlockManager::ChecksumAndWrite(FileBuffer &block, uint64_t location, bool skip_block_header) const {
 	auto delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
-
 	uint64_t checksum;
 
 	if (skip_block_header && delta > 0) {
@@ -888,8 +918,34 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileB
 	return result;
 }
 
-idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) {
+idx_t SingleFileBlockManager::GetBlockLocation(block_id_t block_id) const {
 	return BLOCK_START + NumericCast<idx_t>(block_id) * GetBlockAllocSize();
+}
+
+void SingleFileBlockManager::ReadBlock(data_ptr_t internal_buffer, uint64_t block_size, bool skip_block_header) const {
+	//! calculate delta header bytes (if any)
+	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+
+	if (options.encryption_options.encryption_enabled && !skip_block_header) {
+		DecryptBuffer(internal_buffer, block_size, delta);
+	}
+
+	CheckChecksum(internal_buffer, delta, skip_block_header);
+}
+
+void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) const {
+	// read the buffer from disk
+	auto location = GetBlockLocation(block.id);
+	block.Read(*handle, location);
+
+	//! calculate delta header bytes (if any)
+	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+
+	if (options.encryption_options.encryption_enabled && !skip_block_header) {
+		DecryptBuffer(block.InternalBuffer(), block.Size(), delta);
+	}
+
+	CheckChecksum(block, location, delta, skip_block_header);
 }
 
 void SingleFileBlockManager::Read(Block &block) {
@@ -909,17 +965,8 @@ void SingleFileBlockManager::ReadBlocks(FileBuffer &buffer, block_id_t start_blo
 	// for each of the blocks - verify the checksum
 	auto ptr = buffer.InternalBuffer();
 	for (idx_t i = 0; i < block_count; i++) {
-		// compute the checksum
 		auto start_ptr = ptr + i * GetBlockAllocSize();
-		auto stored_checksum = Load<uint64_t>(start_ptr);
-		uint64_t computed_checksum = Checksum(start_ptr + GetBlockHeaderSize(), GetBlockSize());
-		// verify the checksum
-		if (stored_checksum != computed_checksum) {
-			throw IOException(
-			    "Corrupt database file: computed checksum %llu does not match stored checksum %llu in block "
-			    "at location %llu",
-			    computed_checksum, stored_checksum, location + i * GetBlockAllocSize());
-		}
+		ReadBlock(start_ptr, GetBlockSize());
 	}
 }
 
