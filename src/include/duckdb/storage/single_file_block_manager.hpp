@@ -110,7 +110,7 @@ public:
 	void CreateNewDatabase(optional_ptr<string> encryption_key = nullptr);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase(string *encryption_key = nullptr);
+	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr);
 
 	//! Derive encryption key
 	static string DeriveKey(const string &user_key, data_ptr_t salt = nullptr);

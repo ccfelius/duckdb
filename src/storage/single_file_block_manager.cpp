@@ -78,7 +78,7 @@ void GenerateSalt(AttachedDatabase &db, uint8_t *salt, StorageManagerOptions &op
 }
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
-                   const string *derived_key) {
+                   const optional_ptr<string> derived_key) {
 
 	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
 
@@ -87,7 +87,7 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	memset(iv, 0, sizeof(iv));
 	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
 
-	encryption_state->InitializeEncryption(iv, MainHeader::AES_NONCE_LEN, derived_key);
+	encryption_state->InitializeEncryption(iv, MainHeader::AES_NONCE_LEN, derived_key.get());
 	encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
 	                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
 
@@ -95,7 +95,7 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 }
 
 void DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
-                   const string *derived_key) {
+                   optional_ptr<const string> derived_key) {
 	// just zero-out the iv
 	uint8_t iv[16];
 	memset(iv, 0, sizeof(iv));
@@ -105,7 +105,7 @@ void DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	memset(decrypted_canary, 0, MainHeader::CANARY_BYTE_SIZE);
 
 	//! Decrypt the canary
-	encryption_state->InitializeDecryption(iv, MainHeader::AES_NONCE_LEN, derived_key);
+	encryption_state->InitializeDecryption(iv, MainHeader::AES_NONCE_LEN, derived_key.get());
 	encryption_state->Process(main_header.GetEncryptedCanary(), MainHeader::CANARY_BYTE_SIZE, decrypted_canary,
 	                          MainHeader::CANARY_BYTE_SIZE);
 
@@ -433,7 +433,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase(string *encryption_key) {
+void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryption_key) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle

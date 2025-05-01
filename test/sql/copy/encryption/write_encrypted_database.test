@@ -5,9 +5,6 @@ require noforcestorage
 
 require skip_reload
 
-# workaround - alternative verify always forces the latest storage
-require no_alternative_verify
-
 statement ok
 PRAGMA enable_verification
 
