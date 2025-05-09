@@ -10,6 +10,8 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #endif
 
+using duckdb_parquet::PageType;
+
 namespace duckdb {
 
 ParquetKeys &ParquetKeys::Get(ClientContext &context) {
@@ -70,6 +72,10 @@ ParquetEncryptionConfig::ParquetEncryptionConfig(ClientContext &context, const V
 			footer_key = StringValue::Get(children[i].DefaultCastAs(LogicalType::BLOB));
 		} else if (StringUtil::Lower(struct_key) == "column_keys") {
 			throw NotImplementedException("Parquet encryption_config column_keys not yet implemented");
+		} else if (StringUtil::Lower(struct_key) == "encryption_algorithm") {
+			const auto encryption_algorithm_name = StringValue::Get(children[i].DefaultCastAs(LogicalType::VARCHAR));
+			//! todo; check encryption algorithm, otherwise, default to aes_gcm_v1 algorithm
+			encryption_algorithm.algorithm = StringToCipher(encryption_algorithm_name);
 		} else {
 			throw BinderException("Unknown key in encryption_config \"%s\"", struct_key);
 		}
@@ -80,8 +86,60 @@ shared_ptr<ParquetEncryptionConfig> ParquetEncryptionConfig::Create(ClientContex
 	return shared_ptr<ParquetEncryptionConfig>(new ParquetEncryptionConfig(context, arg));
 }
 
+ParquetEncryptionConfig::ParquetCipher::type ParquetEncryptionConfig::StringToCipher(const string &cipher) {
+
+	if (cipher == "aes_gcm_ctr_v1") {
+		return ParquetEncryptionConfig::ParquetCipher::AES_GCM_CTR_V1;
+	} else if (cipher == "aes_gcm_v1") {
+		return ParquetEncryptionConfig::ParquetCipher::AES_GCM_V1;
+	}
+
+	throw BinderException(
+	    "Encryption algorithm \"%s\" does not exists. AES_GCM_CTR_V1 or AES_GCM_V1 are valid options.", cipher);
+}
+
 const string &ParquetEncryptionConfig::GetFooterKey() const {
 	return footer_key;
+}
+
+//! copied from arrow
+uint8_t *CreateModuleAad(const std::string &file_aad, int8_t module_type, int16_t row_group_ordinal,
+                         int16_t column_ordinal, int32_t page_ordinal) {
+
+	// CheckPageOrdinal(page_ordinal);
+	const int16_t page_ordinal_short = static_cast<int16_t>(page_ordinal);
+	int8_t type_ordinal_bytes[1];
+	type_ordinal_bytes[0] = module_type;
+	std::string type_ordinal_bytes_str(reinterpret_cast<char const *>(type_ordinal_bytes), 1);
+
+	if (ParquetCrypto::Footer == module_type) {
+		uint8_t aad_suffix_footer_out[1];
+		aad_suffix_footer_out[0] = module_type;
+		return aad_suffix_footer_out;
+	}
+
+	uint16_t row_group_ordinal_bytes = static_cast<uint16_t>(row_group_ordinal);
+	uint16_t column_ordinal_bytes = static_cast<uint16_t>(column_ordinal);
+
+	if (ParquetCrypto::DataPage != module_type && ParquetCrypto::DataPageHeader != module_type) {
+		uint8_t aad_suffix_out[5];
+		aad_suffix_out[0] = module_type;
+		aad_suffix_out[1] = row_group_ordinal_bytes;
+		aad_suffix_out[3] = column_ordinal_bytes;
+		return aad_suffix_out;
+	}
+
+	uint16_t page_ordinal_bytes = static_cast<uint16_t>(page_ordinal_short);
+
+	uint8_t aad_suffix_out_page[7];
+	memcpy(aad_suffix_out_page, aad_suffix_out_page, 5);
+	aad_suffix_out_page[5] = page_ordinal_bytes;
+
+	return aad_suffix_out_page;
+}
+uint8_t *CreateFooterAad(const std::string &aad_prefix_bytes) {
+	return CreateModuleAad(aad_prefix_bytes, ParquetCrypto::Footer, static_cast<int16_t>(-1), static_cast<int16_t>(-1),
+	                       static_cast<int16_t>(-1));
 }
 
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;

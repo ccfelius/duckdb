@@ -861,6 +861,7 @@ void ParquetWriter::Finalize() {
 	}
 
 	const auto metadata_start_offset = writer->GetTotalWritten();
+
 	if (encryption_config) {
 		// Crypto metadata is written unencrypted
 		FileCryptoMetaData crypto_metadata;
