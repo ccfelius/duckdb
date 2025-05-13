@@ -88,7 +88,8 @@ void StructColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t
 	}
 }
 
-void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
+void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p, uint16_t row_group_ordinal,
+                                       uint16_t column_ordinal) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// we add the null count of the struct to the null count of the children

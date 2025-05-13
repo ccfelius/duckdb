@@ -61,7 +61,7 @@ public:
 
 	struct AadMetadata {
 		std::string aad_prefix;
-		std::string aad_file_unique;
+		std::string aad_file_id;
 		bool supply_aad_prefix;
 	};
 
@@ -105,6 +105,9 @@ public:
 	static constexpr int8_t OffsetIndex = 7;
 	static constexpr int8_t BloomFilterHeader = 8;
 	static constexpr int8_t BloomFilterBitset = 9;
+
+	// Standard AAD length for file
+	static constexpr int32_t AADFileIDLength = 8;
 
 public:
 	//! Decrypt and read a Thrift object from the transport protocol

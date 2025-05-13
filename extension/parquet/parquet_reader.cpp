@@ -17,6 +17,7 @@
 #include "reader/struct_column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 #include "thrift_tools.hpp"
+#include "../core_functions/include/core_functions/scalar/blob_functions.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -33,6 +34,7 @@
 #include <chrono>
 #include <cstring>
 #include <sstream>
+#include <duckdb/common/types/blob.hpp>
 
 namespace duckdb {
 
@@ -166,6 +168,13 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.GetPath());
 		}
+		// this is the footer
+		// ParquetCrypto::UnwrapKey(crypto_metadata.key_metadata)
+		auto key_metadata_map = StringUtil::ParseJSONMap(crypto_metadata->key_metadata);
+		auto wrapped_dek = key_metadata_map->GetValue("wrappedDEK");
+		auto decoded_size = Blob::FromBase64Size(wrapped_dek);
+		auto base64_decoded_wrapped_dek = Blob::FromBase64(wrapped_dek);
+
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util);
 	} else {
 		metadata->read(file_proto.get());

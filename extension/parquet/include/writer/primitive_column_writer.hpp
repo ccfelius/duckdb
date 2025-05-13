@@ -73,7 +73,7 @@ public:
 	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
-	void FinalizeWrite(ColumnWriterState &state) override;
+	void FinalizeWrite(ColumnWriterState &state, uint16_t row_group_ordinal, uint16_t column_ordinal) override;
 
 protected:
 	static void WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels, idx_t max_value,

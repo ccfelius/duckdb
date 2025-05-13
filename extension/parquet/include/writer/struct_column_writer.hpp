@@ -32,7 +32,8 @@ public:
 
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
-	void FinalizeWrite(ColumnWriterState &state) override;
+	void FinalizeWrite(ColumnWriterState &state, uint16_t row_group_ordinal = -1,
+	                   uint16_t column_ordinal = -1) override;
 };
 
 } // namespace duckdb

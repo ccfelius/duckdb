@@ -259,8 +259,8 @@ public:
 		geo_state.geo_data_writer.Update(geo_state.geo_data, vector, count);
 	}
 
-	void FinalizeWrite(ColumnWriterState &state) override {
-		StandardColumnWriter::FinalizeWrite(state);
+	void FinalizeWrite(ColumnWriterState &state, uint16_t row_group_ordinal, uint16_t column_ordinal) override {
+		StandardColumnWriter::FinalizeWrite(state, row_group_ordinal, column_ordinal);
 
 		// Add the geodata object to the writer
 		const auto &geo_state = state.Cast<WKBColumnWriterState>();

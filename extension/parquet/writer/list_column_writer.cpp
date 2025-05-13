@@ -128,7 +128,7 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 	child_writer->Write(*state.child_state, child_list, child_length);
 }
 
-void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
+void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p, uint16_t row_group_ordinal, uint16_t column_ordinal) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
 	child_writer->FinalizeWrite(*state.child_state);
 }

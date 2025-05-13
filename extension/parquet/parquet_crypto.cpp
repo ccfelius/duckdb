@@ -102,7 +102,7 @@ const string &ParquetEncryptionConfig::GetFooterKey() const {
 	return footer_key;
 }
 
-//! copied from arrow
+//! partly copied from arrow
 uint8_t *CreateModuleAad(const std::string &file_aad, int8_t module_type, int16_t row_group_ordinal,
                          int16_t column_ordinal, int32_t page_ordinal) {
 
@@ -110,11 +110,13 @@ uint8_t *CreateModuleAad(const std::string &file_aad, int8_t module_type, int16_
 	const int16_t page_ordinal_short = static_cast<int16_t>(page_ordinal);
 	int8_t type_ordinal_bytes[1];
 	type_ordinal_bytes[0] = module_type;
+
 	std::string type_ordinal_bytes_str(reinterpret_cast<char const *>(type_ordinal_bytes), 1);
 
 	if (ParquetCrypto::Footer == module_type) {
 		uint8_t aad_suffix_footer_out[1];
 		aad_suffix_footer_out[0] = module_type;
+		//! thi[s will espcape the function
 		return aad_suffix_footer_out;
 	}
 
@@ -357,6 +359,7 @@ private:
 
 uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
                              const EncryptionUtil &encryption_util_p) {
+
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
 	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());

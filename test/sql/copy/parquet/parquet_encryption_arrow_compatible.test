@@ -1,0 +1,26 @@
+# name: test/sql/copy/parquet/parquet_encryption_arrow_compatible.test
+# description: Test Parquet encryption
+# group: [parquet]
+
+require parquet
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+
+statement ok
+PRAGMA add_parquet_key('footer_key', '0123456789112345');
+
+# single wrapped
+# query I
+# SELECT * FROM read_parquet('/Users/lottefeliuscwi/Documents/Projects/duckdb/encrypted_table.parquet', encryption_config = {footer_key: 'footer_key'});
+# ----
+
+# double wrapped
+query I
+SELECT * FROM read_parquet('/Users/lottefeliuscwi/Documents/Projects/encrypted_table_single_wrap_arrow_16.parquet', encryption_config = {footer_key: 'footer_key'});
+----
+

@@ -123,7 +123,7 @@ public:
 
 	virtual void BeginWrite(ColumnWriterState &state) = 0;
 	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count) = 0;
-	virtual void FinalizeWrite(ColumnWriterState &state) = 0;
+	virtual void FinalizeWrite(ColumnWriterState &state, uint16_t row_group_ordinal = -1, uint16_t col_idx = -1) = 0;
 
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,

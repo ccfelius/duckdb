@@ -3,6 +3,8 @@
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
 
+#include <parquet_crypto.hpp>
+
 namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
@@ -306,7 +308,7 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	}
 }
 
-void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
+void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p, uint16_t row_group_ordinal, uint16_t col_idx) {
 	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
 	auto &column_chunk = state.row_group.columns[state.col_idx];
 
@@ -331,6 +333,8 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	// write the individual pages to disk
 	idx_t total_uncompressed_size = 0;
 	for (auto &write_info : state.write_info) {
+		// how to get here the data page index??
+		// column_chunk.metadata.data_page_offset? or index?
 		// set the data page offset whenever we see the *first* data page
 		if (column_chunk.meta_data.data_page_offset == 0 && (write_info.page_header.type == PageType::DATA_PAGE ||
 		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
@@ -338,12 +342,16 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		}
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		auto header_start_offset = column_writer.GetTotalWritten();
-		writer.Write(write_info.page_header);
+		// we will also need to give a page_ordinal (= page index)
+		// module type hoeft hier nog niet
+		writer.Write(write_info.page_header, state.row_group.ordinal, state.col_idx, state.current_page);
 		// total uncompressed size in the column chunk includes the header size (!)
 		total_uncompressed_size += column_writer.GetTotalWritten() - header_start_offset;
 		total_uncompressed_size += write_info.page_header.uncompressed_page_size;
-		writer.WriteData(write_info.compressed_data, write_info.compressed_size);
+		writer.WriteData(write_info.compressed_data, write_info.compressed_size, state.row_group.ordinal, state.col_idx,
+		                 state.current_page);
 	}
+
 	column_chunk.meta_data.total_compressed_size =
 	    UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten() - start_offset);
 	column_chunk.meta_data.total_uncompressed_size = UnsafeNumericCast<int64_t>(total_uncompressed_size);

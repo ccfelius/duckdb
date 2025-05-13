@@ -286,7 +286,8 @@ void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type, duckdb_p
 	}
 }
 
-uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
+uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object, uint16_t row_group_ordinal,
+                              uint16_t column_ordinal, uint16_t page_ordinal) {
 	if (encryption_config) {
 		return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey(), *encryption_util);
 	} else {
@@ -294,7 +295,8 @@ uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
 	}
 }
 
-uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size) {
+uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size, uint16_t row_group_ordinal,
+                                  uint16_t column_ordinal, uint16_t page_ordinal) {
 	if (encryption_config) {
 		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey(),
 		                                *encryption_util);
@@ -533,10 +535,12 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 		throw InternalException("Attempting to flush a row group with no rows");
 	}
 	row_group.file_offset = NumericCast<int64_t>(writer->GetTotalWritten());
+	row_group.ordinal = num_row_groups;
+
 	for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
 		auto write_state = std::move(states[col_idx]);
-		col_writer->FinalizeWrite(*write_state);
+		col_writer->FinalizeWrite(*write_state, row_group.ordinal, col_idx);
 	}
 	// let's make sure all offsets are ay-okay
 	ValidateColumnOffsets(file_name, writer->GetTotalWritten(), row_group);
