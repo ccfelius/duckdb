@@ -231,11 +231,12 @@ private:
 //! Decryption wrapper for a transport protocol
 class DecryptionTransport : public TTransport {
 public:
-	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
+	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p, const string *aad = nullptr, uint64_t encrypted_size_p = 0)
 	    : prot(prot_p), trans(*prot.getTransport()), aes(encryption_util_p.CreateEncryptionState(&key)),
-	      read_buffer_size(0), read_buffer_offset(0) {
+	      read_buffer_size(0), read_buffer_offset(0), aad(*aad), encrypted_size(encrypted_size_p) {
 		Initialize(key);
 	}
+
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
 
@@ -288,9 +289,13 @@ public:
 private:
 	void Initialize(const string &key) {
 		// Read encoded length (don't add to read_bytes)
-		data_t length_buf[ParquetCrypto::LENGTH_BYTES];
-		trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
-		total_bytes = Load<uint32_t>(length_buf);
+		if (encrypted_size != 0) {
+			total_bytes = encrypted_size;
+		} else {
+			data_t length_buf[ParquetCrypto::LENGTH_BYTES];
+			trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
+			total_bytes = Load<uint32_t>(length_buf);
+		}
 		transport_remaining = total_bytes;
 		// Read nonce and initialize AES
 		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
@@ -306,11 +311,12 @@ private:
 		// Decrypt from read_buffer + block size into read_buffer start (decryption can trail behind in same buffer)
 #ifdef DEBUG
 		auto size = aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
-		                         ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
+		                         ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE, reinterpret_cast<const unsigned char*>(aad.data()), aad.size());
+
 		D_ASSERT(size == read_buffer_size);
 #else
 		aes->Process(read_buffer + ParquetCrypto::BLOCK_SIZE, read_buffer_size, buf,
-		             ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE);
+		             ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE, reinterpret_cast<const unsigned char*>(aad.data()), aad.size());
 #endif
 		read_buffer_offset = 0;
 	}
@@ -322,6 +328,13 @@ private:
 
 	//! AES context and buffers
 	shared_ptr<EncryptionState> aes;
+
+	//! Additional Authenticated Data
+	const string &aad;
+
+	//! Size of encrypted data
+	//! Only used for PartialReads
+	uint32_t encrypted_size;
 
 	//! We read/decrypt big blocks at a time
 	data_t read_buffer[ParquetCrypto::CRYPTO_BLOCK_SIZE + ParquetCrypto::BLOCK_SIZE];
@@ -358,15 +371,16 @@ private:
 };
 
 uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
-                             const EncryptionUtil &encryption_util_p) {
+                             const EncryptionUtil &encryption_util_p, const string *aad) {
 
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
+	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, aad));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// We have to read the whole thing otherwise thrift throws an error before we realize we're decryption is wrong
 	auto all = dtrans.ReadAll();
 	TCompactProtocolFactoryT<SimpleReadTransport> tsimple_proto_factory;
+
 	auto simple_prot =
 	    tsimple_proto_factory.getProtocol(std::make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
 
@@ -374,6 +388,36 @@ uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
 	object.read(simple_prot.get());
 
 	return ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + all.GetSize() + ParquetCrypto::TAG_BYTES;
+}
+
+uint32_t ParquetCrypto::ReadPartial(TBase &object, const string &encrypted_data, const string &key,
+							 const EncryptionUtil &encryption_util_p, const string *aad) {
+
+	using apache::thrift::protocol::TCompactProtocol;
+	using apache::thrift::transport::TMemoryBuffer;
+
+	auto encrypted_size = static_cast<uint32_t>(encrypted_data.size());
+	auto mem_buf = std::make_shared<apache::thrift::transport::TMemoryBuffer>(
+		const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(encrypted_data.data())),
+		encrypted_size
+	);
+
+	TCompactProtocol new_proto(mem_buf);
+
+	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
+	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(new_proto, key, encryption_util_p, aad, encrypted_size));
+	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
+
+	auto all = dtrans.ReadAll();
+	TCompactProtocolFactoryT<SimpleReadTransport> tsimple_proto_factory;
+
+	auto simple_prot =
+		tsimple_proto_factory.getProtocol(std::make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
+
+	// Read the object
+	object.read(simple_prot.get());
+
+	return 10;
 }
 
 uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const string &key,
@@ -459,5 +503,67 @@ void ParquetCrypto::AddKey(ClientContext &context, const FunctionParameters &par
 		keys.AddKey(key_name, decoded_key);
 	}
 }
+
+unique_ptr<ComplexJSON> ParquetCrypto::ParseKeyMetadata(const std::string& key_metadata) {
+	return StringUtil::ParseJSONMap(key_metadata);
+}
+
+string ParquetCrypto::GetDEK(const std::string& key_metadata) {
+	// Parse Key metadata
+	auto parsed_metadata = ParseKeyMetadata(key_metadata);
+
+	if (parsed_metadata->GetValue("doubleWrapping") == "true") {
+		throw NotImplementedException("Double Key Wrapping is not yet supported");
+	}
+
+	auto wrapped_dek = parsed_metadata->GetValue("wrappedDEK");
+	auto decoded_dek = Base64Decode(wrapped_dek);
+
+	// we just need to extract the key (the last 16 bytes)
+	const string &dek = decoded_dek.substr(decoded_dek.size() - 16);
+
+	return dek;
+}
+
+string ParquetCrypto::GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm) {
+	if (encryption_algorithm.__isset.AES_GCM_V1) {
+		return encryption_algorithm.AES_GCM_V1.aad_file_unique;
+	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+		return encryption_algorithm.AES_GCM_CTR_V1.aad_file_unique;
+	} else {
+		throw InternalException("File is encrypted but no encryption algorithm is set");
+}
+}
+
+string ParquetCrypto::CreateColumnMetadataAAD(const string &file_aad, uint16_t row_group_ordinal, uint16_t column_ordinal) {
+	// Column metadata AAD consist of:
+	// Column ordinal is just the physical column index
+	// aad prefix (not implemented yet), file aad, ParquetCrypto::ColumnMetaData, row_group_ordinal, column_ordinal);
+
+	int8_t type_ordinal_bytes[1];
+	type_ordinal_bytes[0] = ParquetCrypto::ColumnMetaData;
+	std::string type_ordinal_bytes_str(reinterpret_cast<char const*>(type_ordinal_bytes),
+									   1);
+
+	int16_t rg_ordinal_bytes[1];
+	rg_ordinal_bytes[0] = row_group_ordinal;
+	std::string rg_ordinal_bytes_str(reinterpret_cast<char const*>(rg_ordinal_bytes),
+									   2);
+
+	int16_t column_ordinal_bytes[1];
+	column_ordinal_bytes[0] = column_ordinal;
+	std::string column_ordinal_bytes_str(reinterpret_cast<char const*>(column_ordinal_bytes),
+									   2);
+
+	// this is the AAD string for the column
+	const string result_aad = file_aad + type_ordinal_bytes_str + rg_ordinal_bytes_str + column_ordinal_bytes_str;
+
+	return result_aad;
+}
+
+//
+// string ParquetCrypto::CreateModuleAAD() {
+// //todo
+// }
 
 } // namespace duckdb

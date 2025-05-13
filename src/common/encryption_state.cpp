@@ -18,7 +18,7 @@ void EncryptionState::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::
 }
 
 size_t EncryptionState::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
-                                duckdb::idx_t out_len) {
+                                duckdb::idx_t out_len, const_data_ptr_t aad, idx_t aad_len) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 

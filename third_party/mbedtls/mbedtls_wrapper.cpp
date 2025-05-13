@@ -296,8 +296,16 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_pt
 }
 
 size_t MbedTlsWrapper::AESStateMBEDTLS::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
-                                                   duckdb::idx_t out_len) {
+                                                   duckdb::idx_t out_len, duckdb::const_data_ptr_t aad, duckdb::idx_t aad_len) {
+
 	size_t result;
+	if (aad_len > 0) {
+		auto ret = mbedtls_cipher_update_ad(context.get(), aad, aad_len);
+		if (ret != 0) {
+			throw std::runtime_error("Failed to set AAD");
+		}
+	}
+
 	if (mbedtls_cipher_update(context.get(), reinterpret_cast<const unsigned char *>(in), in_len, out,
 	                      &result) != 0) {
 			runtime_error("Encryption or Decryption failed at Process");

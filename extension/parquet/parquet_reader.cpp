@@ -161,8 +161,9 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	}
 
 	auto metadata = make_uniq<FileMetaData>();
+	auto crypto_metadata = make_uniq<FileCryptoMetaData>();
+
 	if (footer_encrypted) {
-		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 		crypto_metadata->read(file_proto.get());
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
@@ -175,14 +176,70 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		auto decoded_size = Blob::FromBase64Size(wrapped_dek);
 		auto base64_decoded_wrapped_dek = Blob::FromBase64(wrapped_dek);
 
-		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util);
+		// we just need to extract the key (the last 16 bytes)
+		const string &dek = base64_decoded_wrapped_dek.substr(base64_decoded_wrapped_dek.size() - 16);
+
+		if (key_metadata_map->GetValue("doubleWrapping") == "true") {
+			string wrapped_kek;
+			idx_t decoded_kek_size;
+			string base64_decoded_wrapped_kek;
+			throw NotImplementedException("Double Wrapping is not yet supported");
+		}
+
+		// ParquetCrypto::CreateFooterAAD(){
+		int8_t type_ordinal_bytes[1];
+		type_ordinal_bytes[0] = ParquetCrypto::Footer;
+		std::string type_ordinal_bytes_str(reinterpret_cast<char const*>(type_ordinal_bytes),
+										   1);
+
+		//ParquetCrypto::GetFileAAD(){}
+		std::string file_aad;
+		auto alg = crypto_metadata->encryption_algorithm;
+
+		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1) {
+			file_aad = alg.AES_GCM_V1.aad_file_unique;
+		} else {
+			file_aad = alg.AES_GCM_CTR_V1.aad_file_unique;
+		}
+
+		// this is the AAD string for the footer
+		const string result_aad = file_aad + type_ordinal_bytes_str;
+
+		// ParquetCrypto::CreateAAD(){
+		ParquetCrypto::Read(*metadata, *file_proto, dek, encryption_util, &result_aad);
+
+		// if columnar encryption then decrypt all the metadata directly
+		//! todo; from keys if they are apparent
+		auto unique_file_aad = ParquetCrypto::GetFileAAD(crypto_metadata->encryption_algorithm);
+		// if crypto meta data is set in the first place
+		//! and yes we loop through the whole file
+		auto decrypted_metadata  = make_uniq<duckdb_parquet::ColumnMetaData>();
+
+		uint16_t row_group_ordinal = 0;
+		for (auto &row_group: metadata->row_groups) {
+			uint16_t column_ordinal = 0;
+			// todo; create a udf that wraps keys!
+			for (auto &col: row_group.columns) {
+				if (col.crypto_metadata.__isset.ENCRYPTION_WITH_COLUMN_KEY) {
+					const std::string& key_metadata = col.crypto_metadata.ENCRYPTION_WITH_COLUMN_KEY.key_metadata;
+					// parse the key metadata
+					auto data_encryption_key = ParquetCrypto::GetDEK(key_metadata);
+					auto final_aad = ParquetCrypto::CreateColumnMetadataAAD(file_aad, row_group_ordinal, column_ordinal);
+
+					ParquetCrypto::ReadPartial(*decrypted_metadata, col.encrypted_column_metadata, dek, encryption_util, &final_aad);
+				}
+				column_ordinal++;
+			}
+			row_group_ordinal++;
+		}
+
 	} else {
 		metadata->read(file_proto.get());
 	}
 
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
-	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata));
+	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata), std::move(crypto_metadata));
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const {

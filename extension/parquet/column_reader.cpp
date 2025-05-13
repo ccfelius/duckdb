@@ -14,6 +14,7 @@
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
 #include "parquet_float16.hpp"
+#include "parquet_crypto.hpp"
 
 #include "reader/row_number_column_reader.hpp"
 #include "snappy.h"
@@ -27,6 +28,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
@@ -184,10 +186,40 @@ void ColumnReader::PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t
 	throw NotImplementedException("PlainSelect not implemented");
 }
 
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftFileProtocol(CachingFileHandle &file_handle,
+																					   bool prefetch_mode) {
+	auto transport = std::make_shared<ThriftFileTransport>(file_handle, prefetch_mode);
+	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
+}
+
 void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 	D_ASSERT(ColumnIndex() < columns.size());
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
+
+	// warning; if there is any metadata
+	string data_encryption_key;
+	string result_aad;
+
+	if (chunk->crypto_metadata.__isset.ENCRYPTION_WITH_COLUMN_KEY) {
+		// decrypt column metadata first
+		const std::string& key_metadata = chunk->crypto_metadata.ENCRYPTION_WITH_COLUMN_KEY.key_metadata;
+		// parse the key metadata
+		data_encryption_key = ParquetCrypto::GetDEK(key_metadata);
+		auto file_aad = ParquetCrypto::GetFileAAD(reader.metadata->crypto_metadata->encryption_algorithm);
+		result_aad = ParquetCrypto::CreateColumnMetadataAAD(file_aad, row_group_idx_p, ColumnIndex());
+
+		auto encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+		auto column_metadata = make_uniq<duckdb_parquet::ColumnMetaData>();
+
+		//auto file_proto = CreateThriftFileProtocol(reader.file_handle, false);
+		// auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
+		column_metadata->read(protocol);
+
+		ParquetCrypto::Read(*column_metadata, *protocol, data_encryption_key, *encryption_util, &result_aad);
+		// chunk->meta_data = std::move(column_metadata);
+	}
+
 	D_ASSERT(chunk);
 	D_ASSERT(chunk->__isset.meta_data);
 

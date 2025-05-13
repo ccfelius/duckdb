@@ -55,6 +55,7 @@ public:
 	static shared_ptr<ParquetEncryptionConfig> Deserialize(Deserializer &deserializer);
 
 public:
+
 	struct ParquetCipher {
 		enum type { AES_GCM_V1 = 0, AES_GCM_CTR_V1 = 1 };
 	};
@@ -111,7 +112,9 @@ public:
 
 public:
 	//! Decrypt and read a Thrift object from the transport protocol
-	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p);
+	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p, const string *aad = nullptr);
+	static uint32_t ReadPartial(TBase &object, const string &encrypted_data, const string &key, const EncryptionUtil &encryption_util_p, const string *aad = nullptr);
+
 	//! Encrypt and write a Thrift object to the transport protocol
 	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
 	                      const EncryptionUtil &encryption_util_p);
@@ -125,6 +128,13 @@ public:
 public:
 	static void AddKey(ClientContext &context, const FunctionParameters &parameters);
 	static bool ValidKey(const std::string &key);
+
+public:
+	static unique_ptr<ComplexJSON> ParseKeyMetadata(const std::string& key_metadata);
+	static string GetDEK(const std::string& key_metadata);
+	static string GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
+	static string CreateColumnMetadataAAD(const string& file_aad, uint16_t row_group_ordinal, uint16_t column_ordinal);
+
 };
 
 } // namespace duckdb

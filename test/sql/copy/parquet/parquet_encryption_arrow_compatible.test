@@ -12,7 +12,7 @@ PRAGMA enable_verification
 
 
 statement ok
-PRAGMA add_parquet_key('footer_key', '0123456789112345');
+PRAGMA add_parquet_key('footer_key', '0923456789112399');
 
 # single wrapped
 # query I
@@ -21,6 +21,6 @@ PRAGMA add_parquet_key('footer_key', '0123456789112345');
 
 # double wrapped
 query I
-SELECT * FROM read_parquet('/Users/lottefeliuscwi/Documents/Projects/encrypted_table_single_wrap_arrow_16.parquet', encryption_config = {footer_key: 'footer_key'});
+SELECT * FROM read_parquet('/Users/lottefeliuscwi/Documents/Projects/encrypted_table_single_wrap_arrow_128_dek.parquet', encryption_config = {footer_key: 'footer_key'});
 ----
 
