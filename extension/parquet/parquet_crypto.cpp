@@ -248,6 +248,7 @@ public:
 			if (read_buffer_offset == read_buffer_size) {
 				ReadBlock(buf);
 			}
+
 			const auto next = MinValue(read_buffer_size - read_buffer_offset, len);
 			read_buffer_offset += next;
 			buf += next;
@@ -289,13 +290,9 @@ public:
 private:
 	void Initialize(const string &key) {
 		// Read encoded length (don't add to read_bytes)
-		if (encrypted_size != 0) {
-			total_bytes = encrypted_size;
-		} else {
-			data_t length_buf[ParquetCrypto::LENGTH_BYTES];
-			trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
-			total_bytes = Load<uint32_t>(length_buf);
-		}
+		data_t length_buf[ParquetCrypto::LENGTH_BYTES];
+		trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
+		total_bytes = Load<uint32_t>(length_buf);
 		transport_remaining = total_bytes;
 		// Read nonce and initialize AES
 		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
@@ -393,59 +390,60 @@ uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
 uint32_t ParquetCrypto::ReadPartial(TBase &object, const string &encrypted_data, const string &key,
 							 const EncryptionUtil &encryption_util_p, const string *aad) {
 
-	// try to decrypt ourselves
-	auto aes = encryption_util_p.CreateEncryptionState(&key);
+	// // try to decrypt ourselves
+	// auto aes = encryption_util_p.CreateEncryptionState(&key);
+	//
+	// D_ASSERT(encrypted_data.size() > 28);
 
-	D_ASSERT(encrypted_data.size() > 28);
-
-	uint32_t length;
-	memcpy(&length, encrypted_data.data(), sizeof(length));
-	D_ASSERT(length == encrypted_data.size() - ParquetCrypto::LENGTH_BYTES);
-
-	uint8_t nonce[ParquetCrypto::NONCE_BYTES];
-	uint8_t tag[ParquetCrypto::TAG_BYTES];
-	memcpy(nonce, encrypted_data.data() + ParquetCrypto::LENGTH_BYTES, 12);
-	memcpy(tag, encrypted_data.data() + encrypted_data.size() - ParquetCrypto::TAG_BYTES, ParquetCrypto::TAG_BYTES);
-
-	// use a buffer to decrypt the data
-	const uint32_t decrypted_data_size = static_cast<uint32_t>(encrypted_data.size()) - ParquetCrypto::NONCE_BYTES - ParquetCrypto::TAG_BYTES - ParquetCrypto::LENGTH_BYTES;
-	uint8_t temp_buffer[ParquetCrypto::BLOCK_SIZE];
-
-	// initialize context
-	aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, &key);
-	aes->Process(reinterpret_cast<const_data_ptr_t>(encrypted_data.data() + ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES), decrypted_data_size, temp_buffer, decrypted_data_size, reinterpret_cast<const_data_ptr_t>(aad), aad->size());
-	aes->Finalize(temp_buffer, decrypted_data_size, tag, ParquetCrypto::TAG_BYTES);
+	// uint32_t length;
+	// memcpy(&length, encrypted_data.data(), sizeof(length));
+	// D_ASSERT(length == encrypted_data.size() - ParquetCrypto::LENGTH_BYTES);
+	//
+	// uint8_t nonce[ParquetCrypto::NONCE_BYTES];
+	// uint8_t tag[ParquetCrypto::TAG_BYTES];
+	// memcpy(nonce, encrypted_data.data() + ParquetCrypto::LENGTH_BYTES, 12);
+	// memcpy(tag, encrypted_data.data() + encrypted_data.size() - ParquetCrypto::TAG_BYTES, ParquetCrypto::TAG_BYTES);
+	//
+	// // use a buffer to decrypt the data
+	// const uint32_t decrypted_data_size = static_cast<uint32_t>(encrypted_data.size()) - ParquetCrypto::NONCE_BYTES - ParquetCrypto::TAG_BYTES - ParquetCrypto::LENGTH_BYTES;
+	// uint8_t temp_buffer[ParquetCrypto::BLOCK_SIZE];
+	//
+	// // initialize context
+	// aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, &key);
+	// aes->Process(reinterpret_cast<const_data_ptr_t>(encrypted_data.data() + ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES), decrypted_data_size, temp_buffer, decrypted_data_size, reinterpret_cast<const_data_ptr_t>(aad), aad->size());
+	// aes->Finalize(temp_buffer, decrypted_data_size, tag, ParquetCrypto::TAG_BYTES);
 
 	using apache::thrift::protocol::TCompactProtocol;
 	using apache::thrift::transport::TMemoryBuffer;
 
-	auto mem_buf = std::make_shared<apache::thrift::transport::TMemoryBuffer>(temp_buffer, decrypted_data_size);
+	auto encrypted_size = encrypted_data.size();
+	auto mem_buf = std::make_shared<apache::thrift::transport::TMemoryBuffer>(const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(encrypted_data.data())), encrypted_size);
 	auto protocol = std::make_shared<TCompactProtocol>(mem_buf);
 
-	// Read the object
-	object.read(protocol.get());
-
-	return 10;
+	// // Read the object
+	// object.read(protocol.get());
+	//
+	// return 10;
 
 	// // we can also decrypt it ourselves?
 	// // is there always a len?
 	//
-	// TCompactProtocol new_proto(mem_buf);
-	//
-	// TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	// auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(new_proto, key, encryption_util_p, aad, encrypted_size));
-	// auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
-	//
-	// auto all = dtrans.ReadAll();
-	// TCompactProtocolFactoryT<SimpleReadTransport> tsimple_proto_factory;
-	//
-	// auto simple_prot =
-	// 	tsimple_proto_factory.getProtocol(std::make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
-	//
-	// // Read the object
-	// object.read(simple_prot.get());
-	//
-	// return 10;
+	TCompactProtocol new_proto(mem_buf);
+
+	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
+	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(new_proto, key, encryption_util_p, aad, encrypted_size));
+	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
+
+	auto all = dtrans.ReadAll();
+	TCompactProtocolFactoryT<SimpleReadTransport> tsimple_proto_factory;
+
+	auto simple_prot =
+		tsimple_proto_factory.getProtocol(std::make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
+
+	// Read the object
+	object.read(simple_prot.get());
+
+	return 10;
 }
 
 uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const string &key,
@@ -573,15 +571,14 @@ string ParquetCrypto::CreateColumnMetadataAAD(const string &file_aad, uint16_t r
 	std::string type_ordinal_bytes_str(reinterpret_cast<char const*>(type_ordinal_bytes),
 									   1);
 
-	int16_t rg_ordinal_bytes[1];
-	rg_ordinal_bytes[0] = row_group_ordinal;
-	std::string rg_ordinal_bytes_str(reinterpret_cast<char const*>(rg_ordinal_bytes),
-									   2);
+	// safe cast
+	std::string rg_ordinal_bytes_str;
+	rg_ordinal_bytes_str.push_back(static_cast<char>(row_group_ordinal & 0xFF));        // LSB
+	rg_ordinal_bytes_str.push_back(static_cast<char>((row_group_ordinal >> 8) & 0xFF)); // MSB
 
-	int16_t column_ordinal_bytes[1];
-	column_ordinal_bytes[0] = column_ordinal;
-	std::string column_ordinal_bytes_str(reinterpret_cast<char const*>(column_ordinal_bytes),
-									   2);
+	std::string column_ordinal_bytes_str;
+	column_ordinal_bytes_str.push_back(static_cast<char>(column_ordinal & 0xFF));         // LSB
+	column_ordinal_bytes_str.push_back(static_cast<char>((column_ordinal >> 8) & 0xFF));
 
 	// this is the AAD string for the column
 	const string result_aad = file_aad + type_ordinal_bytes_str + rg_ordinal_bytes_str + column_ordinal_bytes_str;

@@ -225,7 +225,6 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 					// parse the key metadata
 					auto data_encryption_key = ParquetCrypto::GetDEK(key_metadata);
 					auto final_aad = ParquetCrypto::CreateColumnMetadataAAD(file_aad, row_group_ordinal, column_ordinal);
-
 					ParquetCrypto::ReadPartial(*decrypted_metadata, col.encrypted_column_metadata, dek, encryption_util, &final_aad);
 				}
 				column_ordinal++;
