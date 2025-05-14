@@ -75,8 +75,10 @@ struct EncryptionOptions {
 
 	//! indicates whether the db is encrypted
 	bool encryption_enabled = false;
-	//! derived encryption key
-	string derived_key;
+	//! Whether Additional Authenticated Data is used
+	bool aad = false;
+	//! derived encryption key id
+	string derived_key_id;
 	//! Cipher used for encryption
 	CipherType cipher;
 	//! key derivation function (kdf) used
@@ -114,10 +116,6 @@ public:
 
 	//! Derive encryption key
 	static string DeriveKey(const string &user_key, data_ptr_t salt = nullptr);
-
-	//! Lock and unlock encryption key
-	void LockEncryptionKey();
-	void UnlockEncryptionKey();
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -180,6 +178,15 @@ private:
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
 
 	idx_t GetBlockLocation(block_id_t block_id) const;
+
+	// Encrypt, Store, Decrypt the canary
+	void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header) const;
+	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
+	void StoreEncryptionMetadata(MainHeader &main_header) const;
+
+	// Add encryption key to cache
+	void AddDerivedKeyToCache(string &derived_key);
+	const string &GetKeyFromCache() const;
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();

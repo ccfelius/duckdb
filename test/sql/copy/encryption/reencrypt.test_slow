@@ -38,6 +38,12 @@ statement error
 ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted;
 ----
 
+statement ok
+ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'xxxx');
+
+statement ok
+DETACH reencrypted
+
 statement error
 ATTACH '__TEST_DIR__/reencrypted.duckdb' AS reencrypted (ENCRYPTION_KEY 'asdf');
 ----
