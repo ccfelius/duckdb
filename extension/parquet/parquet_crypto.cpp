@@ -393,31 +393,59 @@ uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
 uint32_t ParquetCrypto::ReadPartial(TBase &object, const string &encrypted_data, const string &key,
 							 const EncryptionUtil &encryption_util_p, const string *aad) {
 
+	// try to decrypt ourselves
+	auto aes = encryption_util_p.CreateEncryptionState(&key);
+
+	D_ASSERT(encrypted_data.size() > 28);
+
+	uint32_t length;
+	memcpy(&length, encrypted_data.data(), sizeof(length));
+	D_ASSERT(length == encrypted_data.size() - ParquetCrypto::LENGTH_BYTES);
+
+	uint8_t nonce[ParquetCrypto::NONCE_BYTES];
+	uint8_t tag[ParquetCrypto::TAG_BYTES];
+	memcpy(nonce, encrypted_data.data() + ParquetCrypto::LENGTH_BYTES, 12);
+	memcpy(tag, encrypted_data.data() + encrypted_data.size() - ParquetCrypto::TAG_BYTES, ParquetCrypto::TAG_BYTES);
+
+	// use a buffer to decrypt the data
+	const uint32_t decrypted_data_size = static_cast<uint32_t>(encrypted_data.size()) - ParquetCrypto::NONCE_BYTES - ParquetCrypto::TAG_BYTES - ParquetCrypto::LENGTH_BYTES;
+	uint8_t temp_buffer[ParquetCrypto::BLOCK_SIZE];
+
+	// initialize context
+	aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, &key);
+	aes->Process(reinterpret_cast<const_data_ptr_t>(encrypted_data.data() + ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES), decrypted_data_size, temp_buffer, decrypted_data_size, reinterpret_cast<const_data_ptr_t>(aad), aad->size());
+	aes->Finalize(temp_buffer, decrypted_data_size, tag, ParquetCrypto::TAG_BYTES);
+
 	using apache::thrift::protocol::TCompactProtocol;
 	using apache::thrift::transport::TMemoryBuffer;
 
-	auto encrypted_size = static_cast<uint32_t>(encrypted_data.size());
-	auto mem_buf = std::make_shared<apache::thrift::transport::TMemoryBuffer>(
-		const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(encrypted_data.data())),
-		encrypted_size
-	);
-
-	TCompactProtocol new_proto(mem_buf);
-
-	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(new_proto, key, encryption_util_p, aad, encrypted_size));
-	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
-
-	auto all = dtrans.ReadAll();
-	TCompactProtocolFactoryT<SimpleReadTransport> tsimple_proto_factory;
-
-	auto simple_prot =
-		tsimple_proto_factory.getProtocol(std::make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
+	auto mem_buf = std::make_shared<apache::thrift::transport::TMemoryBuffer>(temp_buffer, decrypted_data_size);
+	auto protocol = std::make_shared<TCompactProtocol>(mem_buf);
 
 	// Read the object
-	object.read(simple_prot.get());
+	object.read(protocol.get());
 
 	return 10;
+
+	// // we can also decrypt it ourselves?
+	// // is there always a len?
+	//
+	// TCompactProtocol new_proto(mem_buf);
+	//
+	// TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
+	// auto dprot = tproto_factory.getProtocol(std::make_shared<DecryptionTransport>(new_proto, key, encryption_util_p, aad, encrypted_size));
+	// auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
+	//
+	// auto all = dtrans.ReadAll();
+	// TCompactProtocolFactoryT<SimpleReadTransport> tsimple_proto_factory;
+	//
+	// auto simple_prot =
+	// 	tsimple_proto_factory.getProtocol(std::make_shared<SimpleReadTransport>(all.get(), all.GetSize()));
+	//
+	// // Read the object
+	// object.read(simple_prot.get());
+	//
+	// return 10;
 }
 
 uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const string &key,
