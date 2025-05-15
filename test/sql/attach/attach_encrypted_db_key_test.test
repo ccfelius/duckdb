@@ -12,18 +12,18 @@ PRAGMA enable_verification
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY);
 ----
-"true" is not a valid key. A key must be equal to or larger then 4 characters.
+"true" is not a valid key. A key must not be empty
 
 statement error
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY '');
 ----
-Binder Error: "" is not a valid key. A key must be equal to or larger then 4 characters.
+Binder Error: "" is not a valid key. A key must not be empty
 
 statement ok
 ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY');
+ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCY0000EXAMPLEKEY');
 
 statement ok
 DETACH encrypted
@@ -54,7 +54,7 @@ ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 
 Wrong encryption key used to open the database file
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY');
+ATTACH '__TEST_DIR__/encrypted_aws_key.duckdb' AS encrypted_aws (ENCRYPTION_KEY 'wJalrXUtnFEMI/K7MDENG/bPxRfiCY0000EXAMPLEKEY');
 
 
 
