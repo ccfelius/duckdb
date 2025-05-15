@@ -17,7 +17,7 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			storage_options.block_alloc_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "encryption_key") {
 			auto user_key = entry.second.GetValue<string>();
-			if (user_key.empty()) {
+			if (user_key.empty() || user_key == "true") {
 				throw BinderException("\"%s\" is not a valid key. A key must not be empty", entry.second.ToString());
 			}
 			storage_options.encryption_key = user_key;
