@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-EncryptionKey::EncryptionKey(const string &encryption_key_p) : encryption_key(std::move(encryption_key_p)) {
+EncryptionKey::EncryptionKey(const string &encryption_key_p) : encryption_key(encryption_key_p) {
 	// Lock the encryption key
 	LockEncryptionKey(encryption_key);
 }

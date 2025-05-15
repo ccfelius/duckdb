@@ -20,7 +20,7 @@ namespace duckdb {
 class EncryptionKey {
 
 public:
-	EncryptionKey(const string &encryption_key);
+	explicit EncryptionKey(const string &encryption_key);
 	~EncryptionKey();
 
 	EncryptionKey(const EncryptionKey &) = delete;
