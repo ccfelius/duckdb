@@ -14,6 +14,13 @@ EncryptionKey::EncryptionKey(const string &encryption_key_p) : encryption_key(st
 	LockEncryptionKey(encryption_key);
 }
 
+// destructor
+EncryptionKey::~EncryptionKey() {
+	if (!encryption_key.empty()) {
+		UnlockEncryptionKey(encryption_key);
+	}
+}
+
 void EncryptionKey::LockEncryptionKey(string &key) {
 #if defined(_WIN32)
 	VirtualLock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
@@ -70,6 +77,10 @@ const string &EncryptionKeyManager::GetKey(const string &key_name) const {
 	D_ASSERT(HasKey(key_name));
 	auto &key = derived_keys.at(key_name);
 	return key.Get();
+}
+
+void EncryptionKeyManager::DeleteKey(const string &key_name) {
+	derived_keys.erase(key_name);
 }
 
 string EncryptionKeyManager::KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt) {

@@ -308,14 +308,17 @@ void SingleFileBlockManager::StoreSalt(MainHeader &main_header, data_ptr_t salt)
 }
 
 void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) const {
-	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
-	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
-	data_ptr_t offset = metadata;
+
 	//! first byte is the key derivation function used (kdf)
 	//! second byte is for the usage of AAD
 	//! third byte is for the cipher used
 	//! the subsequent byte is empty
 	//! the last 4 bytes are the key length
+
+	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
+	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
+	data_ptr_t offset = metadata;
+
 	Store<uint8_t>(options.encryption_options.kdf, offset);
 	offset++;
 	Store<uint8_t>(options.encryption_options.aad, offset);
@@ -325,21 +328,6 @@ void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) co
 	Store<uint32_t>(options.encryption_options.key_length, offset);
 
 	main_header.SetEncryptionMetadata(metadata);
-}
-
-string KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt) {
-	//! For now, we are only using SHA256 for key derivation
-	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
-	state.AddSalt(salt, MainHeader::SALT_LEN);
-	state.AddString(user_key);
-	auto derived_key = state.Finalize();
-	//! key_length is hardcoded to 32 bytes
-	D_ASSERT(derived_key.length() == MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	return derived_key;
-}
-
-string SingleFileBlockManager::DeriveKey(const string &user_key, data_ptr_t salt) {
-	return KeyDerivationFunctionSHA256(user_key, salt);
 }
 
 const string &SingleFileBlockManager::GetKeyFromCache() const {
@@ -381,7 +369,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 		GenerateSalt(db, salt, options);
 
 		// Derive the encryption key and add it to cache
-		auto derived_key = DeriveKey(*encryption_key, salt);
+		auto derived_key = EncryptionKeyManager::DeriveKey(*encryption_key, salt);
 		AddDerivedKeyToCache(derived_key);
 
 		//! Store all metadata in the main header
@@ -470,7 +458,7 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 		memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
 
 		//! Check if the correct key is used to decrypt the database
-		auto derived_key = DeriveKey(*encryption_key, salt);
+		auto derived_key = EncryptionKeyManager::DeriveKey(*encryption_key, salt);
 		if (!DecryptCanary(main_header, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key), &derived_key)) {
 			throw IOException("Wrong encryption key used to open the database file");
 		}

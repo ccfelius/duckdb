@@ -1,4 +1,4 @@
-# name: test/sql/copy/encryption/multiple_encrypted_databases.test
+# name: test/sql/copy/encryption/multiple_encrypted_databases.test_slow
 # group: [encryption]
 
 require noforcestorage

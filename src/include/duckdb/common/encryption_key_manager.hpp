@@ -21,9 +21,7 @@ class EncryptionKey {
 
 public:
 	EncryptionKey(const string &encryption_key);
-	~EncryptionKey() {
-		std::memset(&encryption_key[0], 0, encryption_key.size());
-	}
+	~EncryptionKey();
 
 	EncryptionKey(const EncryptionKey &) = delete;
 	EncryptionKey &operator=(const EncryptionKey &) = delete;
@@ -54,6 +52,7 @@ public:
 public:
 	void AddKey(const string &key_name, string &key);
 	bool HasKey(const string &key_name) const;
+	void DeleteKey(const string &key_name);
 	const string &GetKey(const string &key_name) const;
 
 public:

@@ -114,9 +114,6 @@ public:
 	//! to detect inconsistencies with the file header.
 	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr);
 
-	//! Derive encryption key
-	static string DeriveKey(const string &user_key, data_ptr_t salt = nullptr);
-
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
 	unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) override;
