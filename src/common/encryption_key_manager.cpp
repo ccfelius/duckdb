@@ -22,11 +22,13 @@ EncryptionKey::~EncryptionKey() {
 }
 
 void EncryptionKey::LockEncryptionKey(string &key) {
+	if (!key.empty()) {
 #if defined(_WIN32)
-	VirtualLock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+		VirtualLock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
 #else
-	mlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+		mlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
 #endif
+	}
 }
 
 void EncryptionKey::UnlockEncryptionKey(string &key) {
