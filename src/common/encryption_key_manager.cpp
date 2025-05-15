@@ -30,7 +30,8 @@ void EncryptionKey::LockEncryptionKey(string &key) {
 }
 
 void EncryptionKey::UnlockEncryptionKey(string &key) {
-	memset(&key, 0, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	fill(key.begin(), key.end(), 0); // zero out contents
+	key.clear();
 #if defined(_WIN32)
 	VirtualUnlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
 #else

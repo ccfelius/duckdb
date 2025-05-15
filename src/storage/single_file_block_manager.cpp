@@ -17,13 +17,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <__filesystem/file_type.h>
-
-#if defined(_WIN32)
-#include "duckdb/common/windows.hpp"
-#else
-#include <sys/mman.h>
-#endif
 
 namespace duckdb {
 

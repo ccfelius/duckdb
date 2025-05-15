@@ -20,7 +20,7 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			if (user_key.empty()) {
 				throw BinderException("\"%s\" is not a valid key. A key must not be empty", entry.second.ToString());
 			}
-			storage_options.encryption_key = entry.second.ToString();
+			storage_options.encryption_key = user_key;
 			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			storage_options.encryption = true;
 			// set storage version to v1.3.0

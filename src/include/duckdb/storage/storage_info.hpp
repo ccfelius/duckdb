@@ -126,12 +126,12 @@ struct MainHeader {
 		memcpy(encryption_metadata, source, ENCRYPTION_METADATA_LEN);
 	}
 
-	void SetSalt(const data_t *source) {
+	void SetSalt(data_ptr_t source) {
 		memset(salt, 0, SALT_LEN);
 		memcpy(salt, source, SALT_LEN);
 	}
 
-	void SetEncryptedCanary(const data_t *source) {
+	void SetEncryptedCanary(data_ptr_t source) {
 		memset(encrypted_canary, 0, CANARY_BYTE_SIZE);
 		memcpy(encrypted_canary, source, CANARY_BYTE_SIZE);
 	}
