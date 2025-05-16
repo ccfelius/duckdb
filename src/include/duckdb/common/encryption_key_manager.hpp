@@ -45,12 +45,20 @@ private:
 class EncryptionKeyManager : public ObjectCacheEntry {
 
 public:
+	explicit EncryptionKeyManager() = default;
+	virtual ~EncryptionKeyManager() = default;
+
+public:
+	// Initialize the EncryptionKeyManager with the DB instance
+	DUCKDB_API void Initialize(DatabaseInstance &db);
+
+	static void Initialize(ObjectCache &cache);
 	static EncryptionKeyManager &GetInternal(ObjectCache &cache);
 	static EncryptionKeyManager &Get(ClientContext &context);
 	static EncryptionKeyManager &Get(DatabaseInstance &db);
 
 public:
-	void AddKey(const string &key_name, string &key);
+	void AddKey(const string &key_name, string &key, bool wipe = true);
 	bool HasKey(const string &key_name) const;
 	void DeleteKey(const string &key_name);
 	const string &GetKey(const string &key_name) const;
@@ -70,6 +78,7 @@ public:
 	static constexpr idx_t DERIVED_KEY_LENGTH = 32;
 
 private:
+	bool initialized = false;
 	unordered_map<string, EncryptionKey> derived_keys;
 };
 

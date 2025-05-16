@@ -2367,6 +2367,14 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 ** the database fails to open, print an error message and exit.
 */
 void ShellState::OpenDB(int flags) {
+
+	const char *password = nullptr;
+	if (full_encryption) {
+		password = master_key.c_str();
+	} else if (!user_key.empty()) {
+		password = user_key.c_str();
+	}
+
 	if (db == 0) {
 		if (openMode == SHELL_OPEN_UNSPEC) {
 			if (zDbFilename.empty()) {
@@ -2377,26 +2385,27 @@ void ShellState::OpenDB(int flags) {
 		}
 		switch (openMode) {
 		case SHELL_OPEN_APPENDVFS: {
-			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | openFlags,
-			                "apndvfs");
+			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | openFlags, "apndvfs",
+			                password);
 			break;
 		}
 		case SHELL_OPEN_HEXDB:
 		case SHELL_OPEN_DESERIALIZE: {
-			sqlite3_open(0, &db);
+			sqlite3_open(0, &db, password);
 			break;
 		}
 		case SHELL_OPEN_ZIPFILE: {
-			sqlite3_open(":memory:", &db);
+			sqlite3_open(":memory:", &db, password);
 			break;
 		}
 		case SHELL_OPEN_READONLY: {
-			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READONLY | openFlags, 0);
+			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READONLY | openFlags, 0, password);
 			break;
 		}
 		case SHELL_OPEN_UNSPEC:
 		case SHELL_OPEN_NORMAL: {
-			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | openFlags, 0);
+			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | openFlags, 0,
+			                password);
 			break;
 		}
 		}
@@ -2404,7 +2413,7 @@ void ShellState::OpenDB(int flags) {
 		if (db == 0 || SQLITE_OK != sqlite3_errcode(db)) {
 			utf8_printf(stderr, "Error: unable to open database \"%s\": %s\n", zDbFilename.c_str(), sqlite3_errmsg(db));
 			if (flags & OPEN_DB_KEEPALIVE) {
-				sqlite3_open(":memory:", &db);
+				sqlite3_open(":memory:", &db, password);
 				return;
 			}
 			exit(1);
@@ -2506,7 +2515,7 @@ static void linenoise_completion(const char *zLine, linenoiseCompletions *lc) {
 	zSql = sqlite3_mprintf("CALL sql_auto_complete(%Q)", zLine);
 	sqlite3 *localDb = NULL;
 	if (!globalDb) {
-		sqlite3_open(":memory:", &localDb);
+		sqlite3_open(":memory:", &localDb, NULL);
 		sqlite3_prepare_v2(localDb, zSql, -1, &pStmt, 0);
 	} else {
 		sqlite3_prepare_v2(globalDb, zSql, -1, &pStmt, 0);
@@ -4869,6 +4878,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		char *z;
 		z = argv[i];
 		if (z[0] != '-') {
+			//! Read database file (if present)
 			if (data.zDbFilename.empty()) {
 				data.zDbFilename = z;
 			} else {
@@ -4920,6 +4930,15 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			}
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
+		} else if (strcmp(z, "-key") == 0) {
+			// only possible if there is a database file as input
+			data.user_key = cmdline_option_value(argc, argv, ++i);
+			data.openFlags |= DUCKDB_ENCRYPTION_KEY;
+		} else if (strcmp(z, "-master_key") == 0) {
+			// add a master key and set the database to full encryption
+			data.master_key = cmdline_option_value(argc, argv, ++i);
+			data.openFlags |= DUCKDB_MASTER_KEY;
+			data.full_encryption = true;
 		}
 	}
 	verify_uninitialized();
@@ -4956,6 +4975,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	** to the sqlite command-line tool.
 	*/
 	if (access(data.zDbFilename.c_str(), 0) == 0) {
+		// add encryption key here?
 		data.OpenDB(0);
 	}
 
@@ -5031,6 +5051,17 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNREDACTED_SECRETS;
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
+		} else if (strcmp(z, "-master_key") == 0) {
+			data.openFlags |= DUCKDB_MASTER_KEY;
+			// fetch the encryption key
+			data.master_key = cmdline_option_value(argc, argv, ++i);
+		} else if (strcmp(z, "-key") == 0) {
+			if (data.full_encryption) {
+				utf8_printf(stderr,
+				            "Error: it is not possible to set a master key and user key. Add user key through ATTACH");
+			}
+			data.openFlags |= DUCKDB_ENCRYPTION_KEY;
+			data.user_key = cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-version") == 0) {
 			printf("%s %s\n", sqlite3_libversion(), sqlite3_sourceid());
 			free(azCmd);

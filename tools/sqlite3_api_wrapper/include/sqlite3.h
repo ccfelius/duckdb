@@ -579,7 +579,11 @@ SQLITE_API int sqlite3_exec(
 // we need to somehow communicate this through open_v2
 #define DUCKDB_UNSIGNED_EXTENSIONS   0x10000000
 #define DUCKDB_UNREDACTED_SECRETS    0x20000000
+  //! This can give a false positive if both
+  //! unsigned extensions and unredacted secrets are set
 #define DUCKDB_LATEST_STORAGE_VERSION 0x30000000
+#define DUCKDB_ENCRYPTION_KEY         0x40000000
+#define DUCKDB_MASTER_KEY             0x80000000
 
 /*
 ** CAPI3REF: Device Characteristics
@@ -3529,7 +3533,8 @@ SQLITE_API void sqlite3_progress_handler(sqlite3*, int, int(*)(void*), void*);
 */
 SQLITE_API int sqlite3_open(
   const char *filename,   /* Database filename (UTF-8) */
-  sqlite3 **ppDb          /* OUT: SQLite db handle */
+  sqlite3 **ppDb,          /* OUT: SQLite db handle */
+  const char *password    /* Encryption Key */
 );
 SQLITE_API int sqlite3_open16(
   const void *filename,   /* Database filename (UTF-16) */
@@ -3539,7 +3544,8 @@ SQLITE_API int sqlite3_open_v2(
   const char *filename,   /* Database filename (UTF-8) */
   sqlite3 **ppDb,         /* OUT: SQLite db handle */
   int flags,              /* Flags */
-  const char *zVfs        /* Name of VFS module to use */
+  const char *zVfs, /* Name of VFS module to use */
+  const char *password    /* Encryption Key */
 );
 
 /*

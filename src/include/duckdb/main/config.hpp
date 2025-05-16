@@ -56,6 +56,7 @@ class ExtensionCallback;
 class SecretManager;
 class CompressionInfo;
 class EncryptionUtil;
+class EncryptionKeyManager;
 class HTTPUtil;
 
 struct CompressionFunctionSet;
@@ -266,6 +267,17 @@ struct DBConfigOptions {
 	string custom_user_agent;
 	//! Use old implicit casting style (i.e. allow everything to be implicitly casted to VARCHAR)
 	bool old_implicit_casting = false;
+	//! Database encryption key (plaintext)
+	//! This key corresponds to one database
+	string user_key;
+	//! Database encryption master key
+	//! If this key is added by the user
+	//! All database files will be [en/de]crypted with the master key
+	//! Unless specified otherwise
+	string master_key;
+	//! If a master key is given
+	//! All db files are encrypted
+	bool full_encryption = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//! The default block header size for new duckdb database files.

@@ -41,9 +41,13 @@ void EncryptionKey::UnlockEncryptionKey(string &key) {
 #endif
 }
 
+void EncryptionKeyManager::Initialize(ObjectCache &cache) {
+	cache.Put(EncryptionKeyManager::ObjectType(), make_shared_ptr<EncryptionKeyManager>());
+}
+
 EncryptionKeyManager &EncryptionKeyManager::GetInternal(ObjectCache &cache) {
 	if (!cache.Get<EncryptionKeyManager>(EncryptionKeyManager::ObjectType())) {
-		cache.Put(EncryptionKeyManager::ObjectType(), make_shared_ptr<EncryptionKeyManager>());
+		Initialize(cache);
 	}
 	return *cache.Get<EncryptionKeyManager>(EncryptionKeyManager::ObjectType());
 }
@@ -65,11 +69,14 @@ string EncryptionKeyManager::GenerateRandomKeyID() {
 	return key_id_str;
 }
 
-void EncryptionKeyManager::AddKey(const string &key_name, string &key) {
+void EncryptionKeyManager::AddKey(const string &key_name, string &key, bool wipe) {
 	derived_keys.emplace(key_name, EncryptionKey(key));
-	// wipe out the original key
-	std::memset(&key[0], 0, key.size());
-	key.clear();
+
+	if (wipe) {
+		// wipe out the original key
+		std::memset(&key[0], 0, key.size());
+		key.clear();
+	}
 }
 
 bool EncryptionKeyManager::HasKey(const string &key_name) const {

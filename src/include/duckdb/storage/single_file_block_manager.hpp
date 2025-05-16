@@ -180,10 +180,15 @@ private:
 	void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header) const;
 	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
+	bool CheckEncryptionKey(MainHeader &main_header, const string *derived_key) const;
+	void CheckAndAddEncryptionKey(MainHeader &main_header, const string &user_key, bool is_master_key = false);
 
 	// Add encryption key to cache
-	void AddDerivedKeyToCache(string &derived_key);
+	void AddKeyToCache(string &key, const string &key_name, bool wipe = true) const;
+	void AddKeyToCache(string &derived_key, bool wipe = true);
+	bool ContainsKey(const string &key_name) const;
 	const string &GetKeyFromCache() const;
+	const string &GetKeyFromCache(const string &key_name) const;
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();

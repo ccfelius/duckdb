@@ -51,6 +51,7 @@ public:
 public:
 	BufferPool &GetBufferPool() const;
 	DUCKDB_API SecretManager &GetSecretManager();
+	DUCKDB_API EncryptionKeyManager &GetEncryptionKeyManager();
 	DUCKDB_API BufferManager &GetBufferManager();
 	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
