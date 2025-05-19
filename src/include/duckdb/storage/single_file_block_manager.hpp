@@ -109,10 +109,10 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase(optional_ptr<string> encryption_key = nullptr);
+	void CreateNewDatabase(optional_ptr<string> encryption_key = nullptr, bool encryption_on_attach = false);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr);
+	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr, bool encryption_on_attach = false);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -180,7 +180,7 @@ private:
 	void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header) const;
 	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
-	bool CheckEncryptionKey(MainHeader &main_header, const string *derived_key) const;
+	bool CheckEncryptionKey(MainHeader &main_header, const string &derived_key) const;
 	void CheckAndAddEncryptionKey(MainHeader &main_header, const string &user_key, bool is_master_key = false);
 
 	// Add encryption key to cache

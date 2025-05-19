@@ -71,12 +71,11 @@ string EncryptionKeyManager::GenerateRandomKeyID() {
 
 void EncryptionKeyManager::AddKey(const string &key_name, string &key, bool wipe) {
 	derived_keys.emplace(key_name, EncryptionKey(key));
-
-	if (wipe) {
-		// wipe out the original key
-		std::memset(&key[0], 0, key.size());
-		key.clear();
-	}
+	// if (wipe) {
+	// wipe out the original key
+	//	std::memset(&key[0], 0, key.size());
+	//	key.clear();
+	//}
 }
 
 bool EncryptionKeyManager::HasKey(const string &key_name) const {

@@ -353,15 +353,15 @@ void SingleFileBlockManager::AddKeyToCache(string &key, bool wipe) {
 	options.encryption_options.derived_key_id = keys.GenerateRandomKeyID();
 	if (!keys.HasKey(options.encryption_options.derived_key_id)) {
 		keys.AddKey(options.encryption_options.derived_key_id, key, wipe);
-	} else {
+	} else if (wipe) {
 		// wipe out the original key
 		std::memset(&key[0], 0, key.size());
 		key.clear();
 	}
 }
 
-bool SingleFileBlockManager::CheckEncryptionKey(MainHeader &main_header, const string *derived_key) const {
-	return DecryptCanary(main_header, GetEncryptionUtil(db)->CreateEncryptionState(derived_key), derived_key);
+bool SingleFileBlockManager::CheckEncryptionKey(MainHeader &main_header, const string &derived_key) const {
+	return DecryptCanary(main_header, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key), derived_key);
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, const string &user_key,
@@ -374,10 +374,13 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, c
 	//! Check if the correct key is used to decrypt the database
 	auto derived_key = EncryptionKeyManager::DeriveKey(user_key, salt);
 
-	if (!CheckEncryptionKey(main_header, &derived_key)) {
+	if (!CheckEncryptionKey(main_header, derived_key)) {
 		if (is_master_key) {
 			throw IOException("Master Key found in cache, but cannot open the database file due to incorrect master "
 			                  "key. Try to open an encrypted database file with ATTACH.");
+		}
+		if (is_master_key) {
+			std::cout << "trying to use master key but " << std::endl;
 		}
 		throw IOException("Wrong encryption key used to open the database file");
 	}
@@ -385,7 +388,7 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, c
 	AddKeyToCache(derived_key, !is_master_key);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_key) {
+void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_key, bool encryption_on_attach) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -398,6 +401,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+	auto &config = DBConfig::GetConfig(db.GetDatabase());
 
 	if (options.encryption_options.encryption_enabled) {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
@@ -407,7 +411,24 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 		GenerateSalt(db, salt, options);
 
 		// Derive the encryption key and add it to cache
-		auto derived_key = EncryptionKeyManager::DeriveKey(*encryption_key, salt);
+		string derived_key;
+
+		if (encryption_on_attach) {
+			//! key given with attach
+			std::cout << "key given with attach" << std::endl;
+			derived_key = EncryptionKeyManager::DeriveKey(*encryption_key, salt);
+		} else if (!config.options.user_key.empty()) {
+			//! user key given in cli (with -key '')
+			std::cout << "key given with USER KEY" << std::endl;
+			derived_key = EncryptionKeyManager::DeriveKey(config.options.user_key, salt);
+		} else if (config.options.full_encryption && !config.options.master_key.empty()) {
+			//! master key used to encrypt/decrypt all files (in cli with -master_key '')
+			std::cout << "key given with MASTER KEY" << std::endl;
+			derived_key = EncryptionKeyManager::DeriveKey(config.options.master_key, salt);
+		} else {
+			throw CatalogException("Cannot create a new database without a key");
+		}
+
 		AddKeyToCache(derived_key);
 
 		//! Store all metadata in the main header
@@ -457,7 +478,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryption_key) {
+void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryption_key, bool encryption_on_attach) {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
@@ -481,46 +502,44 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 	auto &config = DBConfig::GetConfig(db.GetDatabase());
 
 	if (main_header.IsEncrypted() && !options.encryption_options.encryption_enabled) {
-		//! Set encryption to true
-		options.encryption_options.encryption_enabled = true;
-		if (!config.options.user_key.empty()) {
-			//! A new (encrypted) database is added through the CLI
-			//! If a user key is given, let's try this key
-			//! If it succeeds, we put the key in cache
-			CheckAndAddEncryptionKey(main_header, config.options.user_key);
-		} else if (config.options.full_encryption && !config.options.master_key.empty()) {
-			if (ContainsKey("master_key")) {
-				//! If the master key is already in cache
-				//! Check if the derived key is correct
-				//! And put the derived key in cache, if it is correct
-				CheckAndAddEncryptionKey(main_header, GetKeyFromCache("master_key"), true);
-			} else if (!config.options.master_key.empty() && !ContainsKey("master_key")) {
-				// If a master key is present, and cache does not contain master key
-				// add master key to cache (note; in plaintext)
-				AddKeyToCache(config.options.master_key, "master_key", true);
-				// Check if master key is correct, and add the derived key
-				CheckAndAddEncryptionKey(main_header, GetKeyFromCache("master_key"), true);
-			} else {
-				// no master key given and key is not in cache, but full encryption is set
-				throw CatalogException(
-				    "Full encryption is set, but cannot encrypt or decrypt a database without a master key", path);
-			}
-		} else {
-			// No encryption enabled through Attach, no user key given, no full encryption, but file is encrypted
-			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
+		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
+	} else if (main_header.IsEncrypted() && options.encryption_options.encryption_enabled && encryption_on_attach) {
+		// encryption is set, check if the given key upon attach is correct
+		std::cout << "Checking Encryption key with ATTACH" << std::endl;
+		CheckAndAddEncryptionKey(main_header, *encryption_key, false);
+	} else if (main_header.IsEncrypted() && !config.options.user_key.empty()) {
+		//! A new (encrypted) database is added through the CLI
+		//! If a user key is given, let's try this key
+		//! If it succeeds, we put the key in cache
+		std::cout << "test with USER KEY " << std::endl;
+		CheckAndAddEncryptionKey(main_header, config.options.user_key);
+	} else if (config.options.full_encryption) {
+		if (ContainsKey("master_key")) {
+			//! If the master key is already in cache
+			//! Check if the derived key is correct
+			//! And put the derived key in cache, if it is correct
+			std::cout << "test with MASTER KEY in cache " << std::endl;
+			CheckAndAddEncryptionKey(main_header, GetKeyFromCache("master_key"), true);
+		} else if (!config.options.master_key.empty() && !ContainsKey("master_key")) {
+			// If a master key is present, and cache does not contain master key
+			// add master key to cache (note; in plaintext)
+			AddKeyToCache(config.options.master_key, "master_key", true);
+			// Check if master key is correct, and add the derived key
+			std::cout << "test with MASTER KEY added to cache " << std::endl;
+			CheckAndAddEncryptionKey(main_header, GetKeyFromCache("master_key"), true);
+		} else if (!ContainsKey("master_key")) {
+			// no master key given and key is not in cache, but full encryption is set
+			throw CatalogException(
+			    "Full encryption is set, but cannot encrypt or decrypt a database without a master key", path);
 		}
+	}
 
-	} else if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
+	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		//! write existing database
+		//! TODO
 		//! if master key is specified, existing database will also be encrypted
-		//! do this later, should not error
-
 		// database is not encrypted, but is tried to be opened with a key
 		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
-
-	} else if (main_header.IsEncrypted()) {
-		// encryption is set, check if the key is correct
-		CheckAndAddEncryptionKey(main_header, *encryption_key, false);
 	}
 
 	options.version_number = main_header.version_number;
@@ -606,7 +625,6 @@ void SingleFileBlockManager::DecryptBuffer(data_ptr_t internal_buffer, uint64_t 
 	encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, &GetKeyFromCache());
 
 	auto checksum_offset = internal_buffer + delta;
-	//! we need to use here block.size..
 	auto size = block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE;
 
 	//! decrypt the block including the checksum
