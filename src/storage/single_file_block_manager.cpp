@@ -34,18 +34,6 @@ void DeserializeVersionNumber(ReadStream &stream, data_t *dest) {
 	stream.ReadData(dest, MainHeader::MAX_VERSION_SIZE);
 }
 
-shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db) {
-	auto encryption_util = db.GetDatabase().config.encryption_util;
-
-	if (encryption_util) {
-		encryption_util = db.GetDatabase().config.encryption_util;
-	} else {
-		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
-	}
-
-	return encryption_util;
-}
-
 void GenerateSalt(uint8_t *salt, const shared_ptr<EncryptionState> &encryption_state) {
 	encryption_state->GenerateRandomData(salt, 16);
 }
@@ -227,16 +215,28 @@ SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const strin
 void SingleFileBlockManager::LockEncryptionKey() const {
 	auto derived_key = options.encryption_options.derived_key;
 #if defined(_WIN32)
-	VirtualLock(const_cast<void*>(static_cast<const void*>(derived_key.data())), derived_key.size());
+	VirtualLock(const_cast<void *>(static_cast<const void *>(derived_key.data())), derived_key.size());
 #else
 	mlock(derived_key.data(), derived_key.size());
 #endif
 }
 
+shared_ptr<EncryptionUtil> SingleFileBlockManager::GetEncryptionUtil(AttachedDatabase &db) {
+	auto encryption_util = db.GetDatabase().config.encryption_util;
+
+	if (encryption_util) {
+		encryption_util = db.GetDatabase().config.encryption_util;
+	} else {
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	}
+
+	return encryption_util;
+}
+
 void SingleFileBlockManager::UnlockEncryptionKey() const {
 	auto derived_key = options.encryption_options.derived_key;
 #if defined(_WIN32)
-	VirtualLock(const_cast<void*>(static_cast<const void*>(derived_key.data())), derived_key.size());
+	VirtualLock(const_cast<void *>(static_cast<const void *>(derived_key.data())), derived_key.size());
 #else
 	munlock(derived_key.data(), derived_key.size());
 #endif
@@ -285,7 +285,8 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 }
 
 void StoreEncryptedCanary(AttachedDatabase &db, data_ptr_t encrypted_canary, StorageManagerOptions &options) {
-	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&options.encryption_options.derived_key);
+	auto encryption_state =
+	    SingleFileBlockManager::GetEncryptionUtil(db)->CreateEncryptionState(&options.encryption_options.derived_key);
 
 	// Encrypt or decrypt canary with derived key
 	EncryptCanary(encrypted_canary, encryption_state, &options.encryption_options.derived_key);

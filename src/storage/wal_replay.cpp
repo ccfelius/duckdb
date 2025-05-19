@@ -71,10 +71,9 @@ public:
 		deserializer.Set<Catalog &>(catalog);
 	}
 
-	StorageManager& GetStorageManager() {
+	StorageManager &GetStorageManager() {
 		return db.GetStorageManager();
 	}
-
 
 	static WriteAheadLogDeserializer Open(ReplayState &state_p, BufferedFileReader &stream,
 	                                      bool deserialize_only = false) {
@@ -85,74 +84,96 @@ public:
 
 		if (state_p.wal_version == 2) {
 
-		// read the checksum and size
-		auto size = stream.Read<uint64_t>();
-		auto stored_checksum = stream.Read<uint64_t>();
-		auto offset = stream.CurrentOffset();
-		auto file_size = stream.FileSize();
+			// read the checksum and size
+			auto size = stream.Read<uint64_t>();
+			auto stored_checksum = stream.Read<uint64_t>();
+			auto offset = stream.CurrentOffset();
+			auto file_size = stream.FileSize();
 
-		if (offset + size > file_size) {
-			throw SerializationException(
-			    "Corrupt WAL file: entry size exceeded remaining data in file at byte position %llu "
-			    "(found entry with size %llu bytes, file size %llu bytes)",
-			    offset, size, file_size);
+			if (offset + size > file_size) {
+				throw SerializationException(
+				    "Corrupt WAL file: entry size exceeded remaining data in file at byte position %llu "
+				    "(found entry with size %llu bytes, file size %llu bytes)",
+				    offset, size, file_size);
+			}
+
+			// allocate a buffer and read data into the buffer
+			auto buffer = unique_ptr<data_t[]>(new data_t[size]);
+			stream.ReadData(buffer.get(), size);
+
+			// compute and verify the checksum
+			auto computed_checksum = Checksum(buffer.get(), size);
+			if (stored_checksum != computed_checksum) {
+				throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+				                  "stored checksum %llu",
+				                  offset, computed_checksum, stored_checksum);
+			}
+
+			return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
 		}
 
-		// allocate a buffer and read data into the buffer
-		auto buffer = unique_ptr<data_t[]>(new data_t[size]);
-		stream.ReadData(buffer.get(), size);
+		if (state_p.wal_version == 3) {
 
-		// compute and verify the checksum
-		auto computed_checksum = Checksum(buffer.get(), size);
-		if (stored_checksum != computed_checksum) {
-			throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
-			                  "stored checksum %llu",
-			                  offset, computed_checksum, stored_checksum);
+			//! WAL is encrypted
+			//! TODO; a config flag, to encrypt the WAL
+			//! if wal_version is 3, this means that the WAL is encrypted
+			// we then first will need to decrypt the WAL
+			//! For encryption, the length field remains plaintext
+			//! After the length field, we store a 12-byte nonce
+			//! After the nonce, we store the checksum, followed by the actual entry
+			//! After the stored entry, we store a 16-byte nonce (for GCM).
+			//! a nonce is randomly generated for every block
+
+			// read the size (excluding the nonce, checksum and tag)
+			auto size = stream.Read<uint64_t>();
+
+			uint8_t nonce[MainHeader::AES_IV_LEN];
+			memset(nonce, 0, MainHeader::AES_IV_LEN);
+			stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
+
+			//! INPUT THE key?
+			auto derived_key = state_p.db.GetStorageManager().GetBlockManager().GetDerivedEncryptionKey();
+			auto encryption_state =
+			    SingleFileBlockManager::GetEncryptionUtil(state_p.db)->CreateEncryptionState(&derived_key);
+
+			//! Initialize the decryption
+			encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, &derived_key);
+
+			//! Allocate a decryption buffer
+			const auto ciphertext_size = size + sizeof(uint64_t);
+			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);
+			auto out_buffer = unique_ptr<data_t[]>(new data_t[size]);
+
+			stream.ReadData(buffer.get(), ciphertext_size);
+			encryption_state->Process(buffer.get(), ciphertext_size, buffer.get(), ciphertext_size);
+
+			//! read and verify the stored tag
+			uint8_t tag[MainHeader::AES_TAG_LEN];
+			memset(tag, 0, MainHeader::AES_TAG_LEN);
+			stream.ReadData(tag, MainHeader::AES_TAG_LEN);
+			encryption_state->Finalize(buffer.get(), ciphertext_size, tag, MainHeader::AES_TAG_LEN);
+
+			//! read the stored checksum
+			auto stored_checksum = Load<uint64_t>(buffer.get());
+			memcpy(out_buffer.get(), buffer.get() + sizeof(stored_checksum), size);
+
+			auto offset = stream.CurrentOffset();
+			auto file_size = stream.FileSize();
+
+			// compute and verify the checksum
+			auto computed_checksum = Checksum(out_buffer.get(), size);
+			if (stored_checksum != computed_checksum) {
+				throw IOException("Corrupt WAL file: entry at byte position %llu computed checksum %llu does not match "
+				                  "stored checksum %llu",
+				                  offset, computed_checksum, stored_checksum);
+			}
+
+			return WriteAheadLogDeserializer(state_p, std::move(out_buffer), size, deserialize_only);
 		}
-
-		return WriteAheadLogDeserializer(state_p, std::move(buffer), size, deserialize_only);
-
-		}
-
-		//! if wal_version is 3, this means that the WAL is encrypted
-		// we then first will need to decrypt the WAL
-		//! For encryption, the length field remains plaintext
-		//! Before the length field, we store a nonce (and tag for GCM?)
-		//! a nonce is randomly generated for every block
-
-		uint8_t nonce[MainHeader::AES_IV_LEN];
-		memset(nonce, 0, MainHeader::AES_IV_LEN);
-
-		uint8_t tag[MainHeader::AES_TAG_LEN];
-		memset(tag, 0, MainHeader::AES_TAG_LEN);
-
-		stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
-		stream.ReadData(tag, MainHeader::AES_TAG_LEN);
-
-		// read the size
-		auto size = stream.Read<uint64_t>();
-
-		//! decrypt
-		//! INPUT THE key?
-		auto derived_key = state_p.db.GetStorageManager().GetBlockManager().GetDerivedEncryptionKey();
-		auto encryption_state = GetEncryptionUtil(state_p.db)->CreateEncryptionState(&derived_key);
-		encryption_state->InitializeDecryption(nonce, MainHeader::AES_IV_LEN, nullptr);
-
-		//! Allocate a decryption buffer
-		auto buffer = unique_ptr<data_t[]>(new data_t[size]);
-		stream.ReadData(buffer.get(), size);
-
-		encryption_state->Process(buffer.get(), size, buffer.get(), size);
-		encryption_state->Finalize(buffer.get(), size, tag, MainHeader::AES_TAG_LEN);
-
-		//! store the checksum etc.
-		auto stored_checksum = stream.Read<uint64_t>();
-		auto offset = stream.CurrentOffset();
-		auto file_size = stream.FileSize();
 
 		if (state_p.wal_version != 3) {
 			throw IOException("Failed to read WAL of version %llu - can only read version 1, 2 and 3",
-		  state_p.wal_version);
+			                  state_p.wal_version);
 		}
 	}
 
@@ -219,6 +240,10 @@ private:
 	MemoryStream stream;
 	BinaryDeserializer deserializer;
 	bool deserialize_only;
+
+public:
+	static constexpr idx_t NONCE_LEN = 12;
+	static constexpr idx_t TAG_LEN = 16;
 };
 
 //===--------------------------------------------------------------------===//

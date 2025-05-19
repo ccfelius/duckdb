@@ -20,6 +20,9 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/single_file_block_manager.hpp"
+
+#include <fmt/core.h>
 
 namespace duckdb {
 
@@ -116,6 +119,7 @@ public:
 		if (!stream) {
 			stream = wal.Initialize();
 		}
+
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 		// compute the checksum over the entry
@@ -124,7 +128,64 @@ public:
 		stream->Write<uint64_t>(size);
 		stream->Write<uint64_t>(checksum);
 		// write data to the underlying stream
-		stream->WriteData(memory_stream.GetData(), memory_stream.GetPosition());
+		stream->WriteData(data, size);
+		// rewind the buffer
+		memory_stream.Rewind();
+	}
+
+	void FlushEncrypted() {
+
+		if (!stream) {
+			stream = wal.Initialize();
+		}
+
+		auto data = memory_stream.GetData();
+		auto size = memory_stream.GetPosition();
+
+		// compute the checksum over the entry
+		auto checksum = Checksum(data, size);
+
+		//! encrypt the entry
+		auto encryption_util = SingleFileBlockManager::GetEncryptionUtil(wal.GetDatabase());
+
+		// temp buffer
+		const idx_t cipher_size = size + sizeof(uint64_t);
+		std::unique_ptr<uint8_t[]> temp_buf(new uint8_t[cipher_size]);
+
+		// generate nonce
+		uint8_t nonce[MainHeader::AES_IV_LEN];
+		memset(nonce, 0, MainHeader::AES_IV_LEN);
+
+		auto encryption_key = wal.GetDatabase().GetStorageManager().GetBlockManager().GetDerivedEncryptionKey();
+		auto encryption_state = encryption_util->CreateEncryptionState(&encryption_key);
+
+		// get the key temporarily in a rather unsafe way (for now)
+		encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
+
+		stream->Write<uint64_t>(size);
+		stream->WriteData(nonce, MainHeader::AES_NONCE_LEN);
+
+		// store the checksum in the temp buffer
+		memcpy(temp_buf.get(), &checksum, sizeof(checksum));
+		// checksum + data
+		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
+
+		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN, &encryption_key);
+		encryption_state->Process(temp_buf.get(), cipher_size, temp_buf.get(), cipher_size);
+
+		// now the tag to finalize
+		// generate nonce
+		uint8_t tag[MainHeader::AES_TAG_LEN];
+		memset(tag, 0, MainHeader::AES_TAG_LEN);
+
+		encryption_state->Finalize(temp_buf.get(), cipher_size, tag, MainHeader::AES_TAG_LEN);
+
+		// write data to the underlying stream
+		stream->WriteData(temp_buf.get(), cipher_size);
+
+		// Write the tag to the stream
+		stream->WriteData(tag, MainHeader::AES_TAG_LEN);
+
 		// rewind the buffer
 		memory_stream.Rewind();
 	}

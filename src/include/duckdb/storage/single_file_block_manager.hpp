@@ -119,6 +119,8 @@ public:
 	//! to detect inconsistencies with the file header.
 	void LoadExistingDatabase();
 
+	static shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db);
+
 	//! lock and unlock encryption key
 	void LockEncryptionKey() const;
 	void UnlockEncryptionKey() const;
