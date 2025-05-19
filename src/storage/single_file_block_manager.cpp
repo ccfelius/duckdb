@@ -379,9 +379,6 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, c
 			throw IOException("Master Key found in cache, but cannot open the database file due to incorrect master "
 			                  "key. Try to open an encrypted database file with ATTACH.");
 		}
-		if (is_master_key) {
-			std::cout << "trying to use master key but " << std::endl;
-		}
 		throw IOException("Wrong encryption key used to open the database file");
 	}
 
@@ -501,6 +498,16 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 	auto &config = DBConfig::GetConfig(db.GetDatabase());
 
+	//! also todo; how to reeencrypt with a master key?
+	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
+		//! TODO, what is the behaviour we want here?
+		// database is not encrypted, but is tried to be opened with a key
+		if (config.options.full_encryption) {
+			throw CatalogException("A master key is found, but database \"%s\" is not encrypted", path);
+		}
+		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
+	}
+
 	if (main_header.IsEncrypted() && !options.encryption_options.encryption_enabled) {
 		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 	} else if (main_header.IsEncrypted() && options.encryption_options.encryption_enabled && encryption_on_attach) {
@@ -532,14 +539,6 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 			throw CatalogException(
 			    "Full encryption is set, but cannot encrypt or decrypt a database without a master key", path);
 		}
-	}
-
-	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
-		//! write existing database
-		//! TODO
-		//! if master key is specified, existing database will also be encrypted
-		// database is not encrypted, but is tried to be opened with a key
-		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
 	}
 
 	options.version_number = main_header.version_number;
