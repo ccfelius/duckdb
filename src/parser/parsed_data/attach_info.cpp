@@ -16,6 +16,7 @@ bool ValidKey(const string &key) {
 
 StorageOptions AttachInfo::GetStorageOptions() const {
 	StorageOptions storage_options;
+	string storage_version_user_provided = "";
 	for (auto &entry : options) {
 		if (entry.first == "block_size") {
 			// Extract the block allocation size. This is NOT the actual memory available on a block (block_size),
@@ -29,14 +30,24 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			storage_options.encryption_key = entry.second.ToString();
 			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 			storage_options.encryption = true;
-			// set storage version to v1.3.0
-			storage_options.storage_version = SerializationCompatibility::FromString("v1.3.0").serialization_version;
 		} else if (entry.first == "row_group_size") {
 			storage_options.row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
+			storage_version_user_provided = entry.second.ToString();
 			storage_options.storage_version =
 			    SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
 		}
+	}
+	if (storage_options.encryption && (!storage_options.storage_version.IsValid() ||
+	                                   storage_options.storage_version.GetIndex() <
+	                                       SerializationCompatibility::FromString("v1.3.0").serialization_version)) {
+		if (!storage_version_user_provided.empty()) {
+			throw InvalidInputException(
+			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.3.0) are not compatible",
+			    storage_version_user_provided);
+		}
+		// set storage version to v1.3.0
+		storage_options.storage_version = SerializationCompatibility::FromString("v1.3.0").serialization_version;
 	}
 	return storage_options;
 }

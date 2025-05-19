@@ -94,7 +94,7 @@ void WriteAheadLog::Delete() {
 	}
 	writer.reset();
 	auto &fs = FileSystem::Get(database);
-	fs.RemoveFile(wal_path);
+	fs.TryRemoveFile(wal_path);
 	init_state = WALInitState::NO_WAL;
 	wal_size = 0;
 }
