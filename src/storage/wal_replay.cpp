@@ -29,6 +29,7 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/common/encryption_key_manager.hpp"
 
 namespace duckdb {
 

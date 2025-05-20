@@ -46,7 +46,7 @@ class EncryptionKeyManager : public ObjectCacheEntry {
 
 public:
 	explicit EncryptionKeyManager() = default;
-	virtual ~EncryptionKeyManager() = default;
+	~EncryptionKeyManager() override = default;
 
 public:
 	// Initialize the EncryptionKeyManager with the DB instance
