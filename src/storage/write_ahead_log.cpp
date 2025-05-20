@@ -143,9 +143,9 @@ public:
 		auto checksum = Checksum(data, size);
 
 		auto &database = wal.GetDatabase();
-		auto keys = EncryptionKeyManager::Get(database.GetDatabase());
-		auto encryption_state =
-		    wal.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(&keys.GetKey(database.GetEncryptionKeyId()));
+		auto &keys = EncryptionKeyManager::Get(database.GetDatabase());
+		auto &derived_key = keys.GetKey(database.GetEncryptionKeyId());
+		auto encryption_state = wal.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(&derived_key);
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);
@@ -167,8 +167,8 @@ public:
 		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
 
 		//! encrypt the temp buf
-		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN,
-		                                       &keys.GetKey(database.GetEncryptionKeyId()));
+		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN, &derived_key);
+
 		encryption_state->Process(temp_buf.get(), ciphertext_size, temp_buf.get(), ciphertext_size);
 
 		//! calculate the tag (for GCM)

@@ -135,12 +135,11 @@ public:
 			memset(nonce, 0, MainHeader::AES_IV_LEN);
 			stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
 
+			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
+			auto &derived_key = keys.GetKey(state_p.db.GetEncryptionKeyId());
 			//! initialize the decryption
-			auto keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
-			auto encryption_state =
-			    state_p.db.GetEncryptionUtil()->CreateEncryptionState(&keys.GetKey(state_p.db.GetEncryptionKeyId()));
-			encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN,
-			                                       &keys.GetKey(state_p.db.GetEncryptionKeyId()));
+			auto encryption_state = state_p.db.GetEncryptionUtil()->CreateEncryptionState(&derived_key);
+			encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, &derived_key);
 
 			//! Allocate a decryption buffer
 			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);

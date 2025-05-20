@@ -404,15 +404,12 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 
 		if (encryption_on_attach) {
 			//! key given with ATTACH
-			std::cout << "key given with attach" << std::endl;
 			derived_key = EncryptionKeyManager::DeriveKey(*encryption_key, salt);
 		} else if (!config.options.user_key.empty()) {
 			//! user key given in cli (with -key '')
-			std::cout << "key given with USER KEY" << std::endl;
 			derived_key = EncryptionKeyManager::DeriveKey(config.options.user_key, salt);
 		} else if (config.options.full_encryption && !config.options.master_key.empty()) {
 			//! master key used to encrypt/decrypt all files (in cli with -master_key '')
-			std::cout << "key given with MASTER KEY" << std::endl;
 			derived_key = EncryptionKeyManager::DeriveKey(config.options.master_key, salt);
 		} else {
 			throw CatalogException("Cannot create a new database without a key");
