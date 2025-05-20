@@ -8,6 +8,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -24,6 +25,7 @@
 namespace duckdb {
 
 constexpr uint64_t WAL_VERSION_NUMBER = 2;
+constexpr uint64_t WAL_ENCRYPTED_VERSION_NUMBER = 3;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size,
                              WALInitState init_state)
@@ -115,6 +117,11 @@ public:
 		if (!stream) {
 			stream = wal.Initialize();
 		}
+
+		if (wal.IsEncrypted()) {
+			return FlushEncrypted();
+		}
+
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 		// compute the checksum over the entry
@@ -124,6 +131,57 @@ public:
 		stream->Write<uint64_t>(checksum);
 		// write data to the underlying stream
 		stream->WriteData(memory_stream.GetData(), memory_stream.GetPosition());
+		// rewind the buffer
+		memory_stream.Rewind();
+	}
+
+	void FlushEncrypted() {
+		auto data = memory_stream.GetData();
+		auto size = memory_stream.GetPosition();
+
+		// compute the checksum over the entry
+		auto checksum = Checksum(data, size);
+
+		auto &database = wal.GetDatabase();
+		auto keys = EncryptionKeyManager::Get(database.GetDatabase());
+		auto encryption_state =
+		    wal.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(&keys.GetKey(database.GetEncryptionKeyId()));
+
+		// temp buffer
+		const idx_t ciphertext_size = size + sizeof(uint64_t);
+		std::unique_ptr<uint8_t[]> temp_buf(new uint8_t[ciphertext_size]);
+
+		// generate nonce
+		uint8_t nonce[MainHeader::AES_IV_LEN];
+		memset(nonce, 0, MainHeader::AES_IV_LEN);
+
+		// get the key temporarily in a rather unsafe way (for now)
+		encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
+
+		stream->Write<uint64_t>(size);
+		stream->WriteData(nonce, MainHeader::AES_NONCE_LEN);
+
+		//! store the checksum in the temp buffer
+		memcpy(temp_buf.get(), &checksum, sizeof(checksum));
+		//! checksum + entry in the temp buf
+		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
+
+		//! encrypt the temp buf
+		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN,
+		                                       &keys.GetKey(database.GetEncryptionKeyId()));
+		encryption_state->Process(temp_buf.get(), ciphertext_size, temp_buf.get(), ciphertext_size);
+
+		//! calculate the tag (for GCM)
+		uint8_t tag[MainHeader::AES_TAG_LEN];
+		memset(tag, 0, MainHeader::AES_TAG_LEN);
+		encryption_state->Finalize(temp_buf.get(), ciphertext_size, tag, MainHeader::AES_TAG_LEN);
+
+		// write data to the underlying stream
+		stream->WriteData(temp_buf.get(), ciphertext_size);
+
+		// Write the tag to the stream
+		stream->WriteData(tag, MainHeader::AES_TAG_LEN);
+
 		// rewind the buffer
 		memory_stream.Rewind();
 	}

@@ -54,18 +54,6 @@ void DeserializeEncryptionData(ReadStream &stream, data_t *dest, idx_t size) {
 	stream.ReadData(dest, size);
 }
 
-shared_ptr<EncryptionUtil> GetEncryptionUtil(AttachedDatabase &db) {
-	auto encryption_util = db.GetDatabase().config.encryption_util;
-
-	if (encryption_util) {
-		encryption_util = db.GetDatabase().config.encryption_util;
-	} else {
-		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
-	}
-
-	return encryption_util;
-}
-
 void GenerateSalt(AttachedDatabase &db, uint8_t *salt, StorageManagerOptions &options) {
 	memset(salt, 0, MainHeader::SALT_LEN);
 	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(salt, MainHeader::SALT_LEN);
@@ -291,7 +279,7 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 
 void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header) const {
 	// Encrypt canary with the derived key
-	auto encryption_state = GetEncryptionUtil(db)->CreateEncryptionState(&GetKeyFromCache());
+	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(&GetKeyFromCache());
 	EncryptCanary(main_header, encryption_state, &GetKeyFromCache());
 }
 
@@ -351,6 +339,7 @@ void SingleFileBlockManager::AddKeyToCache(string &key, const string &key_name, 
 void SingleFileBlockManager::AddKeyToCache(string &key, bool wipe) {
 	auto &keys = EncryptionKeyManager::Get(db.GetDatabase());
 	options.encryption_options.derived_key_id = keys.GenerateRandomKeyID();
+	db.SetEncryptionKeyId(options.encryption_options.derived_key_id);
 	if (!keys.HasKey(options.encryption_options.derived_key_id)) {
 		keys.AddKey(options.encryption_options.derived_key_id, key, wipe);
 	} else if (wipe) {
@@ -361,7 +350,7 @@ void SingleFileBlockManager::AddKeyToCache(string &key, bool wipe) {
 }
 
 bool SingleFileBlockManager::CheckEncryptionKey(MainHeader &main_header, const string &derived_key) const {
-	return DecryptCanary(main_header, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key), derived_key);
+	return DecryptCanary(main_header, db.GetEncryptionUtil()->CreateEncryptionState(&derived_key), derived_key);
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, const string &user_key,
@@ -403,6 +392,9 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 	if (options.encryption_options.encryption_enabled) {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 
+		// automatically encrypt the WAL
+		config.options.encrypt_wal = true;
+
 		//! we generate a random salt for each password
 		uint8_t salt[MainHeader::SALT_LEN];
 		GenerateSalt(db, salt, options);
@@ -411,7 +403,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 		string derived_key;
 
 		if (encryption_on_attach) {
-			//! key given with attach
+			//! key given with ATTACH
 			std::cout << "key given with attach" << std::endl;
 			derived_key = EncryptionKeyManager::DeriveKey(*encryption_key, salt);
 		} else if (!config.options.user_key.empty()) {
@@ -498,9 +490,8 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 	auto &config = DBConfig::GetConfig(db.GetDatabase());
 
-	//! also todo; how to reeencrypt with a master key?
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
-		//! TODO, what is the behaviour we want here?
+		//! TODO; what is the behaviour that we want here?
 		// database is not encrypted, but is tried to be opened with a key
 		if (config.options.full_encryption) {
 			throw CatalogException("A master key is found, but database \"%s\" is not encrypted", path);
@@ -512,30 +503,26 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 	} else if (main_header.IsEncrypted() && options.encryption_options.encryption_enabled && encryption_on_attach) {
 		// encryption is set, check if the given key upon attach is correct
-		std::cout << "Checking Encryption key with ATTACH" << std::endl;
 		CheckAndAddEncryptionKey(main_header, *encryption_key, false);
 	} else if (main_header.IsEncrypted() && !config.options.user_key.empty()) {
 		//! A new (encrypted) database is added through the CLI
 		//! If a user key is given, let's try this key
 		//! If it succeeds, we put the key in cache
-		std::cout << "test with USER KEY " << std::endl;
 		CheckAndAddEncryptionKey(main_header, config.options.user_key);
 	} else if (config.options.full_encryption) {
 		if (ContainsKey("master_key")) {
 			//! If the master key is already in cache
 			//! Check if the derived key is correct
-			//! And put the derived key in cache, if it is correct
-			std::cout << "test with MASTER KEY in cache " << std::endl;
+			//! And put the derived key in cache - if it is correct
 			CheckAndAddEncryptionKey(main_header, GetKeyFromCache("master_key"), true);
 		} else if (!config.options.master_key.empty() && !ContainsKey("master_key")) {
-			// If a master key is present, and cache does not contain master key
-			// add master key to cache (note; in plaintext)
+			//! if a master key is present, and cache does not contain master key
+			//! add master key to cache (note; in plaintext)
 			AddKeyToCache(config.options.master_key, "master_key", true);
-			// Check if master key is correct, and add the derived key
-			std::cout << "test with MASTER KEY added to cache " << std::endl;
+			//! Check if master key is correct, and add the derived key
 			CheckAndAddEncryptionKey(main_header, GetKeyFromCache("master_key"), true);
 		} else if (!ContainsKey("master_key")) {
-			// no master key given and key is not in cache, but full encryption is set
+			//! no master key given and key is not in cache, but full encryption is set
 			throw CatalogException(
 			    "Full encryption is set, but cannot encrypt or decrypt a database without a master key", path);
 		}
@@ -569,7 +556,7 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const {
 	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
 
-	auto encryption_util = GetEncryptionUtil(db);
+	auto encryption_util = db.GetEncryptionUtil();
 	auto encryption_state = encryption_util->CreateEncryptionState(&GetKeyFromCache());
 
 	uint8_t tag[MainHeader::AES_TAG_LEN];
@@ -604,11 +591,10 @@ void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_b
 	memcpy(block_offset_internal + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
 }
 
-// Everything is just block.internalbuffer, we should change that
-// void SingleFileBlockManager::DecryptBuffer(FileBuffer &block, uint64_t delta) const {
 void SingleFileBlockManager::DecryptBuffer(data_ptr_t internal_buffer, uint64_t block_size, uint64_t delta) const {
+
 	//! initialize encryption state
-	auto encryption_util = GetEncryptionUtil(db);
+	auto encryption_util = db.GetEncryptionUtil();
 	auto encryption_state = encryption_util->CreateEncryptionState(&GetKeyFromCache());
 
 	//! load the stored nonce

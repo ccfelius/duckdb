@@ -22,6 +22,7 @@ class StorageManager;
 class TransactionManager;
 class StorageExtension;
 class DatabaseManager;
+class EncryptionUtil;
 
 struct AttachInfo;
 
@@ -75,6 +76,16 @@ public:
 		return db;
 	}
 
+	shared_ptr<EncryptionUtil> GetEncryptionUtil();
+
+	void SetEncryptionKeyId(const string &key_id) {
+		encryption_key_id = key_id;
+	};
+
+	string &GetEncryptionKeyId() {
+		return encryption_key_id;
+	};
+
 	optional_ptr<StorageExtension> GetStorageExtension() {
 		return storage_extension;
 	}
@@ -103,6 +114,9 @@ private:
 	optional_ptr<StorageExtension> storage_extension;
 	bool is_initial_database = false;
 	bool is_closed = false;
+
+	//! key for encryption
+	string encryption_key_id;
 };
 
 } // namespace duckdb

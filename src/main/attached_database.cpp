@@ -10,6 +10,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database_path_and_type.hpp"
+#include "duckdb/common/encryption_state.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
@@ -186,6 +188,18 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOp
 	if (storage) {
 		storage->Initialize(options);
 	}
+}
+
+shared_ptr<EncryptionUtil> AttachedDatabase::GetEncryptionUtil() {
+	auto encryption_util = db.config.encryption_util;
+
+	if (encryption_util) {
+		encryption_util = db.config.encryption_util;
+	} else {
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	}
+
+	return encryption_util;
 }
 
 StorageManager &AttachedDatabase::GetStorageManager() {
