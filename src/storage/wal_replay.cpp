@@ -113,26 +113,33 @@ public:
 		}
 
 		if (state_p.wal_version == 3) {
-
 			//! WAL is encrypted
-			//! TODO; a config flag, to encrypt the WAL
-			//! if wal_version is 3, this means that the WAL is encrypted
-			// we then first will need to decrypt the WAL
 			//! For encryption, the length field remains plaintext
-			//! After the length field, we store a 12-byte nonce
+			//! After the length field, we store a 12-byte nonce (for GCM)
 			//! After the nonce, we store the checksum, followed by the actual entry
 			//! After the stored entry, we store a 16-byte nonce (for GCM).
 			//! a nonce is randomly generated for every block
 
 			// read the size (excluding the nonce, checksum and tag)
 			auto size = stream.Read<uint64_t>();
+			const auto ciphertext_size = size + sizeof(uint64_t);
+
+			auto offset = stream.CurrentOffset();
+			auto file_size = stream.FileSize();
+
+			if (offset + MainHeader::AES_NONCE_LEN + ciphertext_size + MainHeader::AES_TAG_LEN > file_size) {
+				throw SerializationException(
+				    "Corrupt Encrypted WAL file: entry size exceeded remaining data in file at byte position %llu "
+				    "(found entry with size %llu bytes, file size %llu bytes)",
+				    offset, size, file_size);
+			}
 
 			uint8_t nonce[MainHeader::AES_IV_LEN];
 			memset(nonce, 0, MainHeader::AES_IV_LEN);
 			stream.ReadData(nonce, MainHeader::AES_NONCE_LEN);
 
-			//! INPUT THE key?
-			auto derived_key = state_p.db.GetStorageManager().GetBlockManager().GetDerivedEncryptionKey();
+			// FIX the key for now
+			const string derived_key = "01234567891123450123456789112345";
 			auto encryption_state =
 			    SingleFileBlockManager::GetEncryptionUtil(state_p.db)->CreateEncryptionState(&derived_key);
 
@@ -140,7 +147,6 @@ public:
 			encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, &derived_key);
 
 			//! Allocate a decryption buffer
-			const auto ciphertext_size = size + sizeof(uint64_t);
 			auto buffer = unique_ptr<data_t[]>(new data_t[ciphertext_size]);
 			auto out_buffer = unique_ptr<data_t[]>(new data_t[size]);
 
@@ -151,14 +157,14 @@ public:
 			uint8_t tag[MainHeader::AES_TAG_LEN];
 			memset(tag, 0, MainHeader::AES_TAG_LEN);
 			stream.ReadData(tag, MainHeader::AES_TAG_LEN);
+
 			encryption_state->Finalize(buffer.get(), ciphertext_size, tag, MainHeader::AES_TAG_LEN);
 
 			//! read the stored checksum
 			auto stored_checksum = Load<uint64_t>(buffer.get());
-			memcpy(out_buffer.get(), buffer.get() + sizeof(stored_checksum), size);
 
-			auto offset = stream.CurrentOffset();
-			auto file_size = stream.FileSize();
+			//! copy the decrypted data to the output buffer
+			memcpy(out_buffer.get(), buffer.get() + sizeof(stored_checksum), size);
 
 			// compute and verify the checksum
 			auto computed_checksum = Checksum(out_buffer.get(), size);
@@ -171,10 +177,9 @@ public:
 			return WriteAheadLogDeserializer(state_p, std::move(out_buffer), size, deserialize_only);
 		}
 
-		if (state_p.wal_version != 3) {
-			throw IOException("Failed to read WAL of version %llu - can only read version 1, 2 and 3",
-			                  state_p.wal_version);
-		}
+		// we cannot read this WAL version
+		throw IOException("Failed to read WAL of version %llu - can only read version 1, 2 and 3 (Encrypted)",
+		                  state_p.wal_version);
 	}
 
 	bool ReplayEntry() {

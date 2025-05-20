@@ -26,8 +26,8 @@
 
 namespace duckdb {
 
-// constexpr uint64_t WAL_VERSION_NUMBER = 2;
-constexpr uint64_t WAL_VERSION_NUMBER = 3;
+constexpr uint64_t WAL_VERSION_NUMBER = 2;
+constexpr uint64_t WAL_ENCRYPTED_VERSION_NUMBER = 3;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size,
                              WALInitState init_state)
@@ -120,6 +120,10 @@ public:
 			stream = wal.Initialize();
 		}
 
+		if (wal.IsEncrypted()) {
+			return FlushEncrypted();
+		}
+
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 		// compute the checksum over the entry
@@ -134,11 +138,6 @@ public:
 	}
 
 	void FlushEncrypted() {
-
-		if (!stream) {
-			stream = wal.Initialize();
-		}
-
 		auto data = memory_stream.GetData();
 		auto size = memory_stream.GetPosition();
 
@@ -156,8 +155,12 @@ public:
 		uint8_t nonce[MainHeader::AES_IV_LEN];
 		memset(nonce, 0, MainHeader::AES_IV_LEN);
 
-		auto encryption_key = wal.GetDatabase().GetStorageManager().GetBlockManager().GetDerivedEncryptionKey();
-		auto encryption_state = encryption_util->CreateEncryptionState(&encryption_key);
+		//! hardcode for now
+		const string key = "01234567891123450123456789112345";
+		// uint8_t encryption_key[32];
+		// memcpy(encryption_key, key.data(), 32);
+
+		auto encryption_state = encryption_util->CreateEncryptionState(&key);
 
 		// get the key temporarily in a rather unsafe way (for now)
 		encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
@@ -170,11 +173,10 @@ public:
 		// checksum + data
 		memcpy(temp_buf.get() + sizeof(checksum), memory_stream.GetData(), memory_stream.GetPosition());
 
-		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN, &encryption_key);
+		encryption_state->InitializeEncryption(nonce, MainHeader::AES_NONCE_LEN, &key);
 		encryption_state->Process(temp_buf.get(), cipher_size, temp_buf.get(), cipher_size);
 
 		// now the tag to finalize
-		// generate nonce
 		uint8_t tag[MainHeader::AES_TAG_LEN];
 		memset(tag, 0, MainHeader::AES_TAG_LEN);
 
@@ -244,8 +246,24 @@ void WriteAheadLog::WriteVersion() {
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
-	serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+
+	if (IsEncrypted()) {
+		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
+	} else {
+		serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+	}
+
 	serializer.End();
+}
+
+bool WriteAheadLog::IsEncrypted() const {
+	// write the version marker
+	// note that we explicitly do not checksum the version entry
+	const auto &config = DBConfig::GetConfig(database.GetDatabase());
+	if (config.options.encrypt_wal) {
+		return true;
+	}
+	return false;
 }
 
 void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {

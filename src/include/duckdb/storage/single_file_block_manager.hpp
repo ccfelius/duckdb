@@ -125,8 +125,8 @@ public:
 	void LockEncryptionKey() const;
 	void UnlockEncryptionKey() const;
 
-	//! Get Derived Encryption key
-	string &GetDerivedEncryptionKey() override;
+	// //! Get Derived Encryption key
+	// string &GetDerivedEncryptionKey() override;
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;

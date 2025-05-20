@@ -66,6 +66,8 @@ public:
 	bool Initialized() const;
 	//! Initializes the file of the WAL by creating the file writer.
 	BufferedFileWriter &Initialize();
+	//! Determines if WAL should be encrypted
+	bool IsEncrypted() const;
 
 	void WriteVersion();
 

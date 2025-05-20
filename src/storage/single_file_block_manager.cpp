@@ -806,11 +806,11 @@ bool SingleFileBlockManager::IsRemote() {
 	return !handle->OnDiskFile();
 }
 
-string &SingleFileBlockManager::GetDerivedEncryptionKey() {
-	//! we should make the encryption key private somehow.
-	//! Otherwise we can manipulate it (albeit accedentily)
-	return options.encryption_options.derived_key;
-}
+// string &SingleFileBlockManager::GetDerivedEncryptionKey() {
+// 	//! we should make the encryption key private somehow.
+// 	//! Otherwise we can manipulate it (albeit accedentily)
+// 	return options.encryption_options.derived_key;
+// }
 
 unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
