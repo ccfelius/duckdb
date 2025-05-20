@@ -28,6 +28,9 @@ namespace duckdb {
 
 constexpr uint64_t WAL_VERSION_NUMBER = 2;
 constexpr uint64_t WAL_ENCRYPTED_VERSION_NUMBER = 3;
+constexpr uint64_t WAL_ENCRYPTED_GCM = WAL_ENCRYPTED_VERSION_NUMBER;
+constexpr uint64_t WAL_ENCRYPTED_CTR = 4;
+constexpr uint64_t WAL_ENCRYPTED_CBC = 5;
 
 WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path, idx_t wal_size,
                              WALInitState init_state)
@@ -208,6 +211,8 @@ public:
 		// write a version marker if none has been written yet
 		wal.WriteVersion();
 		serializer.Begin();
+
+		//! do we also want to encrypt the wal_type?
 		serializer.WriteProperty(100, "wal_type", wal_type);
 	}
 
