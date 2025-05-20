@@ -240,7 +240,11 @@ void WriteAheadLog::WriteVersion() {
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
-	serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+	if (IsEncrypted()) {
+		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
+	} else {
+		serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+	}
 	serializer.End();
 }
 
@@ -248,6 +252,11 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 	WriteAheadLogSerializer serializer(*this, WALType::CHECKPOINT);
 	serializer.WriteProperty(101, "meta_block", meta_block);
 	serializer.End();
+}
+
+bool WriteAheadLog::IsEncrypted() const {
+	const auto &config = DBConfig::GetConfig(database.GetDatabase());
+	return config.options.encrypt_wal;
 }
 
 //===--------------------------------------------------------------------===//
