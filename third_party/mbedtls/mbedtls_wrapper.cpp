@@ -274,7 +274,6 @@ void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(duckdb::data_ptr_
 	}
 }
 
-
 void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
 	GenerateRandomDataStatic(data, len);
 }
