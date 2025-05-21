@@ -83,7 +83,9 @@ bool EncryptionKeyManager::HasKey(const string &key_name) const {
 }
 
 const string &EncryptionKeyManager::GetKey(const string &key_name) const {
-	D_ASSERT(HasKey(key_name));
+	if (!HasKey(key_name)) {
+		throw IOException("Key ID not found in cache");
+	};
 	auto &key = derived_keys.at(key_name);
 	return key.Get();
 }

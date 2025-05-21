@@ -8,6 +8,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/encryption_key_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
