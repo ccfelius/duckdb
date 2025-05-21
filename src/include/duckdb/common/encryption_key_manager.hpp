@@ -13,6 +13,7 @@
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #endif
 
 namespace duckdb {
