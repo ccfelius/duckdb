@@ -412,15 +412,12 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 
 		if (encryption_on_attach) {
 			//! key given with attach
-			std::cout << "key given with attach" << std::endl;
 			derived_key = EncryptionKeyManager::DeriveKey(*encryption_key, salt);
 		} else if (!config.options.user_key.empty()) {
 			//! user key given in cli (with -key '')
-			std::cout << "key given with USER KEY" << std::endl;
 			derived_key = EncryptionKeyManager::DeriveKey(config.options.user_key, salt);
 		} else if (config.options.full_encryption && !config.options.master_key.empty()) {
 			//! master key used to encrypt/decrypt all files (in cli with -master_key '')
-			std::cout << "key given with MASTER KEY" << std::endl;
 			derived_key = EncryptionKeyManager::DeriveKey(config.options.master_key, salt);
 		} else {
 			throw CatalogException("Cannot create a new database without a key");
@@ -498,7 +495,6 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer - delta);
 	auto &config = DBConfig::GetConfig(db.GetDatabase());
 
-	//! also todo; how to reeencrypt with a master key?
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		//! TODO, what is the behaviour we want here?
 		// database is not encrypted, but is tried to be opened with a key
@@ -512,27 +508,23 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 	} else if (main_header.IsEncrypted() && options.encryption_options.encryption_enabled && encryption_on_attach) {
 		// encryption is set, check if the given key upon attach is correct
-		std::cout << "Checking Encryption key with ATTACH" << std::endl;
 		CheckAndAddEncryptionKey(main_header, *encryption_key, false);
 	} else if (main_header.IsEncrypted() && !config.options.user_key.empty()) {
 		//! A new (encrypted) database is added through the CLI
 		//! If a user key is given, let's try this key
 		//! If it succeeds, we put the key in cache
-		std::cout << "test with USER KEY " << std::endl;
 		CheckAndAddEncryptionKey(main_header, config.options.user_key);
 	} else if (config.options.full_encryption) {
 		if (ContainsKey("master_key")) {
 			//! If the master key is already in cache
 			//! Check if the derived key is correct
 			//! And put the derived key in cache, if it is correct
-			std::cout << "test with MASTER KEY in cache " << std::endl;
 			CheckAndAddEncryptionKey(main_header, GetKeyFromCache("master_key"), true);
 		} else if (!config.options.master_key.empty() && !ContainsKey("master_key")) {
 			// If a master key is present, and cache does not contain master key
 			// add master key to cache (note; in plaintext)
 			AddKeyToCache(config.options.master_key, "master_key", true);
 			// Check if master key is correct, and add the derived key
-			std::cout << "test with MASTER KEY added to cache " << std::endl;
 			CheckAndAddEncryptionKey(main_header, GetKeyFromCache("master_key"), true);
 		} else if (!ContainsKey("master_key")) {
 			// no master key given and key is not in cache, but full encryption is set
