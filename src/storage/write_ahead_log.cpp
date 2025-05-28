@@ -145,7 +145,7 @@ public:
 		auto &database = wal.GetDatabase();
 		auto &keys = EncryptionKeyManager::Get(database.GetDatabase());
 		auto &derived_key = keys.GetKey(database.GetEncryptionKeyId());
-		auto encryption_state = wal.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(&derived_key);
+		auto encryption_state = database.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(&derived_key);
 
 		// temp buffer
 		const idx_t ciphertext_size = size + sizeof(uint64_t);

@@ -127,11 +127,17 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_ENCRYPTION_KEY) {
 			//! todo, make sure that pwd is a valid null-terminated string or nullptr
 			config.options.user_key = password;
+			//! encrypt wal and temp files by default (database wide configuration)
+			config.options.encrypt_wal = true;
+			config.options.encrypt_temp_files = true;
 		}
 		if (flags & DUCKDB_MASTER_KEY) {
 			config.options.full_encryption = true;
 			//! todo, make sure that pwd is a valid null-terminated string or nullptr
 			config.options.master_key = password;
+			//! encrypt wal and temp files by default (database wide configuration)
+			config.options.encrypt_wal = true;
+			config.options.encrypt_temp_files = true;
 		}
 		config.error_manager->AddCustomError(
 		    ErrorType::UNSIGNED_EXTENSION,

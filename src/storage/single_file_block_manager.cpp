@@ -279,7 +279,7 @@ MainHeader ConstructMainHeader(idx_t version_number) {
 
 void SingleFileBlockManager::StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header) const {
 	// Encrypt canary with the derived key
-	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(&GetKeyFromCache());
+	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(&GetKeyFromCache());
 	EncryptCanary(main_header, encryption_state, &GetKeyFromCache());
 }
 
@@ -350,7 +350,8 @@ void SingleFileBlockManager::AddKeyToCache(string &key, bool wipe) {
 }
 
 bool SingleFileBlockManager::CheckEncryptionKey(MainHeader &main_header, const string &derived_key) const {
-	return DecryptCanary(main_header, db.GetEncryptionUtil()->CreateEncryptionState(&derived_key), derived_key);
+	return DecryptCanary(main_header, db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(&derived_key),
+	                     derived_key);
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, const string &user_key,
@@ -392,8 +393,9 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<string> encryption_k
 	if (options.encryption_options.encryption_enabled) {
 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 
-		// automatically encrypt the WAL
+		// automatically encrypt the WAL and temp files
 		config.options.encrypt_wal = true;
+		config.options.encrypt_temp_files = true;
 
 		//! we generate a random salt for each password
 		uint8_t salt[MainHeader::SALT_LEN];
@@ -553,7 +555,7 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const {
 	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
 
-	auto encryption_util = db.GetEncryptionUtil();
+	auto encryption_util = db.GetDatabase().GetEncryptionUtil();
 	auto encryption_state = encryption_util->CreateEncryptionState(&GetKeyFromCache());
 
 	uint8_t tag[MainHeader::AES_TAG_LEN];
@@ -591,7 +593,7 @@ void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_b
 void SingleFileBlockManager::DecryptBuffer(data_ptr_t internal_buffer, uint64_t block_size, uint64_t delta) const {
 
 	//! initialize encryption state
-	auto encryption_util = db.GetEncryptionUtil();
+	auto encryption_util = db.GetDatabase().GetEncryptionUtil();
 	auto encryption_state = encryption_util->CreateEncryptionState(&GetKeyFromCache());
 
 	//! load the stored nonce
@@ -617,8 +619,7 @@ void SingleFileBlockManager::DecryptBuffer(data_ptr_t internal_buffer, uint64_t 
 	}
 
 	//! check the tag
-	aes_res =
-	    encryption_state->Finalize(internal_buffer + delta, 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
+	encryption_state->Finalize(internal_buffer + delta, 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
 }
 
 void SingleFileBlockManager::CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header) const {

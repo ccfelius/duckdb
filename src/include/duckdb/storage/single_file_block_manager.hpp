@@ -15,6 +15,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
@@ -24,22 +25,7 @@ struct MetadataHandle;
 
 struct EncryptionOptions {
 
-	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
-
 	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
-
-	string CipherToString(CipherType cipher_p) const {
-		switch (cipher_p) {
-		case GCM:
-			return "gcm";
-		case CTR:
-			return "ctr";
-		case CBC:
-			return "cbc";
-		default:
-			return "unknown";
-		}
-	}
 
 	string KDFToString(KeyDerivationFunction kdf_p) const {
 		switch (kdf_p) {

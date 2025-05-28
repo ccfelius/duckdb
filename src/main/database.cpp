@@ -545,6 +545,18 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 	return SettingLookupResult(SettingScope::GLOBAL);
 }
 
+shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() const {
+	shared_ptr<EncryptionUtil> encryption_util;
+
+	if (encryption_util) {
+		encryption_util = config.encryption_util;
+	} else {
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
+	}
+
+	return encryption_util;
+}
+
 ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
 }

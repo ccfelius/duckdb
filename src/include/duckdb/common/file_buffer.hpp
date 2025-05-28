@@ -72,7 +72,6 @@ public:
 		return header_size;
 	}
 
-
 	struct MemoryRequirement {
 		idx_t alloc_size;
 		idx_t header_size;

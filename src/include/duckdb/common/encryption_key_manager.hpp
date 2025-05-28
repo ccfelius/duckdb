@@ -70,6 +70,7 @@ public:
 public:
 	static string DeriveKey(const string &user_key, data_ptr_t salt);
 	static string KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt);
+	static string GenerateRandomKey();
 	static string GenerateRandomKeyID();
 
 public:

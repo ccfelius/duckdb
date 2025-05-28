@@ -76,8 +76,6 @@ public:
 		return db;
 	}
 
-	shared_ptr<EncryptionUtil> GetEncryptionUtil();
-
 	void SetEncryptionKeyId(const string &key_id) {
 		encryption_key_id = key_id;
 	};

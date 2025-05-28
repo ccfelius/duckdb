@@ -6,7 +6,10 @@
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "zstd.h"
+
+#include <duckdb/common/encryption_key_manager.hpp>
 
 namespace duckdb {
 
@@ -67,6 +70,14 @@ TemporaryFileIdentifier::TemporaryFileIdentifier() : size(TemporaryBufferSize::I
 
 TemporaryFileIdentifier::TemporaryFileIdentifier(TemporaryBufferSize size_p, idx_t file_index_p)
     : size(size_p), file_index(file_index_p) {
+}
+
+TemporaryFileIdentifier::TemporaryFileIdentifier(TemporaryBufferSize size_p, idx_t file_index_p, bool encrypted_p)
+    : size(size_p), file_index(file_index_p), encrypted(encrypted_p) {
+
+	if (encrypted) {
+		// generate a random encryption key ID and corresponding key
+	}
 }
 
 bool TemporaryFileIdentifier::IsValid() const {
@@ -149,8 +160,16 @@ idx_t BlockIndexManager::GetNewBlockIndexInternal(const TemporaryBufferSize size
 }
 
 void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBufferSize size) {
+	auto delta = 0;
+
+	if (manager->encrypted) {
+		delta = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+	}
+
 	const auto temp_file_block_size =
 	    size == TemporaryBufferSize::DEFAULT ? DEFAULT_BLOCK_ALLOC_SIZE : TemporaryBufferSizeToSize(size);
+	const auto temp_file_block_header_size =
+	    size == TemporaryBufferSize::DEFAULT ? DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE : TemporaryBufferSizeToSize(size);
 	if (!manager) {
 		max_index = new_index;
 	} else {
@@ -158,11 +177,12 @@ void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBuffer
 		if (new_index < old) {
 			max_index = new_index;
 			const auto difference = old - new_index;
-			const auto size_on_disk = difference * temp_file_block_size;
+			// add size if encrypted
+			const auto size_on_disk = difference * temp_file_block_size + (difference * delta);
 			manager->DecreaseSizeOnDisk(size_on_disk);
 		} else if (new_index > old) {
 			const auto difference = new_index - old;
-			const auto size_on_disk = difference * temp_file_block_size;
+			const auto size_on_disk = difference * temp_file_block_size + (difference * delta);
 			manager->IncreaseSizeOnDisk(size_on_disk);
 			// Increase can throw, so this is only updated after it was successfully updated
 			max_index = new_index;
@@ -173,10 +193,17 @@ void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBuffer
 //===--------------------------------------------------------------------===//
 // TemporaryFileHandle
 //===--------------------------------------------------------------------===//
+
 TemporaryFileHandle::TemporaryFileHandle(TemporaryFileManager &manager, TemporaryFileIdentifier identifier_p,
                                          idx_t temp_file_count)
     : db(manager.db), identifier(identifier_p), max_allowed_index((1 << temp_file_count) * MAX_ALLOWED_INDEX_BASE),
       path(manager.CreateTemporaryFileName(identifier)), index_manager(manager) {
+
+	if (identifier.encrypted) {
+		// generate key ID and a random encryption key
+		encryption_key_id = EncryptionKeyManager::GenerateRandomKeyID();
+		AddKey
+	}
 }
 
 TemporaryFileHandle::TemporaryFileLock::TemporaryFileLock(mutex &mutex) : lock(mutex) {
@@ -198,6 +225,13 @@ TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex() {
 unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_index,
                                                                 unique_ptr<FileBuffer> reusable_buffer) const {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
+
+	if (identifier.encrypted) {
+		D_ASSERT(!identifier.encryption_key_id.empty());
+		auto &key_manager = EncryptionKeyManager::Get(db);
+		auto &random_key = key_manager.GetKey(encryption_key_id);
+	}
+
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
 		return StandardBufferManager::ReadTemporaryBufferInternal(
 		    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
@@ -225,22 +259,30 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 
 void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t block_index,
                                                AllocatedData &compressed_buffer) const {
+
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 
-	if (encrypted) {
+	if (identifier.encrypted) {
+		// create a new FileBuffer and write that one to the file
+		// Look at how I did this in the CheckSum
+		auto temp_buffer_manager =
+		    make_uniq<FileBuffer>(Allocator::Get(db), buffer.GetBufferType(), buffer.Size(), buffer.HeaderSize());
 
+		auto delta = buffer.HeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+		EncryptionEngine::EncryptBuffer(db, buffer, *temp_buffer_manager, delta, "xxxx");
+		temp_buffer_manager->Write(*handle, GetPositionInFile(block_index));
 	}
 
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
+		// buffer = buffer
 		// when is this used?
 		buffer.Write(*handle, GetPositionInFile(block_index));
 	} else {
-		// this happens if the size is less or more then TemporaryBufferSize::DEFAULT?
+		// this happens if the buffer is compressed and thus less in size
 		handle->Write(compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
 		              GetPositionInFile(block_index));
 	}
-
 }
 
 void TemporaryFileHandle::EraseBlockIndex(block_id_t block_index) {
@@ -303,6 +345,7 @@ idx_t TemporaryFileHandle::GetPositionInFile(const idx_t index) const {
 //===--------------------------------------------------------------------===//
 // TemporaryFileMap
 //===--------------------------------------------------------------------===//
+
 TemporaryFileMap::TemporaryFileMap(TemporaryFileManager &manager_p) : manager(manager_p) {
 }
 
@@ -428,6 +471,7 @@ void TemporaryFileCompressionAdaptivity::Update(const TemporaryCompressionLevel 
 //===--------------------------------------------------------------------===//
 // TemporaryFileManager
 //===--------------------------------------------------------------------===//
+
 TemporaryFileManager::TemporaryFileManager(DatabaseInstance &db, const string &temp_directory_p,
                                            atomic<idx_t> &size_on_disk_p)
     : db(db), temp_directory(temp_directory_p), files(*this), size_on_disk(size_on_disk_p), max_swap_space(0) {
@@ -441,6 +485,8 @@ TemporaryFileManager::TemporaryFileManagerLock::TemporaryFileManagerLock(mutex &
 }
 
 void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer &buffer) {
+	//! TEMPORARY FILE MANAGER
+
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 
@@ -467,7 +513,7 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 		if (!handle) {
 			// no existing handle to write to; we need to create & open a new file
 			auto &size = compression_result.size;
-			const TemporaryFileIdentifier identifier(size, index_managers[size].GetNewBlockIndex(size));
+			const TemporaryFileIdentifier identifier(size, index_managers[size].GetNewBlockIndex(size), IsEncrypted());
 			auto &new_file = files.CreateFile(identifier);
 			index = new_file.TryGetBlockIndex();
 			handle = &new_file;
@@ -477,6 +523,11 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 	}
 	D_ASSERT(handle);
 	D_ASSERT(index.IsValid());
+
+	// temporary file manager encrypted?
+
+	if (encrypted) {
+	}
 
 	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
 

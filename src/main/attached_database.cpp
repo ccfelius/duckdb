@@ -189,18 +189,6 @@ void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOp
 	}
 }
 
-shared_ptr<EncryptionUtil> AttachedDatabase::GetEncryptionUtil() {
-	auto encryption_util = db.config.encryption_util;
-
-	if (encryption_util) {
-		encryption_util = db.config.encryption_util;
-	} else {
-		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
-	}
-
-	return encryption_util;
-}
-
 StorageManager &AttachedDatabase::GetStorageManager() {
 	if (!storage) {
 		throw InternalException("Internal system catalog does not have storage");

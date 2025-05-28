@@ -62,6 +62,13 @@ EncryptionKeyManager &EncryptionKeyManager::Get(DatabaseInstance &db) {
 	return GetInternal(cache);
 }
 
+string EncryptionKeyManager::GenerateRandomKey() {
+	uint8_t key_id[DERIVED_KEY_LENGTH];
+	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(key_id, DERIVED_KEY_LENGTH);
+	string key_id_str(reinterpret_cast<const char *>(key_id), DERIVED_KEY_LENGTH);
+	return key_id_str;
+}
+
 string EncryptionKeyManager::GenerateRandomKeyID() {
 	uint8_t key_id[KEY_ID_BYTES];
 	duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(key_id, KEY_ID_BYTES);
@@ -71,11 +78,11 @@ string EncryptionKeyManager::GenerateRandomKeyID() {
 
 void EncryptionKeyManager::AddKey(const string &key_name, string &key, bool wipe) {
 	derived_keys.emplace(key_name, EncryptionKey(key));
-	// if (wipe) {
-	// wipe out the original key
-	//	std::memset(&key[0], 0, key.size());
-	//	key.clear();
-	//}
+	if (wipe) {
+		// wipe out the original key
+		memset(&key[0], 0, key.size());
+		key.clear();
+	}
 }
 
 bool EncryptionKeyManager::HasKey(const string &key_name) const {
@@ -100,7 +107,8 @@ string EncryptionKeyManager::KeyDerivationFunctionSHA256(const string &user_key,
 	state.AddSalt(salt, MainHeader::SALT_LEN);
 	state.AddString(user_key);
 	auto derived_key = state.Finalize();
-	//! key_length is hardcoded to 32 bytes
+
+	//! key_length is hardcoded to 32 bytes now
 	D_ASSERT(derived_key.length() == MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 	return derived_key;
 }

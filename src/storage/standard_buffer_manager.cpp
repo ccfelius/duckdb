@@ -11,6 +11,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/storage/buffer/encrypted_buffer.hpp"
 
 namespace duckdb {
 
@@ -47,6 +48,25 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	} else {
 		// non re-usable buffer: allocate a new buffer
 		result = make_uniq<FileBuffer>(Allocator::Get(db), type, size, block_header_size);
+	}
+	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
+	return result;
+}
+
+unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedEncryptedBuffer(idx_t size, idx_t block_header_size,
+                                                                              unique_ptr<FileBuffer> &&source,
+                                                                              FileBufferType type) {
+	unique_ptr<FileBuffer> result;
+	if (type == FileBufferType::BLOCK) {
+		throw InternalException("ConstructManagedBuffer cannot be used to construct blocks");
+	}
+	if (source) {
+		auto tmp = std::move(source);
+		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
+		result = make_uniq<EncryptedBuffer>(*tmp, type);
+	} else {
+		// non re-usable buffer: allocate a new buffer
+		result = make_uniq<EncryptedBuffer>(Allocator::Get(db), type, size, block_header_size);
 	}
 	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
 	return result;
@@ -465,13 +485,21 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 	return result;
 }
 
-unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager,
-                                                                          FileHandle &handle, idx_t position,
-                                                                          idx_t size,
-                                                                          unique_ptr<FileBuffer> reusable_buffer) {
+unique_ptr<FileBuffer>
+StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle, idx_t position,
+                                                   idx_t size, unique_ptr<FileBuffer> reusable_buffer, bool encrypted) {
+
 	auto buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
 	                                                    std::move(reusable_buffer));
+
+	// decrypt the buffer if necessary
+	if (encrypted) {
+		buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
+		                                               std::move(buffer), FileBufferType::ENCRYPTED_BUFFER);
+	}
+
 	buffer->Read(handle, position);
+
 	return buffer;
 }
 
@@ -497,6 +525,18 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
 	// here a temporary file gets written to disk
 	// so we probably should be able to encrypt here
+	uint64_t delta = 0;
+
+	if (db.config.options.encrypt_temp_files) {
+		delta = buffer.HeaderSize();
+	}
+
+	// the buffer should already have the "regular" block header size for encryption
+	// But let's check it
+
+#ifdef DEBUG
+	auto header_size = buffer.HeaderSize();
+#endif
 
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
@@ -516,14 +556,10 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
-
 	// before here, write encrypted data
 	// here the buffer size gets written.
 	// this is excluding nonce?
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
-
-	// so we actually need to include this already in the buffer used?
-	// this is a standard buffer
 	buffer.Write(*handle, sizeof(idx_t));
 }
 

@@ -310,6 +310,8 @@ struct DBConfigOptions {
 	bool enable_external_file_cache = true;
 	//! Encrypt the WAL
 	bool encrypt_wal = false;
+	//! Encrypt the temp files
+	bool encrypt_temp_files = false;
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	bool scheduler_process_partial = true;

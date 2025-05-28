@@ -42,7 +42,7 @@ public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
 	                                                          idx_t position, idx_t size,
-	                                                          unique_ptr<FileBuffer> reusable_buffer);
+	                                                          unique_ptr<FileBuffer> reusable_buffer, bool encryption);
 
 	//! Registers a transient memory buffer.
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) final;
@@ -103,6 +103,9 @@ public:
 	//! Construct a managed buffer.
 	unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size, unique_ptr<FileBuffer> &&source,
 	                                              FileBufferType type = FileBufferType::MANAGED_BUFFER) override;
+	unique_ptr<FileBuffer>
+	ConstructManagedEncryptedBuffer(idx_t size, idx_t block_header_size, unique_ptr<FileBuffer> &&source,
+	                                FileBufferType type = FileBufferType::MANAGED_BUFFER) override;
 
 	DUCKDB_API void ReserveMemory(idx_t size) final;
 	DUCKDB_API void FreeReservedMemory(idx_t size) final;
@@ -176,6 +179,8 @@ protected:
 		unique_ptr<TemporaryDirectoryHandle> handle;
 		//! The maximum swap space that can be used
 		optional_idx maximum_swap_space = optional_idx();
+		//! Temporary files should be encrypted
+		bool encrypted = false;
 	};
 
 protected:

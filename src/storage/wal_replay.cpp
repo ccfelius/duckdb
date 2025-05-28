@@ -139,7 +139,7 @@ public:
 			auto &keys = EncryptionKeyManager::Get(state_p.db.GetDatabase());
 			auto &derived_key = keys.GetKey(state_p.db.GetEncryptionKeyId());
 			//! initialize the decryption
-			auto encryption_state = state_p.db.GetEncryptionUtil()->CreateEncryptionState(&derived_key);
+			auto encryption_state = state_p.db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(&derived_key);
 			encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, &derived_key);
 
 			//! Allocate a decryption buffer
