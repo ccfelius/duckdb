@@ -38,6 +38,7 @@ FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(so
 	size = source.size;
 	internal_buffer = source.internal_buffer;
 	internal_size = source.internal_size;
+	header_size = source.header_size;
 
 	source.Init();
 }
@@ -89,6 +90,7 @@ void FileBuffer::ResizeInternal(uint64_t new_size, uint64_t block_header_size) {
 	if (new_size > 0) {
 		buffer = internal_buffer + req.header_size;
 		size = internal_size - req.header_size;
+		header_size = req.header_size;
 	}
 }
 

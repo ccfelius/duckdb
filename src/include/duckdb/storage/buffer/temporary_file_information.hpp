@@ -22,6 +22,8 @@ struct MemoryInformation {
 struct TemporaryFileInformation {
 	string path;
 	idx_t size;
+	bool encrypted;
+	string encryption_key_id;
 };
 
 struct CachedFileInformation {

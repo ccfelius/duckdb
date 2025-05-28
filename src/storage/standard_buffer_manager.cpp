@@ -495,12 +495,14 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
+	// here a temporary file gets written to disk
+	// so we probably should be able to encrypt here
 
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
 
 	// Append to a few grouped files.
-	if (buffer.AllocSize() == GetBlockAllocSize()) {
+	if (buffer.AllocSize() == GetBlockAllocSize() && buffer.HeaderSize() == GetTemporaryBlockHeaderSize()) {
 		evicted_data_per_tag[uint8_t(tag)] += GetBlockAllocSize();
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
@@ -514,7 +516,14 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
+
+	// before here, write encrypted data
+	// here the buffer size gets written.
+	// this is excluding nonce?
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
+
+	// so we actually need to include this already in the buffer used?
+	// this is a standard buffer
 	buffer.Write(*handle, sizeof(idx_t));
 }
 

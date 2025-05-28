@@ -68,6 +68,11 @@ public:
 		return internal_buffer;
 	}
 
+	idx_t HeaderSize() const {
+		return header_size;
+	}
+
+
 	struct MemoryRequirement {
 		idx_t alloc_size;
 		idx_t header_size;
@@ -85,6 +90,7 @@ protected:
 	//! The aligned size as passed to the constructor.
 	//! This is the size that is read from or written to disk.
 	uint64_t internal_size;
+	idx_t header_size;
 
 	void ReallocBuffer(idx_t new_size);
 	void Init();

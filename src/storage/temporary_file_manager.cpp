@@ -227,12 +227,20 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
                                                AllocatedData &compressed_buffer) const {
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
+
+	if (encrypted) {
+
+	}
+
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
+		// when is this used?
 		buffer.Write(*handle, GetPositionInFile(block_index));
 	} else {
+		// this happens if the size is less or more then TemporaryBufferSize::DEFAULT?
 		handle->Write(compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
 		              GetPositionInFile(block_index));
 	}
+
 }
 
 void TemporaryFileHandle::EraseBlockIndex(block_id_t block_index) {
@@ -315,6 +323,7 @@ optional_ptr<TemporaryFileHandle> TemporaryFileMap::GetFile(const TemporaryFileI
 }
 
 TemporaryFileHandle &TemporaryFileMap::CreateFile(const TemporaryFileIdentifier &identifier) {
+	// create file?
 	D_ASSERT(identifier.IsValid());
 	D_ASSERT(!GetFile(identifier));
 	auto &map = GetMapForSize(identifier.size);

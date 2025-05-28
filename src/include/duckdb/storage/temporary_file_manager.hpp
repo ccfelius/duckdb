@@ -77,6 +77,7 @@ public:
 //===--------------------------------------------------------------------===//
 // BlockIndexManager
 //===--------------------------------------------------------------------===//
+
 struct BlockIndexManager {
 public:
 	BlockIndexManager();
@@ -162,6 +163,7 @@ private:
 	//! Lock for concurrent access and block index manager
 	mutex file_lock;
 	BlockIndexManager index_manager;
+	bool encrypted = false;
 };
 
 //===--------------------------------------------------------------------===//
