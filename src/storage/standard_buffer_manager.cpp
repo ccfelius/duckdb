@@ -60,6 +60,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedEncryptedBuffer(id
 	if (type == FileBufferType::BLOCK) {
 		throw InternalException("ConstructManagedBuffer cannot be used to construct blocks");
 	}
+
 	if (source) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
@@ -68,6 +69,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedEncryptedBuffer(id
 		// non re-usable buffer: allocate a new buffer
 		result = make_uniq<EncryptedBuffer>(Allocator::Get(db), type, size, block_header_size);
 	}
+
 	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
 	return result;
 }
@@ -489,17 +491,16 @@ unique_ptr<FileBuffer>
 StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle, idx_t position,
                                                    idx_t size, unique_ptr<FileBuffer> reusable_buffer, bool encrypted) {
 
-	auto buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
-	                                                    std::move(reusable_buffer));
+	idx_t block_header_size = buffer_manager.GetTemporaryBlockHeaderSize();
 
-	// decrypt the buffer if necessary
 	if (encrypted) {
-		buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
-		                                               std::move(buffer), FileBufferType::ENCRYPTED_BUFFER);
+		block_header_size = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
 
-	buffer->Read(handle, position);
+	auto buffer = buffer_manager.ConstructManagedBuffer(size, block_header_size,
+	                                                    std::move(reusable_buffer), NULL, encrypted);
 
+	buffer->Read(handle, position);
 	return buffer;
 }
 
@@ -578,10 +579,11 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	auto path = GetTemporaryPath(id);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
-	handle->Read(&block_size, sizeof(idx_t), 0);
 
+	// here, the length of the buffer is read
+	handle->Read(&block_size, sizeof(idx_t), 0);
 	// Allocate a buffer of the file's size and read the data into that buffer.
-	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
+	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer), db.config.options.encrypt_temp_files);
 	handle.reset();
 
 	// Delete the file and return the buffer.

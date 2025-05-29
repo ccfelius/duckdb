@@ -69,12 +69,7 @@ idx_t BufferManager::GetQueryMaxMemory() const {
 }
 
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, idx_t block_header_size,
-                                                             unique_ptr<FileBuffer> &&, FileBufferType type) {
-	throw NotImplementedException("This type of BufferManager can not construct managed buffers");
-}
-
-unique_ptr<FileBuffer> BufferManager::ConstructManagedEncryptedBuffer(idx_t size, idx_t block_header_size,
-                                                                      unique_ptr<FileBuffer> &&, FileBufferType type) {
+                                                             unique_ptr<FileBuffer> &&, FileBufferType type, bool encrypted) {
 	throw NotImplementedException("This type of BufferManager can not construct managed buffers");
 }
 

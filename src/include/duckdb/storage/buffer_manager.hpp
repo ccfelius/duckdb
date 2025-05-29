@@ -85,10 +85,7 @@ public:
 	//! Construct a managed buffer.
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size,
 	                                                      unique_ptr<FileBuffer> &&source,
-	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
-	virtual unique_ptr<FileBuffer>
-	ConstructManagedEncryptedBuffer(idx_t size, idx_t block_header_size, unique_ptr<FileBuffer> &&source,
-	                                FileBufferType type = FileBufferType::MANAGED_BUFFER);
+	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER, bool encrypted = false);
 	//! Get the underlying buffer pool responsible for managing the buffers
 	virtual BufferPool &GetBufferPool() const;
 
