@@ -64,7 +64,7 @@ public:
 	uint64_t Size() const {
 		return size;
 	}
-	data_ptr_t InternalBuffer() {
+	data_ptr_t InternalBuffer() const {
 		return internal_buffer;
 	}
 

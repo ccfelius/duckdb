@@ -46,7 +46,7 @@ struct TemporaryFileIdentifier {
 public:
 	TemporaryFileIdentifier();
 	TemporaryFileIdentifier(TemporaryBufferSize size, idx_t file_index);
-	TemporaryFileIdentifier(TemporaryBufferSize size, idx_t file_index, bool encrypted);
+	TemporaryFileIdentifier(DatabaseInstance &db, TemporaryBufferSize size, idx_t file_index, bool encrypted);
 
 public:
 	//! Whether this temporary file identifier is valid (fields have been set)
@@ -59,8 +59,6 @@ public:
 	optional_idx file_index;
 	// Indicates whether the file is encrypted
 	bool encrypted = false;
-	//! The encryption key ID, if the file is encrypted
-	string encryption_key_id;
 };
 
 struct TemporaryFileIndex {
@@ -297,12 +295,12 @@ public:
 	void IncreaseSizeOnDisk(idx_t amount);
 	//! Register temporary file size decrease
 	void DecreaseSizeOnDisk(idx_t amount);
-
-private:
 	//! If temp files should be encrypted
 	bool IsEncrypted() const {
 		return db.config.options.encrypt_temp_files;
 	}
+
+private:
 	//! Compress buffer, write it in compressed_buffer and return the size/level
 	CompressionResult CompressBuffer(TemporaryFileCompressionAdaptivity &compression_adaptivity, FileBuffer &buffer,
 	                                 AllocatedData &compressed_buffer);
@@ -341,8 +339,6 @@ private:
 	static constexpr idx_t COMPRESSION_ADAPTIVITIES = 64;
 	//! Class that oversees when/how much to compress
 	array<TemporaryFileCompressionAdaptivity, COMPRESSION_ADAPTIVITIES> compression_adaptivities;
-	//! Key Id if the file is encrypted
-	string encryption_key_id;
 };
 
 //===--------------------------------------------------------------------===//

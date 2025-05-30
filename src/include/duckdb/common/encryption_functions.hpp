@@ -3,6 +3,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/encryption_state.hpp"
+#include "duckdb/common/encryption_key_manager.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
@@ -19,21 +20,22 @@ public:
 public:
 	const string &GetKeyFromCache(DatabaseInstance &db) const;
 	static const string &GetKeyFromCache(DatabaseInstance &db, const string &key_name);
+	bool ContainsKey(DatabaseInstance &db, const string &key_name) const;
+	static void AddKeyToCache(DatabaseInstance &db, string &key, const string &key_name, bool wipe = true);
+	static string AddKeyToCache(DatabaseInstance &db, string &key);
+	static void AddTempKeyToCache(DatabaseInstance &db);
 
-	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
-	                                   uint64_t delta, const string &key_name);
-	static void DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
-	                                   uint64_t delta, const string &key_name);
+	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer);
+	static void EncryptTemporaryBuffer(DatabaseInstance &db, AllocatedData &input_buffer, AllocatedData &out_buffer,
+	                                   idx_t nr_bytes);
+	static void DecryptTemporaryBuffer(DatabaseInstance &db, const FileBuffer &input_buffer,
+	                                   const FileBuffer &out_buffer);
 
 private:
 	void EncryptInternal();
 	void EncryptBufferGCM();
 	void EncryptBufferCTR();
 	void EncryptBufferCBC();
-
-private:
-	EncryptionKeyManager key_manager;
-	shared_ptr<EncryptionUtil> encryption_util;
 };
 
 class EncryptionTypes {
@@ -52,6 +54,17 @@ public:
 		default:
 			return "unknown";
 		}
+	}
+
+	static CipherType StringToCipher(const string &encryption_cipher) {
+		if (encryption_cipher == "gcm") {
+			return CipherType::GCM;
+		} else if (encryption_cipher == "ctr") {
+			return CipherType::CTR;
+		} else if (encryption_cipher == "cbc") {
+			return CipherType::CBC;
+		}
+		return CipherType::UNKNOWN;
 	}
 };
 

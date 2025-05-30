@@ -48,17 +48,6 @@ struct EncryptionOptions {
 		}
 	}
 
-	CipherType StringToCipher(const string &encryption_cipher) const {
-		if (encryption_cipher == "gcm") {
-			return CipherType::GCM;
-		} else if (encryption_cipher == "ctr") {
-			return CipherType::CTR;
-		} else if (encryption_cipher == "cbc") {
-			return CipherType::CBC;
-		}
-		return CipherType::UNKNOWN;
-	}
-
 	//! indicates whether the db is encrypted
 	bool encryption_enabled = false;
 	//! Whether Additional Authenticated Data is used
@@ -66,7 +55,7 @@ struct EncryptionOptions {
 	//! derived encryption key id
 	string derived_key_id;
 	//! Cipher used for encryption
-	CipherType cipher;
+	EncryptionTypes::CipherType cipher;
 	//! key derivation function (kdf) used
 	KeyDerivationFunction kdf = KeyDerivationFunction::SHA256;
 	//! Key Length

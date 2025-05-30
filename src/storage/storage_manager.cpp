@@ -158,8 +158,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 	if (storage_options.encryption || !config.options.user_key.empty() || config.options.full_encryption) {
 		options.encryption_options.encryption_enabled = true;
-		options.encryption_options.cipher =
-		    options.encryption_options.StringToCipher(storage_options.encryption_cipher);
+		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
 		storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 	}
 

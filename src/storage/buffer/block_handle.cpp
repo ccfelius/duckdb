@@ -173,6 +173,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock) {
 		// temporary block that cannot be destroyed upon evict/unpin: write to temporary file
 		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
 	}
+
 	memory_charge.Resize(0);
 	state = BlockState::BLOCK_UNLOADED;
 	return std::move(buffer);
