@@ -265,6 +265,10 @@ MbedTlsWrapper::AESStateMBEDTLS::~AESStateMBEDTLS() {
 void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomDataStatic(duckdb::data_ptr_t data, duckdb::idx_t len) {
 	duckdb::RandomEngine random_engine;
 
+#ifdef debug
+	random_engine.SetSeed(10);
+#endif
+
 	while (len != 0) {
 		const auto random_integer = random_engine.NextRandomInteger();
 		const auto next = duckdb::MinValue<duckdb::idx_t>(len, sizeof(random_integer));

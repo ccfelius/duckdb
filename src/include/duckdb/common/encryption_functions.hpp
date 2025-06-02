@@ -25,11 +25,13 @@ public:
 	static string AddKeyToCache(DatabaseInstance &db, string &key);
 	static void AddTempKeyToCache(DatabaseInstance &db);
 
-	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer);
-	static void EncryptTemporaryBuffer(DatabaseInstance &db, AllocatedData &input_buffer, AllocatedData &out_buffer,
-	                                   idx_t nr_bytes);
-	static void DecryptTemporaryBuffer(DatabaseInstance &db, const FileBuffer &input_buffer,
-	                                   const FileBuffer &out_buffer);
+	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
+	                                   uint8_t *metadata);
+	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
+	                                          AllocatedData &out_buffer, idx_t nr_bytes);
+	static void DecryptTemporaryBuffer(DatabaseInstance &db, const FileBuffer &input_buffer, uint8_t *metadata);
+	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
+	                                          AllocatedData &out_buffer, idx_t nr_bytes);
 
 private:
 	void EncryptInternal();

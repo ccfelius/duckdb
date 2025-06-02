@@ -78,6 +78,7 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 	}
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
+	auto blcksize = GetBlockManager().GetBlockSize();
 	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
 }
 

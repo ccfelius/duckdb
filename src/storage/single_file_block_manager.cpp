@@ -583,8 +583,8 @@ void SingleFileBlockManager::EncryptBuffer(FileBuffer &block, FileBuffer &temp_b
 	}
 
 	//! Finalize and extract the tag
-	aes_res = encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
-	                                     MainHeader::AES_TAG_LEN);
+	encryption_state->Finalize(block.InternalBuffer() + delta, 0, static_cast<data_ptr_t>(tag),
+	                           MainHeader::AES_TAG_LEN);
 
 	//! store the generated tag after consequetively the nonce
 	memcpy(block_offset_internal + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);

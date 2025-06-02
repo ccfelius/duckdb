@@ -31,6 +31,7 @@
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/common/http_util.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
+#include "mbedtls_wrapper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"

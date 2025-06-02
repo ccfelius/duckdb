@@ -145,6 +145,8 @@ public:
 	//! Get information about this temporary file
 	TemporaryFileInformation GetTemporaryFile();
 
+	bool IsEncrypted() const;
+
 private:
 	//! Create temporary file if it did not exist yet
 	void CreateFileIfNotExists(TemporaryFileLock &);
@@ -296,9 +298,7 @@ public:
 	//! Register temporary file size decrease
 	void DecreaseSizeOnDisk(idx_t amount);
 	//! If temp files should be encrypted
-	bool IsEncrypted() const {
-		return db.config.options.encrypt_temp_files;
-	}
+	bool IsEncrypted() const;
 
 private:
 	//! Compress buffer, write it in compressed_buffer and return the size/level

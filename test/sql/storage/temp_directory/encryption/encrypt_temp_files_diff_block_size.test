@@ -1,0 +1,18 @@
+# name: test/sql/storage/temp_directory/encryption/encrypt_temp_files_diff_block_size.test
+# group: [encryption]
+
+statement ok
+PRAGMA disable_verification;
+
+statement ok
+SET memory_limit = '8MB';
+
+statement ok
+ATTACH '__TEST_DIR__/tmpdb.db' AS tempdb (block_size 131072, ENCRYPTION_KEY 'asdf');
+
+# 10M row table with 8B rows -> 80MB uncompressed - this requires the temp directory
+statement ok
+CREATE TEMPORARY TABLE tbl AS FROM range(10_000_000);
+
+statement ok
+SELECT * FROM tbl;

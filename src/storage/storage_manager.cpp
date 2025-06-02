@@ -141,8 +141,14 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 	if (InMemory()) {
+		auto block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+
+		if (db.GetDatabase().config.options.encrypt_temp_files) {
+			block_header_size += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+		}
+
 		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
-		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
+		                                                block_header_size);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		return;
 	}

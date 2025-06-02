@@ -162,7 +162,6 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
                                                               bool can_destroy) {
 	auto alloc_size = GetAllocSize(block_size + block_header_size);
-
 	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;
 	auto res = EvictBlocksOrThrow(tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
@@ -171,6 +170,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	// Create a new buffer and a block to hold the buffer.
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer),
 	                                     FileBufferType::MANAGED_BUFFER);
+
 	DestroyBufferUpon destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
 	                                    destroy_buffer_upon, alloc_size, std::move(res));
@@ -178,11 +178,20 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,
                                                                        bool can_destroy) {
-	return RegisterMemory(tag, block_size, GetTemporaryBlockHeaderSize(), can_destroy);
+	auto temp_block_header_size = GetTemporaryBlockHeaderSize();
+	if (db.config.options.encrypt_temp_files) {
+		// maybe change name to temp encrypted buffer header size
+		temp_block_header_size = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+	}
+	return RegisterMemory(tag, block_size, temp_block_header_size, can_destroy);
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateMemory(MemoryTag tag, BlockManager *block_manager,
                                                               bool can_destroy) {
+
+	auto temp_block_header_size = block_manager->GetBlockHeaderSize();
+	auto block_size = block_manager->GetBlockSize();
+
 	return RegisterMemory(tag, block_manager->GetBlockSize(), block_manager->GetBlockHeaderSize(), can_destroy);
 }
 
@@ -474,11 +483,11 @@ StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager
 	    buffer_manager.ConstructManagedBuffer(size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, std::move(reusable_buffer));
 
 	if (encrypted) {
-		size = size - DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE + sizeof(idx_t);
-		auto input_buffer = buffer_manager.ConstructManagedBuffer(size, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE,
-		                                                          std::move(reusable_buffer));
-		input_buffer->Read(handle, position);
-		EncryptionEngine::DecryptTemporaryBuffer(buffer_manager.GetDatabase(), *input_buffer, *buffer);
+		// Read nonce and tag from file
+		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
+		handle.Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, position);
+		buffer->Read(handle, position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+		EncryptionEngine::DecryptTemporaryBuffer(buffer_manager.GetDatabase(), *buffer, encryption_metadata);
 		return buffer;
 	}
 
@@ -506,44 +515,15 @@ void StandardBufferManager::RequireTemporaryDirectory() {
 }
 
 void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block_id, FileBuffer &buffer) {
-	// here a temporary file gets written to disk
-	// so we probably should be able to encrypt here
-	uint64_t delta = 0;
-
-	if (db.config.options.encrypt_temp_files) {
-		delta = buffer.HeaderSize();
-	}
-
-	// the buffer should already have the "regular" block header size for encryption
-	// But let's check it
-
-#ifdef DEBUG
-	auto header_size = buffer.HeaderSize();
-#endif
-
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
 
 	// Append to a few grouped files.
-	if (buffer.AllocSize() == GetBlockAllocSize() && buffer.HeaderSize() == GetTemporaryBlockHeaderSize()) {
+	if (buffer.AllocSize() == GetBlockAllocSize()) {
 		evicted_data_per_tag[uint8_t(tag)] += GetBlockAllocSize();
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
 	}
-
-	// Get the path to write to.
-	auto path = GetTemporaryPath(block_id);
-	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
-
-	// Create the file and write the size followed by the buffer contents.
-	auto &fs = FileSystem::GetFileSystem(db);
-	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
-	// before here, write encrypted data
-	// here the buffer size gets written.
-	// this is excluding nonce?
-	handle->Write(&buffer.size, sizeof(idx_t), 0);
-	buffer.Write(*handle, sizeof(idx_t));
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
