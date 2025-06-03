@@ -524,6 +524,17 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;
 	}
+
+	// Get the path to write to.
+	auto path = GetTemporaryPath(block_id);
+	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
+
+	// Create the file and write the size followed by the buffer contents.
+	auto &fs = FileSystem::GetFileSystem(db);
+	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
+	handle->Write(&buffer.size, sizeof(idx_t), 0);
+	buffer.Write(*handle, sizeof(idx_t));
 }
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
@@ -541,12 +552,10 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	auto path = GetTemporaryPath(id);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
-
-	// here, the length of the buffer is read
 	handle->Read(&block_size, sizeof(idx_t), 0);
+
 	// Allocate a buffer of the file's size and read the data into that buffer.
-	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer),
-	                                          db.config.options.encrypt_temp_files);
+	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
 	handle.reset();
 
 	// Delete the file and return the buffer.

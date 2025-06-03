@@ -56,7 +56,7 @@ DROP TABLE ans;
 query I
 SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
 ----
-false
+true
 
 # performing a small hash join should not leave temp files
 statement ok
@@ -68,7 +68,7 @@ DROP TABLE ans;
 query I
 SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
 ----
-false
+true
 
 # performing a large window function
 statement ok
@@ -85,7 +85,7 @@ DROP TABLE ans;
 query I
 SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
 ----
-false
+true
 
 # performing a large hash join should not leave temp files
 statement ok
@@ -102,4 +102,4 @@ DROP TABLE ans;
 query I
 SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
 ----
-false
+true

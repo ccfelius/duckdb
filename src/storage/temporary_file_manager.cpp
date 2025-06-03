@@ -172,10 +172,10 @@ void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBuffer
 	} else {
 
 		if (manager->IsEncrypted()) {
-			// test; maybe this will be unnecessary
-			delta = size == TemporaryBufferSize::DEFAULT ? 0 : DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
-			temp_file_block_size += delta;
+			delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 		}
+
+		temp_file_block_size += delta;
 
 		auto old = max_index;
 		if (new_index < old) {
@@ -285,7 +285,6 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 			EncryptionEngine::EncryptTemporaryBuffer(db, buffer, *temp_buf, encryption_metadata);
 			// first write 28 bytes of nonce + tag
 			handle->Write(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, GetPositionInFile(block_index));
-			auto second_pos = GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 			temp_buf->Write(*handle, GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 		} else {
 			buffer.Write(*handle, GetPositionInFile(block_index));
@@ -527,7 +526,6 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 	const auto time_before_ns = TemporaryFileCompressionAdaptivity::GetCurrentTimeNanos();
 	AllocatedData compressed_buffer;
 
-	// maybe already give an encrypted flag?
 	const auto compression_result = CompressBuffer(compression_adaptivity, buffer, compressed_buffer);
 
 	TemporaryFileIndex index;
@@ -589,14 +587,14 @@ TemporaryFileManager::CompressBuffer(TemporaryFileCompressionAdaptivity &compres
 	compressed_buffer = Allocator::Get(db).Allocate(sizeof(idx_t) + zstd_bound + delta);
 	const auto zstd_size = duckdb_zstd::ZSTD_compress(compressed_buffer.get() + delta + sizeof(idx_t), zstd_bound,
 	                                                  buffer.InternalBuffer(), buffer.AllocSize(), compression_level);
+
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(zstd_size));
 	// the size of the compressed buffer is stored at the start
-	Store<idx_t>(zstd_size, compressed_buffer.get() + delta);
+	Store<idx_t>(zstd_size, compressed_buffer.get());
 	// we can put this to a bigger size, to test uncompressed data.
 	const auto compressed_size = sizeof(idx_t) + zstd_size + delta;
-	// const auto compressed_size = sizeof(idx_t) + zstd_size + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE * IsEncrypted();
 
-	if (compressed_size > TemporaryBufferSizeToSize(MaximumCompressedTemporaryBufferSize())) {
+	if (compressed_size > (TemporaryBufferSizeToSize(MaximumCompressedTemporaryBufferSize()) + delta)) {
 		// compressed size is including delta
 		return {TemporaryBufferSize::DEFAULT, level}; // Use default size if compression ratio is bad
 	}

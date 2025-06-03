@@ -3,6 +3,8 @@
 
 require block_size 262144
 
+load __TEST_DIR__/tmpdb.db;
+
 statement ok
 PRAGMA disable_verification;
 
@@ -10,7 +12,7 @@ statement ok
 SET memory_limit = '8MB';
 
 statement ok
-ATTACH '__TEST_DIR__/tmpdb.db' AS tempdb (ENCRYPTION_KEY 'asdf');
+PRAGMA enable_temp_files_encryption;
 
 # 10M row table with 8B rows -> 80MB uncompressed - this requires the temp directory
 statement ok
