@@ -525,14 +525,24 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 		return;
 	}
 
+	idx_t delta = 0;
+
 	// Get the path to write to.
 	auto path = GetTemporaryPath(block_id);
+	// might need to already add delta here
 	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
+
+	if (db.config.options.encrypt_temp_files) {
+		delta += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+	}
 
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
+	// might need to add delta here
+	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) + delta);
+
+	
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
 	buffer.Write(*handle, sizeof(idx_t));
 }
