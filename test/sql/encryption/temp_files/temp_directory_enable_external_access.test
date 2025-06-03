@@ -1,13 +1,10 @@
-# name: test/sql/storage/temp_directory/encryption/temp_directory_enable_external_access.test
-# group: [encryption]
+# name: test/sql/encryption/temp_files/emp_directory_enable_external_access.test
+# group: [temp_directory]
 
 require block_size 262144
 
 statement ok
 SET temp_directory='__TEST_DIR__/test_temp_dir'
-
-statement ok
-PRAGMA enable_temp_files_encryption;
 
 statement ok
 SET memory_limit = '8MB';

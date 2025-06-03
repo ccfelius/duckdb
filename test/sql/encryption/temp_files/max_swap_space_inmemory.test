@@ -1,4 +1,4 @@
-# name: test/sql/storage/temp_directory/max_swap_space_inmemory.test
+# name: test/sql/encryption/temp_files/max_swap_space_inmemory.test
 # group: [temp_directory]
 
 require noforcestorage

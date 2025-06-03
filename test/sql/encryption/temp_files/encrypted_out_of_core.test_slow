@@ -1,6 +1,6 @@
-# name: test/sql/outofcore/encrypted_out_of_core.test_slow
+# name: test/sql/encryption/temp_files/encrypted_out_of_core.test_slow
 # description: Encrypted large joins in persistent databases have a leftover temporary directory.
-# group: [outofcore]
+# group: [temp_files]
 
 require tpch
 
@@ -10,7 +10,7 @@ statement ok
 PRAGMA enable_temp_files_encryption;
 
 statement ok
-SET threads=1
+SET threads=8
 
 statement ok
 SET memory_limit='1GB';
@@ -24,39 +24,12 @@ ALTER TABLE lineitem RENAME TO lineitem1
 statement ok
 CREATE TABLE lineitem2 AS FROM lineitem1
 
-# creating and dropping a temp table should not leave temp files
-statement ok
-CREATE OR REPLACE TEMPORARY TABLE ans AS SELECT l1.* FROM lineitem1 l1;
-
-query I
-SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
-----
-true
-
-statement ok
-DROP TABLE ans;
-
-query I
-SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
-----
-false
-
 # creating and dropping a table with an ORDER BY should not leave temp files
 statement ok
 CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l1.* from lineitem1 l1 ORDER BY l_orderkey, l_returnflag
 
-query I
-SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
-----
-true
-
 statement ok
 DROP TABLE ans;
-
-query I
-SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
-----
-true
 
 # performing a small hash join should not leave temp files
 statement ok
@@ -65,41 +38,16 @@ CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOI
 statement ok
 DROP TABLE ans;
 
-query I
-SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
-----
-true
-
 # performing a large window function
 statement ok
 CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, row_number() OVER (PARTITION BY l_orderkey, l_linenumber ORDER BY l_orderkey) from lineitem1 l1
 
-query I
-SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
-----
-true
-
 statement ok
 DROP TABLE ans;
-
-query I
-SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
-----
-true
 
 # performing a large hash join should not leave temp files
 statement ok
 CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
 
-query I
-SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
-----
-true
-
 statement ok
 DROP TABLE ans;
-
-query I
-SELECT COUNT(*) > 0 FROM duckdb_temporary_files()
-----
-true

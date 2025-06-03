@@ -225,9 +225,15 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
-		return StandardBufferManager::ReadTemporaryBufferInternal(
-		    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
-		    std::move(reusable_buffer), identifier.encrypted);
+		if (identifier.encrypted) {
+			return StandardBufferManager::ReadTemporaryBufferInternalEncrypted(
+			    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
+			    std::move(reusable_buffer), identifier.encrypted);
+		} else {
+			return StandardBufferManager::ReadTemporaryBufferInternal(
+			    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
+			    std::move(reusable_buffer), identifier.encrypted);
+		}
 	}
 
 	// Read compressed buffer

@@ -1,0 +1,34 @@
+# name: test/sql/encryption/temp_files/encrypt_window_distinct.test_slow
+# description: Windowed distinct aggregates at scale
+# group: [temp_files]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+PRAGMA enable_temp_files_encryption;
+
+statement ok
+PRAGMA temp_directory='__TEST_DIR__/window_distinct'
+
+# Trigger external sorting of a partition
+statement ok
+PRAGMA threads=4
+
+# The actual memory consumption of this query is 1.5GB
+# So this is a serious level of stress.
+statement ok
+PRAGMA memory_limit='500MB'
+
+query I
+WITH t AS (
+	SELECT range AS i, CHR((65 + i % 26)::INTEGER) AS c
+	FROM range(1e6::BIGINT)
+)
+SELECT i, c, COUNT(DISTINCT c) OVER (ORDER BY i DESC) AS n
+FROM t
+ORDER BY ALL
+----
+3000000 values hashing to f56f9b4e62101f52951e1f01a9b5c862

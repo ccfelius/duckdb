@@ -44,6 +44,10 @@ public:
 	                                                          idx_t position, idx_t size,
 	                                                          unique_ptr<FileBuffer> reusable_buffer,
 	                                                          bool encrypted = false);
+	static unique_ptr<FileBuffer> ReadTemporaryBufferInternalEncrypted(BufferManager &buffer_manager,
+	                                                                   FileHandle &handle, idx_t position, idx_t size,
+	                                                                   unique_ptr<FileBuffer> reusable_buffer,
+	                                                                   bool encrypted = false);
 
 	//! Registers a transient memory buffer.
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) final;
