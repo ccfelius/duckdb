@@ -29,9 +29,14 @@ public:
 	                                   uint8_t *metadata);
 	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
 	                                          AllocatedData &out_buffer, idx_t nr_bytes);
+	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
+	                                          AllocatedData &out_buffer, idx_t nr_bytes, uint8_t *metadata);
+
 	static void DecryptTemporaryBuffer(DatabaseInstance &db, const FileBuffer &input_buffer, uint8_t *metadata);
 	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
 	                                          AllocatedData &out_buffer, idx_t nr_bytes);
+	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
+	                                          uint8_t *metadata);
 
 private:
 	void EncryptInternal();

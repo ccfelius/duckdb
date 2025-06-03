@@ -225,13 +225,6 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 
-	idx_t delta = 0;
-	if (identifier.encrypted) {
-		// decrypt the compressed buffer
-		auto &temp_key = EncryptionEngine::GetKeyFromCache(db, "temp_key");
-		delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
-	}
-
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
 		return StandardBufferManager::ReadTemporaryBufferInternal(
 		    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
@@ -240,26 +233,30 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 
 	// Read compressed buffer
 	auto compressed_buffer = Allocator::Get(db).Allocate(TemporaryBufferSizeToSize(identifier.size));
-	auto decrypted_buffer = Allocator::Get(db).Allocate(TemporaryBufferSizeToSize(identifier.size));
-	// Maybe fix this later
-	// auto decrypted_buffer = Allocator::Get(db).Allocate(TemporaryBufferSizeToSize(identifier.size -
-	// DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE));
-	handle->Read(compressed_buffer.get(), compressed_buffer.GetSize(), GetPositionInFile(block_index));
 
 	if (identifier.encrypted) {
-		EncryptionEngine::DecryptTemporaryAllocatedData(db, compressed_buffer, decrypted_buffer,
-		                                                TemporaryBufferSizeToSize(identifier.size));
+		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
+		//! Read nonce and tag.
+		handle->Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, GetPositionInFile(block_index));
+		//! Read the encrypted compressed buffer.
+		handle->Read(compressed_buffer.get(), compressed_buffer.GetSize(),
+		             GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+		//! Decrypt the compressed buffer.
+		EncryptionEngine::DecryptTemporaryAllocatedData(db, compressed_buffer, compressed_buffer.GetSize(),
+		                                                encryption_metadata);
+	} else {
+		handle->Read(compressed_buffer.get(), compressed_buffer.GetSize(), GetPositionInFile(block_index));
 	}
 
 	// Decompress into buffer
 	auto buffer = buffer_manager.ConstructManagedBuffer(
 	    buffer_manager.GetBlockSize(), buffer_manager.GetTemporaryBlockHeaderSize(), std::move(reusable_buffer));
 
-	const auto compressed_size = Load<idx_t>(decrypted_buffer.get());
+	const auto compressed_size = Load<idx_t>(compressed_buffer.get());
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(compressed_size));
 
 	const auto decompressed_size = duckdb_zstd::ZSTD_decompress(
-	    buffer->InternalBuffer(), buffer->AllocSize(), decrypted_buffer.get() + sizeof(idx_t), compressed_size);
+	    buffer->InternalBuffer(), buffer->AllocSize(), compressed_buffer.get() + sizeof(idx_t), compressed_size);
 	(void)decompressed_size;
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(decompressed_size));
 	D_ASSERT(decompressed_size == buffer->AllocSize());
@@ -293,11 +290,15 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 	} else {
 		if (identifier.encrypted) {
 			// write the compressed buffer to the file
+			uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 			auto encrypted_compressed_buffer = Allocator::Get(db).Allocate(TemporaryBufferSizeToSize(identifier.size));
 			EncryptionEngine::EncryptTemporaryAllocatedData(db, compressed_buffer, encrypted_compressed_buffer,
-			                                                TemporaryBufferSizeToSize(identifier.size));
+			                                                TemporaryBufferSizeToSize(identifier.size),
+			                                                encryption_metadata);
+
+			handle->Write(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, GetPositionInFile(block_index));
 			handle->Write(encrypted_compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
-			              GetPositionInFile(block_index));
+			              GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 		} else {
 			// write compressed temp file
 			handle->Write(compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
@@ -564,12 +565,6 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 TemporaryFileManager::CompressionResult
 TemporaryFileManager::CompressBuffer(TemporaryFileCompressionAdaptivity &compression_adaptivity, FileBuffer &buffer,
                                      AllocatedData &compressed_buffer) {
-	idx_t delta = 0;
-
-	if (IsEncrypted()) {
-		// if the file is encrypted, we need space for a header
-		delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
-	}
 
 	if (buffer.AllocSize() <= TemporaryBufferSizeToSize(MinimumCompressedTemporaryBufferSize())) {
 		// Buffer size is less or equal to the minimum compressed size - no point compressing
@@ -584,17 +579,17 @@ TemporaryFileManager::CompressBuffer(TemporaryFileCompressionAdaptivity &compres
 	const auto compression_level = static_cast<int>(level);
 	D_ASSERT(compression_level >= duckdb_zstd::ZSTD_minCLevel() && compression_level <= duckdb_zstd::ZSTD_maxCLevel());
 	const auto zstd_bound = duckdb_zstd::ZSTD_compressBound(buffer.AllocSize());
-	compressed_buffer = Allocator::Get(db).Allocate(sizeof(idx_t) + zstd_bound + delta);
-	const auto zstd_size = duckdb_zstd::ZSTD_compress(compressed_buffer.get() + delta + sizeof(idx_t), zstd_bound,
+	compressed_buffer = Allocator::Get(db).Allocate(sizeof(idx_t) + zstd_bound);
+	const auto zstd_size = duckdb_zstd::ZSTD_compress(compressed_buffer.get() + sizeof(idx_t), zstd_bound,
 	                                                  buffer.InternalBuffer(), buffer.AllocSize(), compression_level);
 
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(zstd_size));
 	// the size of the compressed buffer is stored at the start
 	Store<idx_t>(zstd_size, compressed_buffer.get());
 	// we can put this to a bigger size, to test uncompressed data.
-	const auto compressed_size = sizeof(idx_t) + zstd_size + delta;
+	const auto compressed_size = sizeof(idx_t) + zstd_size;
 
-	if (compressed_size > (TemporaryBufferSizeToSize(MaximumCompressedTemporaryBufferSize()) + delta)) {
+	if (compressed_size > TemporaryBufferSizeToSize(MaximumCompressedTemporaryBufferSize())) {
 		// compressed size is including delta
 		return {TemporaryBufferSize::DEFAULT, level}; // Use default size if compression ratio is bad
 	}
