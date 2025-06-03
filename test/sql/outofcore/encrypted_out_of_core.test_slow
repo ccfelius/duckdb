@@ -10,7 +10,7 @@ statement ok
 PRAGMA enable_temp_files_encryption;
 
 statement ok
-SET threads=8
+SET threads=1
 
 statement ok
 SET memory_limit='1GB';

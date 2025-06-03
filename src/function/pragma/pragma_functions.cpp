@@ -2,6 +2,7 @@
 
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -125,6 +126,7 @@ static void PragmaDisableWalEncryption(ClientContext &context, const FunctionPar
 
 static void PragmaEnableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).options.encrypt_temp_files = true;
+	EncryptionEngine::AddTempKeyToCache(*context.db);
 }
 
 static void PragmaDisableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {

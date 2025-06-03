@@ -178,12 +178,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,
                                                                        bool can_destroy) {
-	auto temp_block_header_size = GetTemporaryBlockHeaderSize();
-	if (db.config.options.encrypt_temp_files) {
-		// maybe change name to temp encrypted buffer header size
-		temp_block_header_size = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
-	}
-	return RegisterMemory(tag, block_size, temp_block_header_size, can_destroy);
+	return RegisterMemory(tag, block_size, GetTemporaryBlockHeaderSize(), can_destroy);
 }
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateMemory(MemoryTag tag, BlockManager *block_manager,
@@ -483,9 +478,10 @@ StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager
 	    buffer_manager.ConstructManagedBuffer(size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, std::move(reusable_buffer));
 
 	if (encrypted) {
-		// Read nonce and tag from file
+		//! Read nonce and tag from file.
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		handle.Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, position);
+		//! Read and decrypt the buffer.
 		buffer->Read(handle, position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
 		EncryptionEngine::DecryptTemporaryBuffer(buffer_manager.GetDatabase(), *buffer, encryption_metadata);
 		return buffer;
@@ -526,24 +522,33 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	}
 
 	idx_t delta = 0;
-
 	// Get the path to write to.
 	auto path = GetTemporaryPath(block_id);
-	// might need to already add delta here
-	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
-
 	if (db.config.options.encrypt_temp_files) {
-		delta += DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+		delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
+
+	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
 
 	// Create the file and write the size followed by the buffer contents.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
-	// might need to add delta here
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) + delta);
-
-	
+	//! for very large buffers, store the size of the buffer in plaintext
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
+
+	if (db.config.options.encrypt_temp_files) {
+		auto temp_buf = make_uniq<FileBuffer>(Allocator::Get(db), buffer.GetBufferType(), buffer.Size(),
+		                                      DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
+
+		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
+		EncryptionEngine::EncryptTemporaryBuffer(db, buffer, *temp_buf, encryption_metadata);
+		//! Write the nonce (and tag for GCM)
+		handle->Write(encryption_metadata, delta, sizeof(idx_t));
+		temp_buf->Write(*handle, sizeof(idx_t) + delta);
+		return;
+	}
+
 	buffer.Write(*handle, sizeof(idx_t));
 }
 

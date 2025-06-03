@@ -27,6 +27,8 @@ public:
 
 	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
 	                                   uint8_t *metadata);
+	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, uint8_t *metadata);
+
 	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
 	                                          AllocatedData &out_buffer, idx_t nr_bytes);
 	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,

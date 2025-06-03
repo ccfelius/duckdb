@@ -1,6 +1,6 @@
-# name: test/sql/storage/temp_directory/max_swap_space_error.test
+# name: test/sql/storage/temp_directory/encryption/max_swap_space_error.test
 # description: Test the maximum swap space.
-# group: [temp_directory]
+# group: [encryption]
 
 require skip_reload
 
@@ -15,6 +15,9 @@ require vector_size 2048
 # Set a temp_directory to offload data
 statement ok
 set temp_directory='__TEST_DIR__/max_swap_space_reached'
+
+statement ok
+PRAGMA enable_temp_files_encryption;
 
 # Ensure the temp_directory is used
 statement ok
@@ -37,6 +40,11 @@ select "size" from duckdb_temporary_files()
 # Max. one block for the default block allocation size
 statement ok
 set max_temp_directory_size='256KiB'
+
+statement error
+CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(1000000);
+----
+failed to offload data block
 
 statement error
 CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(1000000);

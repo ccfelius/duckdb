@@ -171,12 +171,11 @@ void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBuffer
 		max_index = new_index;
 	} else {
 
-		if (manager->IsEncrypted()) {
-			delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
-		}
-
-		temp_file_block_size += delta;
-
+		// if (manager->IsEncrypted()) {
+		// 	delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
+		// }
+		//
+		// temp_file_block_size += delta;
 		auto old = max_index;
 		if (new_index < old) {
 			max_index = new_index;
@@ -397,7 +396,6 @@ optional_ptr<TemporaryFileHandle> TemporaryFileMap::GetFile(const TemporaryFileI
 }
 
 TemporaryFileHandle &TemporaryFileMap::CreateFile(const TemporaryFileIdentifier &identifier) {
-	// create file?
 	D_ASSERT(identifier.IsValid());
 	D_ASSERT(!GetFile(identifier));
 	auto &map = GetMapForSize(identifier.size);

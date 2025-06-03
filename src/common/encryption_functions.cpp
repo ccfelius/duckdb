@@ -52,6 +52,7 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 
 void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
                                               uint8_t *metadata) {
+
 	auto temp_key = &GetKeyFromCache(db, "temp_key");
 
 	auto encryption_util = db.GetEncryptionUtil();
@@ -91,6 +92,51 @@ void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &
 
 	//! store the generated tag after consequetively the nonce
 	memcpy(metadata + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
+	// check if tag is correctly stored
+	D_ASSERT(memcmp(tag, metadata + 12, 16) == 0);
+}
+
+void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, uint8_t *metadata) {
+	auto temp_key = &GetKeyFromCache(db, "temp_key");
+
+	auto encryption_util = db.GetEncryptionUtil();
+	auto encryption_state = encryption_util->CreateEncryptionState(temp_key);
+
+	// zero-out the metadata buffer
+	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
+
+	uint8_t tag[MainHeader::AES_TAG_LEN];
+	memset(tag, 0, MainHeader::AES_TAG_LEN);
+
+	//! a nonce is randomly generated for every block
+	uint8_t nonce[MainHeader::AES_IV_LEN];
+	memset(nonce, 0, MainHeader::AES_IV_LEN);
+
+#ifdef DEBUG
+	uint8_t fixed_nonce[12] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0};
+	memcpy(nonce, fixed_nonce, MainHeader::AES_NONCE_LEN);
+#else
+
+	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
+#endif
+
+	//! store the nonce at the the start of metadata buffer
+	memcpy(metadata, nonce, MainHeader::AES_NONCE_LEN);
+	encryption_state->InitializeEncryption(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN, temp_key);
+
+	auto aes_res = encryption_state->Process(input_buffer.InternalBuffer(), input_buffer.AllocSize(),
+	                                         input_buffer.InternalBuffer(), input_buffer.AllocSize());
+
+	if (aes_res != input_buffer.AllocSize()) {
+		throw IOException("Encryption failure: in- and output size differ");
+	}
+
+	//! Finalize and extract the tag
+	encryption_state->Finalize(input_buffer.InternalBuffer(), 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
+
+	//! store the generated tag after consequetively the nonce
+	memcpy(metadata + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
+
 	// check if tag is correctly stored
 	D_ASSERT(memcmp(tag, metadata + 12, 16) == 0);
 }
