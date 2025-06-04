@@ -19,7 +19,6 @@ struct RowDataBlock {
 public:
 	RowDataBlock(MemoryTag tag, BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
-		auto block_size = buffer_manager.GetBlockSize();
 		auto size = MaxValue<idx_t>(buffer_manager.GetBlockSize(), capacity * entry_size);
 		auto buffer_handle = buffer_manager.Allocate(tag, size, false);
 		block = buffer_handle.GetBlockHandle();

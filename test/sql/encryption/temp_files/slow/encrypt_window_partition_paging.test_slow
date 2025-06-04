@@ -1,6 +1,6 @@
 # name: test/sql/encryption/temp_files/slow/encrypt_window_partition_paging.test_slow
 # description: test paging in constrained memory
-# group: [window]
+# group: [slow]
 
 require 64bit
 

@@ -5,7 +5,8 @@
 
 namespace duckdb {
 
-EncryptionEngine::EncryptionEngine() {};
+EncryptionEngine::EncryptionEngine() {
+}
 
 const string &EncryptionEngine::GetKeyFromCache(DatabaseInstance &db, const string &key_name) {
 	auto &keys = EncryptionKeyManager::Get(db);
@@ -45,9 +46,9 @@ string EncryptionEngine::AddKeyToCache(DatabaseInstance &db, string &key) {
 
 void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
 	//! Add a temporary key to the cache
-	string fixed_key = "1234567890abcdef1234567890abcdef";
+	auto temp_key = EncryptionKeyManager::GenerateRandomKey();
 	string key_id = "temp_key";
-	AddKeyToCache(db, fixed_key, key_id);
+	AddKeyToCache(db, temp_key, key_id);
 }
 
 void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
