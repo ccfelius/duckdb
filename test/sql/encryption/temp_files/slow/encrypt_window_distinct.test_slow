@@ -1,6 +1,6 @@
-# name: test/sql/encryption/temp_files/encrypt_window_distinct.test_slow
+# name: test/sql/encryption/temp_files/slow/encrypt_window_distinct.test_slow
 # description: Windowed distinct aggregates at scale
-# group: [temp_files]
+# group: [slow]
 
 require tpch
 

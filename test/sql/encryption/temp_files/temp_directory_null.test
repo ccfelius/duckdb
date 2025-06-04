@@ -1,9 +1,12 @@
-# name: test/sql/encryption/temp_files/test/sql/encryption/temp_files/temp_directory_null.test
-# group: [temp_directory]
+# name: test/sql/encryption/temp_files/temp_directory_null.test
+# group: [temp_files]
 
 # this one worked from the start
 statement ok
 set temp_directory=''
+
+statement ok
+PRAGMA enable_temp_files_encryption;
 
 query  I
 select value from duckdb_settings() where name = 'temp_directory'

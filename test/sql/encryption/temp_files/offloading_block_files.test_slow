@@ -1,5 +1,5 @@
 # name: test/sql/encryption/temp_files/offloading_block_files.test_slow
-# group: [temp_directory]
+# group: [temp_files]
 
 # For smaller block sizes, the total meta data size increases.
 # On the GitHub runners, this test OOMs on the first query instead of the second.
@@ -7,6 +7,9 @@
 # In comparison, it is 3.2 GiB for the default block size.
 # FIXME: Investigate why the database size is twice the size of the default block size.
 require block_size 262144
+
+statement ok
+PRAGMA enable_temp_files_encryption;
 
 load __TEST_DIR__/offloading_block_files.db
 

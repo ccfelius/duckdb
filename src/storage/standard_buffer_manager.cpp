@@ -530,10 +530,11 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 		return;
 	}
 
-	idx_t delta = 0;
 	// Get the path to write to.
+	// These files are .block, and variable sized, as opposed to .tmp
 	auto path = GetTemporaryPath(block_id);
 
+	idx_t delta = 0;
 	if (db.config.options.encrypt_temp_files) {
 		delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
 	}
@@ -544,13 +545,13 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) + delta);
-	//! for very large buffers, store the size of the buffer in plaintext
+	//! for very large buffers, we store the size of the buffer in plaintext.
 	handle->Write(&buffer.size, sizeof(idx_t), 0);
 
 	if (db.config.options.encrypt_temp_files) {
 		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
 		EncryptionEngine::EncryptTemporaryBuffer(db, buffer, encryption_metadata);
-		//! Write the nonce (and tag for GCM)
+		//! Write the nonce (and tag for GCM).
 		handle->Write(encryption_metadata, delta, sizeof(idx_t));
 	}
 
@@ -583,6 +584,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	} else {
 		buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
 	}
+
 	handle.reset();
 
 	// Delete the file and return the buffer.

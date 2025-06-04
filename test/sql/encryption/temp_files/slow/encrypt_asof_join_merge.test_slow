@@ -1,6 +1,6 @@
-# name: test/sql/encryption/temp_files/encrypt_asof_join_merge.test_slow
+# name: test/sql/encryption/temp_files/slow/encrypt_asof_join_merge.test_slow
 # description: Test merge queue and repartitioning
-# group: [temp_files]
+# group: [slow]
 
 statement ok
 PRAGMA enable_temp_files_encryption;

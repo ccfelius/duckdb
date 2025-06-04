@@ -1,5 +1,5 @@
 # name: test/sql/encryption/temp_files/max_swap_space_explicit.test
-# group: [temp_directory]
+# group: [temp_files]
 
 require skip_reload
 
@@ -7,6 +7,8 @@ statement ok
 PRAGMA memory_limit='2MB'
 
 # --- Not changed when set explicitly by the user
+statement ok
+PRAGMA enable_temp_files_encryption;
 
 # If we set 'max_temp_directory_size' explicitly, it will not be overridden
 statement ok

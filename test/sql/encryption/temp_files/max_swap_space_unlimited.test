@@ -1,9 +1,12 @@
 # name: test/sql/encryption/temp_files/max_swap_space_unlimited.test
-# group: [temp_directory]
+# group: [temp_files]
 
 require skip_reload
 
 require noforcestorage
+
+statement ok
+PRAGMA enable_temp_files_encryption;
 
 # Set a temp_directory to offload data
 statement ok

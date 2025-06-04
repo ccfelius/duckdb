@@ -1,6 +1,6 @@
-# name: test/sql/encryption/temp_files/encrypted_out_of_core.test_slow
+# name: test/sql/encryption/temp_files/slow/encrypted_out_of_core_small.test
 # description: Encrypted large joins in persistent databases have a leftover temporary directory.
-# group: [temp_files]
+# group: [slow]
 
 require tpch
 
@@ -10,19 +10,26 @@ statement ok
 PRAGMA enable_temp_files_encryption;
 
 statement ok
-SET threads=8
+SET threads=1
 
 statement ok
 SET memory_limit='1GB';
 
 statement ok
-CALL dbgen(sf=1);
+CALL dbgen(sf=0.01);
 
 statement ok
 ALTER TABLE lineitem RENAME TO lineitem1
 
 statement ok
 CREATE TABLE lineitem2 AS FROM lineitem1
+
+# creating and dropping a temp table should not leave temp files
+statement ok
+CREATE OR REPLACE TEMPORARY TABLE ans AS SELECT l1.* FROM lineitem1 l1;
+
+statement ok
+DROP TABLE ans;
 
 # creating and dropping a table with an ORDER BY should not leave temp files
 statement ok
