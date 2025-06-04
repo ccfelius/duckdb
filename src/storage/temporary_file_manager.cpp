@@ -9,8 +9,6 @@
 #include "duckdb/common/encryption_functions.hpp"
 #include "zstd.h"
 
-#include <duckdb/common/encryption_key_manager.hpp>
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
