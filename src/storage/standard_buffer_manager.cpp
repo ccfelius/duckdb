@@ -183,10 +183,6 @@ shared_ptr<BlockHandle> StandardBufferManager::AllocateTemporaryMemory(MemoryTag
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateMemory(MemoryTag tag, BlockManager *block_manager,
                                                               bool can_destroy) {
-
-	auto temp_block_header_size = block_manager->GetBlockHeaderSize();
-	auto block_size = block_manager->GetBlockSize();
-
 	return RegisterMemory(tag, block_manager->GetBlockSize(), block_manager->GetBlockHeaderSize(), can_destroy);
 }
 

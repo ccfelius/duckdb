@@ -162,20 +162,12 @@ idx_t BlockIndexManager::GetNewBlockIndexInternal(const TemporaryBufferSize size
 }
 
 void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBufferSize size) {
-	uint64_t delta = 0;
-
 	auto temp_file_block_size =
 	    size == TemporaryBufferSize::DEFAULT ? DEFAULT_BLOCK_ALLOC_SIZE : TemporaryBufferSizeToSize(size);
 
 	if (!manager) {
 		max_index = new_index;
 	} else {
-
-		// if (manager->IsEncrypted()) {
-		// 	delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
-		// }
-		//
-		// temp_file_block_size += delta;
 		auto old = max_index;
 		if (new_index < old) {
 			max_index = new_index;
@@ -277,7 +269,6 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
 		// write an UNCOMPRESSED buffer to the file
 		if (identifier.encrypted) {
-			auto length = Load<idx_t>(buffer.buffer);
 			// create a new FileBuffer and write that one to the file
 			auto temp_buf = make_uniq<FileBuffer>(Allocator::Get(db), buffer.GetBufferType(), buffer.Size(),
 			                                      DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
