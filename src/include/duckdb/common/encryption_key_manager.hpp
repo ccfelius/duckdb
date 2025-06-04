@@ -10,6 +10,8 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/types.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
@@ -70,7 +72,7 @@ public:
 	static constexpr idx_t DERIVED_KEY_LENGTH = 32;
 
 private:
-	unordered_map<string, EncryptionKey> derived_keys;
+	duckdb::unordered_map<duckdb::string, EncryptionKey> derived_keys;
 };
 
 } // namespace duckdb
