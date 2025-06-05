@@ -1,0 +1,7 @@
+description: Sqlite backed
+
+on_connect:
+    SET autoinstall_known_extensions=true;
+    SET autoload_known_extensions=true;
+    ATTACH 'sqlite:__TEST_DIR__/current.db' AS current_db;
+    USE current_db;

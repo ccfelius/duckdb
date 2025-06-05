@@ -1,0 +1,7 @@
+description: DuckDB backed
+
+on_connect:
+    SET autoinstall_known_extensions=true;
+    SET autoload_known_extensions=true;
+    ATTACH '__TEST_DIR__/current.db' AS current_db (STORAGE_VERSION 'v1.3.0');
+    USE current_db;

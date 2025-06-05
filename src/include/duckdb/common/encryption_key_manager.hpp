@@ -10,6 +10,7 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/storage/object_cache.hpp"
@@ -49,9 +50,6 @@ public:
 	~EncryptionKeyManager() override = default;
 
 public:
-	// Initialize the EncryptionKeyManager with the DB instance
-	DUCKDB_API void Initialize(DatabaseInstance &db);
-
 	static void Initialize(ObjectCache &cache);
 	static EncryptionKeyManager &GetInternal(ObjectCache &cache);
 	static EncryptionKeyManager &Get(ClientContext &context);
@@ -80,7 +78,7 @@ public:
 
 private:
 	bool initialized = false;
-	unordered_map<string, EncryptionKey> derived_keys;
+	duckdb::unordered_map<std::string, EncryptionKey> derived_keys;
 };
 
 } // namespace duckdb
