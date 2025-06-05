@@ -1,4 +1,0 @@
-description: Force single thread
-
-on_connect:
-    SET threads = 1;

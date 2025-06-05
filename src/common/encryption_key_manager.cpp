@@ -1,11 +1,7 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "mbedtls_wrapper.hpp"
-
-#if defined(_WIN32)
 #include "duckdb/common/windows.hpp"
-#else
 #include <sys/mman.h>
-#endif
 
 namespace duckdb {
 
