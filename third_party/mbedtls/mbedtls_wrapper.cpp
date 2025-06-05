@@ -149,6 +149,18 @@ std::string MbedTlsWrapper::SHA256State::Finalize() {
 	return hash;
 }
 
+std::array<uint8_t, 32> MbedTlsWrapper::SHA256State::FinalizeArray() {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+
+	std::array<uint8_t, MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES> hash;
+
+	if (mbedtls_sha256_finish(context, hash.data())) {
+		throw std::runtime_error("SHA256 Error");
+	}
+
+	return hash;
+}
+
 void MbedTlsWrapper::SHA256State::FinishHex(char *out) {
 	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
 
@@ -283,9 +295,18 @@ void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) {
+	return InitializeEncryptionInternal(iv, iv_len, key->data(), key->length() * 8);
+}
+
+void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const char *key, duckdb::idx_t key_len) {
+	//! for MbedTLS the key length is in bits
+	return InitializeEncryptionInternal(iv, iv_len, key, key_len * 8);
+}
+
+void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryptionInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const char *key, duckdb::idx_t key_len) {
 	mode = ENCRYPT;
 
-	if (mbedtls_cipher_setkey(context.get(), reinterpret_cast<const unsigned char *>(key->data()), key->length() * 8, MBEDTLS_ENCRYPT) != 0) {
+	if (mbedtls_cipher_setkey(context.get(), reinterpret_cast<const unsigned char *>(key), key_len, MBEDTLS_ENCRYPT) != 0) {
 		runtime_error("Failed to set AES key for encryption");
 	}
 

@@ -21,7 +21,8 @@ namespace duckdb {
 class EncryptionKey {
 
 public:
-	explicit EncryptionKey(const string &encryption_key);
+	explicit EncryptionKey(const uint8_t encryption_key[32]);
+
 	~EncryptionKey();
 
 	EncryptionKey(const EncryptionKey &) = delete;
@@ -31,16 +32,16 @@ public:
 	EncryptionKey &operator=(EncryptionKey &&) noexcept = default;
 
 public:
-	const string &Get() const {
-		return encryption_key;
+	const uint8_t* Get() const {
+		return key;
 	}
 
 private:
-	string encryption_key;
+	uint8_t key[32];
 
 private:
-	static void LockEncryptionKey(string &key);
-	static void UnlockEncryptionKey(string &key);
+	static void LockEncryptionKey(const uint8_t key[32]);
+	static void UnlockEncryptionKey(const uint8_t key_p[32]);
 };
 
 class EncryptionKeyManager : public ObjectCacheEntry {
@@ -56,28 +57,28 @@ public:
 	static EncryptionKeyManager &Get(DatabaseInstance &db);
 
 public:
-	void AddKey(const string &key_name, string &key, bool wipe = true);
+	void AddKey(const string &key_name, uint8_t &key, bool wipe = true);
 	bool HasKey(const string &key_name) const;
 	void DeleteKey(const string &key_name);
-	const string &GetKey(const string &key_name) const;
+	const unique_ptr<EncryptionKey> &GetKey(const string &key_name) const;
 
 public:
 	static string ObjectType();
 	string GetObjectType() override;
 
 public:
-	static string DeriveKey(const string &user_key, data_ptr_t salt);
-	static string KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt);
-	static string GenerateRandomKey();
-	static string GenerateRandomKeyID();
-
-public:
 	//! constants
 	static constexpr idx_t KEY_ID_BYTES = 8;
 	static constexpr idx_t DERIVED_KEY_LENGTH = 32;
 
+public:
+	static std::array<uint8_t, EncryptionKeyManager::DERIVED_KEY_LENGTH> DeriveKey(const string &user_key, data_ptr_t salt);
+	static std::array<uint8_t, DERIVED_KEY_LENGTH> KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt);
+	static string GenerateRandomKey();
+	static string GenerateRandomKeyID();
+
 private:
-	duckdb::unordered_map<std::string, EncryptionKey> derived_keys;
+	duckdb::unordered_map<std::string, unique_ptr<EncryptionKey>> derived_keys;
 };
 
 } // namespace duckdb

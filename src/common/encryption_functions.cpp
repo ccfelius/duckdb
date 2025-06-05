@@ -8,9 +8,10 @@ namespace duckdb {
 EncryptionEngine::EncryptionEngine() {
 }
 
-const string &EncryptionEngine::GetKeyFromCache(DatabaseInstance &db, const string &key_name) {
+const uint8_t &EncryptionEngine::GetKeyFromCache(DatabaseInstance &db, const string &key_name) {
 	auto &keys = EncryptionKeyManager::Get(db);
-	return keys.GetKey(key_name);
+	auto &derived_key = keys.GetKey(key_name);
+	return derived_key->Get();
 }
 
 bool EncryptionEngine::ContainsKey(DatabaseInstance &db, const string &key_name) const {

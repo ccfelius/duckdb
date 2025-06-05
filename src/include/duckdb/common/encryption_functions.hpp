@@ -18,8 +18,8 @@ public:
 	~EncryptionEngine();
 
 public:
-	const string &GetKeyFromCache(DatabaseInstance &db) const;
-	static const string &GetKeyFromCache(DatabaseInstance &db, const string &key_name);
+	const uint8_t &GetKeyFromCache(DatabaseInstance &db) const;
+	static const uint8_t &GetKeyFromCache(DatabaseInstance &db, const string &key_name);
 	bool ContainsKey(DatabaseInstance &db, const string &key_name) const;
 	static void AddKeyToCache(DatabaseInstance &db, string &key, const string &key_name, bool wipe = true);
 	static string AddKeyToCache(DatabaseInstance &db, string &key);

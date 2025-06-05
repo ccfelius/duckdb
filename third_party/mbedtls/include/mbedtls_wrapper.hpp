@@ -38,6 +38,7 @@ public:
 		void AddString(const std::string &str);
 		void AddSalt(unsigned char *salt, size_t salt_len);
 		std::string Finalize();
+		std::array<uint8_t, 32> FinalizeArray();
 		void FinishHex(char *out);
 
 	private:
@@ -66,7 +67,10 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 
 	public:
 		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) override;
+		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const char *key, duckdb::idx_t key_len);
 		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) override;
+		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const char *key, duckdb::idx_t key_len);
+
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		                          duckdb::idx_t out_len) override;
 		DUCKDB_API size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len) override;
@@ -75,6 +79,10 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) override;
 		DUCKDB_API void FinalizeGCM(duckdb::data_ptr_t tag, duckdb::idx_t tag_len);
 		DUCKDB_API const mbedtls_cipher_info_t *GetCipher(size_t key_len);
+
+private:
+	void InitializeEncryptionInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const char *key, duckdb::idx_t key_len);
+	void InitializeDecryptionInternal(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const char *key, duckdb::idx_t key_len);
 
 	private:
 		Mode mode;
