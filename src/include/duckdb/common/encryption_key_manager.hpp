@@ -77,7 +77,6 @@ public:
 	static constexpr idx_t DERIVED_KEY_LENGTH = 32;
 
 private:
-	bool initialized = false;
 	duckdb::unordered_map<std::string, EncryptionKey> derived_keys;
 };
 
