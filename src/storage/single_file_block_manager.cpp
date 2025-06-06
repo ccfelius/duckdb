@@ -15,6 +15,12 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "mbedtls_wrapper.hpp"
 
+#if defined(_WIN32)
+#include "duckdb/common/windows.hpp"
+#else
+#include <sys/mman.h>
+#endif
+
 #include <algorithm>
 #include <cstring>
 
