@@ -5,6 +5,7 @@
 #include "duckdb/common/windows.hpp"
 #else
 #include <sys/mman.h>
+#undef MAP_TYPE
 #endif
 
 namespace duckdb {
