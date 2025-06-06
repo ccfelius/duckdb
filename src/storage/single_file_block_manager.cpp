@@ -450,9 +450,16 @@ void SingleFileBlockManager::LoadExistingDatabase(optional_ptr<string> encryptio
 		memset(salt, 0, MainHeader::SALT_LEN);
 		memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
 
+		//! Derive the encryption key from the provided key and the salt
+		uint8_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
+
 		//! Check if the correct key is used to decrypt the database
-		auto derived_key = EncryptionKeyManager::DeriveKey(*encryption_key, salt);
-		if (!DecryptCanary(main_header, GetEncryptionUtil(db)->CreateEncryptionState(&derived_key), &derived_key)) {
+		EncryptionKeyManager::DeriveKey(*encryption_key, salt, derived_key);
+
+		if (!DecryptCanary(
+		        main_header,
+		        GetEncryptionUtil(db)->CreateEncryptionState(derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH),
+		        derived_key)) {
 			throw IOException("Wrong encryption key used to open the database file");
 		}
 

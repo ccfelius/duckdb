@@ -29,6 +29,7 @@ public:
 	static void ToBase16(char *in, char *out, size_t len);
 
 	static constexpr size_t SHA256_HASH_LENGTH_BYTES = 32;
+	static constexpr size_t DERIVED_KEY_LENGTH_BYTES = 32;
 	static constexpr size_t SHA256_HASH_LENGTH_TEXT = 64;
 
 	class SHA256State {
@@ -36,9 +37,11 @@ public:
 		SHA256State();
 		~SHA256State();
 		void AddString(const std::string &str);
+		void AddBytes(duckdb::data_ptr_t input_bytes, duckdb::idx_t len);
 		void AddSalt(unsigned char *salt, size_t salt_len);
 		std::string Finalize();
 		void FinishHex(char *out);
+		void FinalizeDerivedKey(duckdb::data_ptr_t hash);
 
 	private:
 		void *sha_context;

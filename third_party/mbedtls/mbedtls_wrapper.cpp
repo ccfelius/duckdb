@@ -13,6 +13,7 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
+#include <duckdb.h>
 #include <stdexcept>
 
 using namespace std;
@@ -129,9 +130,27 @@ void MbedTlsWrapper::SHA256State::AddString(const std::string &str) {
 	}
 }
 
+void MbedTlsWrapper::SHA256State::AddBytes(duckdb::data_ptr_t input_bytes, duckdb::idx_t len) {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+	if (mbedtls_sha256_update(context, input_bytes, len)) {
+		throw std::runtime_error("SHA256 Error");
+	}
+}
+
 void MbedTlsWrapper::SHA256State::AddSalt(unsigned char *salt, size_t salt_len) {
 	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
 	if (mbedtls_sha256_update(context, salt, salt_len)) {
+		throw std::runtime_error("SHA256 Error");
+	}
+}
+
+// we need to input
+void MbedTlsWrapper::SHA256State::FinalizeDerivedKey(duckdb::data_ptr_t hash) {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+
+	uint8_t hash[DERIVED_KEY_LENGTH_BYTES];
+
+	if (mbedtls_sha256_finish(context, (duckdb::data_ptr_t)hash)) {
 		throw std::runtime_error("SHA256 Error");
 	}
 }

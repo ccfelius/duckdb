@@ -9,31 +9,31 @@
 
 namespace duckdb {
 
-EncryptionKey::EncryptionKey(const string &encryption_key_p) : encryption_key(encryption_key_p) {
+EncryptionKey::EncryptionKey(data_ptr_t encryption_key_p) {
 	// Lock the encryption key
-	LockEncryptionKey(encryption_key);
+	memcpy(key, encryption_key_p, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	D_ASSERT(memcmp(key, encryption_key_p, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH) == 0);
+
+	// zero out the encryption key in memory
+	memset(encryption_key_p, 0, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	LockEncryptionKey(key);
 }
 
 // destructor
 EncryptionKey::~EncryptionKey() {
-	if (!encryption_key.empty()) {
-		UnlockEncryptionKey(encryption_key);
-	}
+	UnlockEncryptionKey(key);
 }
 
-void EncryptionKey::LockEncryptionKey(string &key) {
-	if (!key.empty()) {
+void EncryptionKey::LockEncryptionKey(data_ptr_t key) {
 #if defined(_WIN32)
-		VirtualLock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	VirtualLock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
 #else
-		mlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	mlock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
 #endif
-	}
 }
 
-void EncryptionKey::UnlockEncryptionKey(string &key) {
-	fill(key.begin(), key.end(), 0); // zero out contents
-	key.clear();
+void EncryptionKey::UnlockEncryptionKey(data_ptr_t key) {
+	memset(key, 0, EncryptionKeyManager::DERIVED_KEY_LENGTH);
 #if defined(_WIN32)
 	VirtualUnlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
 #else
@@ -65,40 +65,37 @@ string EncryptionKeyManager::GenerateRandomKeyID() {
 	return key_id_str;
 }
 
-void EncryptionKeyManager::AddKey(const string &key_name, string &key) {
+void EncryptionKeyManager::AddKey(const string &key_name, data_ptr_t key) {
 	derived_keys.emplace(key_name, EncryptionKey(key));
-	// wipe out the original key
-	std::memset(&key[0], 0, key.size());
-	key.clear();
+
+	// Double check to wipe out the encryption key
+	std::memset(key, 0, DERIVED_KEY_LENGTH);
 }
 
 bool EncryptionKeyManager::HasKey(const string &key_name) const {
 	return derived_keys.find(key_name) != derived_keys.end();
 }
 
-const string &EncryptionKeyManager::GetKey(const string &key_name) const {
+const_data_ptr_t EncryptionKeyManager::GetKey(const string &key_name) const {
 	D_ASSERT(HasKey(key_name));
-	auto &key = derived_keys.at(key_name);
-	return key.Get();
+	return derived_keys.at(key_name).GetPtr();
 }
 
 void EncryptionKeyManager::DeleteKey(const string &key_name) {
 	derived_keys.erase(key_name);
 }
 
-string EncryptionKeyManager::KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt) {
+void EncryptionKeyManager::KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt,
+                                                       data_ptr_t derived_key) {
 	//! For now, we are only using SHA256 for key derivation
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 	state.AddSalt(salt, MainHeader::SALT_LEN);
-	state.AddString(user_key);
-	auto derived_key = state.Finalize();
-	//! key_length is hardcoded to 32 bytes
-	D_ASSERT(derived_key.length() == MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-	return derived_key;
+	state.AddBytes(duckdb::data_ptr_t(user_key.data()), user_key.size());
+	state.FinalizeDerivedKey(derived_key);
 }
 
-string EncryptionKeyManager::DeriveKey(const string &user_key, data_ptr_t salt) {
-	return KeyDerivationFunctionSHA256(user_key, salt);
+void EncryptionKeyManager::DeriveKey(const string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
+	KeyDerivationFunctionSHA256(user_key, salt, derived_key);
 }
 
 string EncryptionKeyManager::ObjectType() {

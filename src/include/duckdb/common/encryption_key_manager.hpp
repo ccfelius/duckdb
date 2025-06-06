@@ -22,7 +22,7 @@ namespace duckdb {
 class EncryptionKey {
 
 public:
-	explicit EncryptionKey(const string &encryption_key);
+	explicit EncryptionKey(data_ptr_t encryption_key);
 	~EncryptionKey();
 
 	EncryptionKey(const EncryptionKey &) = delete;
@@ -32,16 +32,16 @@ public:
 	EncryptionKey &operator=(EncryptionKey &&) noexcept = default;
 
 public:
-	const string &Get() const {
-		return encryption_key;
+	const_data_ptr_t GetPtr() const {
+		return key;
 	}
 
 private:
-	string encryption_key;
+	uint8_t key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 
 private:
-	static void LockEncryptionKey(string &key);
-	static void UnlockEncryptionKey(string &key);
+	static void LockEncryptionKey(data_ptr_t key);
+	static void UnlockEncryptionKey(data_ptr_t key);
 };
 
 class EncryptionKeyManager : public ObjectCacheEntry {
@@ -52,18 +52,18 @@ public:
 	static EncryptionKeyManager &Get(DatabaseInstance &db);
 
 public:
-	void AddKey(const string &key_name, string &key);
+	void AddKey(const string &key_name, data_ptr_t key);
 	bool HasKey(const string &key_name) const;
 	void DeleteKey(const string &key_name);
-	const string &GetKey(const string &key_name) const;
+	const_data_ptr_t GetKey(const string &key_name) const;
 
 public:
 	static string ObjectType();
 	string GetObjectType() override;
 
 public:
-	static string DeriveKey(const string &user_key, data_ptr_t salt);
-	static string KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt);
+	static void DeriveKey(const string &user_key, data_ptr_t salt, data_ptr_t derived_key);
+	static void KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt, data_ptr_t derived_key);
 	static string GenerateRandomKeyID();
 
 public:
