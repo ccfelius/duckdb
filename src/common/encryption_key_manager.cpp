@@ -1,11 +1,7 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "mbedtls_wrapper.hpp"
-
-#if defined(_WIN32)
-#include "duckdb/common/windows.hpp"
-#else
-#include <sys/mman.h>
-#endif
+// #include "duckdb/common/windows.hpp"
+// #include <sys/mman.h>
 
 namespace duckdb {
 
@@ -25,20 +21,20 @@ EncryptionKey::~EncryptionKey() {
 }
 
 void EncryptionKey::LockEncryptionKey(data_ptr_t key) {
-#if defined(_WIN32)
-	VirtualLock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
-#else
-	mlock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
-#endif
+	// #if defined(_WIN32)
+	// 	VirtualLock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	// #else
+	// 	mlock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	// #endif
 }
 
 void EncryptionKey::UnlockEncryptionKey(data_ptr_t key) {
-	memset(key, 0, EncryptionKeyManager::DERIVED_KEY_LENGTH);
-#if defined(_WIN32)
-	VirtualUnlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
-#else
-	munlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
-#endif
+	// 	memset(key, 0, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	// #if defined(_WIN32)
+	// 	VirtualUnlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	// #else
+	// 	munlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	// #endif
 }
 
 EncryptionKeyManager &EncryptionKeyManager::GetInternal(ObjectCache &cache) {
