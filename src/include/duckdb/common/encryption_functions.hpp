@@ -34,6 +34,7 @@ class EncryptionTypes {
 
 public:
 	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
+	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
 
 	string CipherToString(CipherType cipher_p) const {
 		switch (cipher_p) {
@@ -57,6 +58,27 @@ public:
 			return CipherType::CBC;
 		}
 		return CipherType::UNKNOWN;
+	}
+
+	string KDFToString(KeyDerivationFunction kdf_p) const {
+		switch (kdf_p) {
+		case SHA256:
+			return "sha256";
+		case PBKDF2:
+			return "pbkdf2";
+		default:
+			return "default";
+		}
+	}
+
+	KeyDerivationFunction StringToKDF(const string &key_derivation_function) const {
+		if (key_derivation_function == "sha256") {
+			return KeyDerivationFunction::SHA256;
+		} else if (key_derivation_function == "pbkdf2") {
+			return KeyDerivationFunction::PBKDF2;
+		} else {
+			return KeyDerivationFunction::DEFAULT;
+		}
 	}
 };
 

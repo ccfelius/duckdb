@@ -16,6 +16,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/encryption_functions.hpp"
 
 namespace duckdb {
 
@@ -24,55 +25,6 @@ struct MetadataHandle;
 
 struct EncryptionOptions {
 
-	enum CipherType : uint8_t { UNKNOWN = 0, GCM = 1, CTR = 2, CBC = 3 };
-
-	enum KeyDerivationFunction : uint8_t { DEFAULT = 0, SHA256 = 1, PBKDF2 = 2 };
-
-	string CipherToString(CipherType cipher_p) const {
-		switch (cipher_p) {
-		case GCM:
-			return "gcm";
-		case CTR:
-			return "ctr";
-		case CBC:
-			return "cbc";
-		default:
-			return "unknown";
-		}
-	}
-
-	string KDFToString(KeyDerivationFunction kdf_p) const {
-		switch (kdf_p) {
-		case SHA256:
-			return "sha256";
-		case PBKDF2:
-			return "pbkdf2";
-		default:
-			return "default";
-		}
-	}
-
-	KeyDerivationFunction StringToKDF(const string &key_derivation_function) const {
-		if (key_derivation_function == "sha256") {
-			return KeyDerivationFunction::SHA256;
-		} else if (key_derivation_function == "pbkdf2") {
-			return KeyDerivationFunction::PBKDF2;
-		} else {
-			return KeyDerivationFunction::DEFAULT;
-		}
-	}
-
-	CipherType StringToCipher(const string &encryption_cipher) const {
-		if (encryption_cipher == "gcm") {
-			return CipherType::GCM;
-		} else if (encryption_cipher == "ctr") {
-			return CipherType::CTR;
-		} else if (encryption_cipher == "cbc") {
-			return CipherType::CBC;
-		}
-		return CipherType::UNKNOWN;
-	}
-
 	//! indicates whether the db is encrypted
 	bool encryption_enabled = false;
 	//! Whether Additional Authenticated Data is used
@@ -80,9 +32,9 @@ struct EncryptionOptions {
 	//! derived encryption key id
 	string derived_key_id;
 	//! Cipher used for encryption
-	CipherType cipher;
+	EncryptionTypes::CipherType cipher;
 	//! key derivation function (kdf) used
-	KeyDerivationFunction kdf = KeyDerivationFunction::SHA256;
+	EncryptionTypes::KeyDerivationFunction kdf = EncryptionTypes::KeyDerivationFunction::SHA256;
 	//! Key Length
 	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 };

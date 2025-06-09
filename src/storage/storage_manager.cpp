@@ -145,8 +145,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 
 	if (storage_options.encryption) {
 		options.encryption_options.encryption_enabled = true;
-		options.encryption_options.cipher =
-		    options.encryption_options.StringToCipher(storage_options.encryption_cipher);
+		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
