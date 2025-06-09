@@ -105,11 +105,11 @@ class SingleFileBlockManager : public BlockManager {
 	static constexpr uint64_t BLOCK_START = Storage::FILE_HEADER_SIZE * 3;
 
 public:
-	SingleFileBlockManager(AttachedDatabase &db, const string &path, const StorageManagerOptions &options_p);
+	SingleFileBlockManager(AttachedDatabase &db_p, const string &path_p, const StorageManagerOptions &options_p);
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase(optional_ptr<string> encryption_key = nullptr);
+	void CreateNewDatabase(optional_ptr<ClientContext> context, optional_ptr<string> encryption_key = nullptr);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
 	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr);
@@ -143,7 +143,7 @@ public:
 	//! Write the given block to disk
 	void Write(FileBuffer &block, block_id_t block_id) override;
 	//! Write the header to disk, this is the final step of the checkpointing process
-	void WriteHeader(DatabaseHeader header) override;
+	void WriteHeader(optional_ptr<ClientContext> context, DatabaseHeader header) override;
 	//! Sync changes to the underlying file
 	void FileSync() override;
 	//! Truncate the underlying database file after a checkpoint
@@ -166,24 +166,19 @@ private:
 	//!	to detect inconsistencies with the file header.
 	void Initialize(const DatabaseHeader &header, const optional_idx block_alloc_size);
 
-	void EncryptBuffer(FileBuffer &block, FileBuffer &temp_buffer_manager, uint64_t delta) const;
-	void DecryptBuffer(data_ptr_t internal_buffer, uint64_t block_size, uint64_t delta) const;
 	void CheckChecksum(FileBuffer &block, uint64_t location, uint64_t delta, bool skip_block_header = false) const;
 	void CheckChecksum(data_ptr_t start_ptr, uint64_t delta, bool skip_block_header = false) const;
 
 	void ReadAndChecksum(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
-	void ChecksumAndWrite(FileBuffer &handle, uint64_t location, bool skip_block_header = false) const;
+	void ChecksumAndWrite(optional_ptr<ClientContext> context, FileBuffer &handle, uint64_t location,
+	                      bool skip_block_header = false) const;
 
 	idx_t GetBlockLocation(block_id_t block_id) const;
 
 	// Encrypt, Store, Decrypt the canary
-	void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header) const;
+	static void StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id);
 	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
-
-	// Add encryption key to cache
-	void AddDerivedKeyToCache(string &derived_key);
-	const string &GetKeyFromCache() const;
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();
