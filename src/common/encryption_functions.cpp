@@ -18,6 +18,37 @@ bool EncryptionEngine::ContainsKey(DatabaseInstance &db, const string &key_name)
 	return keys.HasKey(key_name);
 }
 
+bool EncryptionEngine::HasMasterKey(DatabaseInstance &db) {
+	auto &keys = EncryptionKeyManager::Get(db);
+	return keys.HasMasterKey();
+}
+
+const_data_ptr_t EncryptionEngine::GetMasterKey(DatabaseInstance &db) {
+	auto &keys = EncryptionKeyManager::Get(db);
+	return keys.GetMasterKey();
+}
+
+idx_t EncryptionEngine::GetMasterKeySize(DatabaseInstance &db) {
+	auto &keys = EncryptionKeyManager::Get(db);
+	return keys.GetMasterKeySize();
+}
+
+void EncryptionEngine::AddMasterKey(DatabaseInstance &db, DBConfigOptions &config_options) {
+	auto &keys = EncryptionKeyManager::Get(db);
+
+	if (config_options.master_key.empty()) {
+		throw InvalidInputException("Cannot add master key: no master key found.");
+	}
+
+	if (!keys.HasMasterKey()) {
+		// set the master key
+		keys.SetMasterKey(data_ptr_t(config_options.master_key.data()), config_options.master_key.size());
+	}
+
+	// wipe out the key
+	memset(&config_options.master_key, 0, config_options.master_key.size());
+}
+
 void EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const string &key_name, bool wipe) {
 	auto &keys = EncryptionKeyManager::Get(db);
 	if (!keys.HasKey(key_name)) {

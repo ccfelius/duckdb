@@ -25,37 +25,20 @@ EncryptionKey::~EncryptionKey() {
 	UnlockEncryptionKey(key);
 }
 
-void EncryptionKey::LockEncryptionKey(data_ptr_t key) {
+void EncryptionKey::LockEncryptionKey(data_ptr_t key, idx_t key_len) {
 #if defined(_WIN32)
-	VirtualLock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	VirtualLock(key, key_len);
 #else
-	mlock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	mlock(key, key_len);
 #endif
 }
 
-void EncryptionKey::UnlockEncryptionKey(data_ptr_t key) {
-	memset(key, 0, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, idx_t key_len) {
+	memset(key, 0, key_len);
 #if defined(_WIN32)
-	VirtualUnlock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	VirtualUnlock(key, key_len);
 #else
-	munlock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
-#endif
-}
-
-void EncryptionKey::LockEncryptionKey(data_ptr_t key, const idx_t size) {
-#if defined(_WIN32)
-	VirtualLock(key, size);
-#else
-	mlock(key, size);
-#endif
-}
-
-void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, const idx_t size) {
-	memset(key, 0, size);
-#if defined(_WIN32)
-	VirtualUnlock(key, size);
-#else
-	munlock(key, size);
+	munlock(key, key_len);
 #endif
 }
 
@@ -102,8 +85,9 @@ void EncryptionKeyManager::DeleteKey(const string &key_name) {
 	derived_keys.erase(key_name);
 }
 
-void EncryptionKeyManager::KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
+void EncryptionKeyManager::KeyDerivationFunctionSHA256(const_data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
                                                        data_ptr_t derived_key) {
+
 	//! For now, we are only using SHA256 for key derivation
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 	state.AddSalt(salt, MainHeader::SALT_LEN);
@@ -111,14 +95,21 @@ void EncryptionKeyManager::KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_
 	state.FinalizeDerivedKey(derived_key);
 }
 
-void EncryptionKeyManager::DeriveKey(const string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
-	KeyDerivationFunctionSHA256(data_ptr_t(reinterpret_cast<const uint8_t *>(user_key.data())), user_key.size(), salt,
-	                            derived_key);
+void EncryptionKeyManager::KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
+                                                       data_ptr_t derived_key) {
+	KeyDerivationFunctionSHA256(user_key, user_key_size, salt, derived_key);
 }
 
-void EncryptionKeyManager::DeriveKey(data_ptr_t user_key, data_ptr_t salt, data_ptr_t derived_key) {
-	// this key (master key) is already derived
-	KeyDerivationFunctionSHA256(user_key, DERIVED_KEY_LENGTH, salt, derived_key);
+void EncryptionKeyManager::DeriveKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
+                                     data_ptr_t derived_key) {
+	KeyDerivationFunctionSHA256(master_key, key_size, salt, derived_key);
+}
+
+void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
+	DeriveKey(user_key, salt, derived_key);
+
+	//! todo; clear user key
+	memset(&user_key, 0, user_key.size());
 }
 
 string EncryptionKeyManager::ObjectType() {

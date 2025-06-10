@@ -143,11 +143,9 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 	options.debug_initialize = config.options.debug_initialize;
 	options.storage_version = storage_options.storage_version;
 
-	if (storage_options.encryption || !config.options.user_key.empty() || config.options.full_encryption) {
+	if (storage_options.encryption) {
 		options.encryption_options.encryption_enabled = true;
-		options.encryption_options.cipher = options.encryption_options.cipher =
-		    EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
-		storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
+		options.encryption_options.cipher = EncryptionTypes::StringToCipher(storage_options.encryption_cipher);
 	}
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
@@ -201,7 +199,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->CreateNewDatabase(context, &storage_options.encryption_key, storage_options.encryption);
+		sf_block_manager->CreateNewDatabase(context, storage_options);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 		wal = make_uniq<WriteAheadLog>(db, wal_path);
@@ -227,7 +225,7 @@ void SingleFileStorageManager::LoadDatabase(optional_ptr<ClientContext> context,
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
 		// and later adjust it when reading the file header.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
-		sf_block_manager->LoadExistingDatabase(&storage_options.encryption_key, storage_options.encryption);
+		sf_block_manager->LoadExistingDatabase(storage_options);
 		block_manager = std::move(sf_block_manager);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, row_group_size);
 

@@ -531,7 +531,6 @@ SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &ke
 }
 
 shared_ptr<EncryptionUtil> DatabaseInstance::GetEncryptionUtil() const {
-
 	if (config.encryption_util) {
 		return config.encryption_util;
 	}
