@@ -87,7 +87,6 @@ void EncryptionKeyManager::DeleteKey(const string &key_name) {
 
 void EncryptionKeyManager::KeyDerivationFunctionSHA256(const_data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
                                                        data_ptr_t derived_key) {
-
 	//! For now, we are only using SHA256 for key derivation
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 	state.AddSalt(salt, MainHeader::SALT_LEN);
@@ -97,7 +96,7 @@ void EncryptionKeyManager::KeyDerivationFunctionSHA256(const_data_ptr_t user_key
 
 void EncryptionKeyManager::KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
                                                        data_ptr_t derived_key) {
-	KeyDerivationFunctionSHA256(user_key, user_key_size, salt, derived_key);
+	KeyDerivationFunctionSHA256(reinterpret_cast<const_data_ptr_t>(user_key), user_key_size, salt, derived_key);
 }
 
 void EncryptionKeyManager::DeriveKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
@@ -106,9 +105,9 @@ void EncryptionKeyManager::DeriveKey(const_data_ptr_t master_key, idx_t key_size
 }
 
 void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
-	DeriveKey(user_key, salt, derived_key);
+	DeriveKey(reinterpret_cast<const_data_ptr_t>(&user_key), user_key.size(), salt, derived_key);
 
-	//! todo; clear user key
+	//! Clear user key
 	memset(&user_key, 0, user_key.size());
 }
 

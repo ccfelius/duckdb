@@ -522,25 +522,6 @@ void SingleFileBlockManager::LoadExistingDatabase(StorageOptions &storage_option
 		}
 	}
 
-	if (main_header.IsEncrypted()) {
-		//! Get the stored salt
-		uint8_t salt[MainHeader::SALT_LEN];
-		memset(salt, 0, MainHeader::SALT_LEN);
-		memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
-
-		//! Check if the correct key is used to decrypt the database
-		// Derive the encryption key and add it to cache
-		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-		EncryptionKeyManager::DeriveKey(storage_options.encryption_key, salt, derived_key);
-		auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
-		    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
-		if (!DecryptCanary(main_header, encryption_state, derived_key)) {
-			throw IOException("Wrong encryption key used to open the database file");
-		}
-
-		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
-	}
-
 	options.version_number = main_header.version_number;
 
 	// read the database headers from disk

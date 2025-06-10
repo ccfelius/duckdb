@@ -136,7 +136,6 @@ public:
 
 public:
 	static void DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key);
-	static void DeriveKey(data_ptr_t user_key, data_ptr_t salt, data_ptr_t derived_key);
 	static void DeriveKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt, data_ptr_t derived_key);
 	static void KeyDerivationFunctionSHA256(const_data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
 	                                        data_ptr_t derived_key);
