@@ -46,7 +46,8 @@ void EncryptionEngine::AddMasterKey(DatabaseInstance &db, DBConfigOptions &confi
 	}
 
 	// wipe out the key
-	memset(&config_options.master_key, 0, config_options.master_key.size());
+	std::fill(config_options.master_key.begin(), config_options.master_key.end(), 0);
+	config_options.master_key.clear();
 }
 
 void EncryptionEngine::AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const string &key_name, bool wipe) {

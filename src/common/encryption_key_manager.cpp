@@ -108,7 +108,8 @@ void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr
 	DeriveKey(reinterpret_cast<const_data_ptr_t>(&user_key), user_key.size(), salt, derived_key);
 
 	//! Clear user key
-	memset(&user_key, 0, user_key.size());
+	std::fill(user_key.begin(), user_key.end(), 0);
+	user_key.clear();
 }
 
 string EncryptionKeyManager::ObjectType() {
