@@ -13,7 +13,7 @@ const_data_ptr_t EncryptionEngine::GetKeyFromCache(DatabaseInstance &db, const s
 	return keys.GetKey(key_name);
 }
 
-bool EncryptionEngine::ContainsKey(DatabaseInstance &db, const string &key_name) const {
+bool EncryptionEngine::ContainsKey(DatabaseInstance &db, const string &key_name) {
 	auto &keys = EncryptionKeyManager::Get(db);
 	return keys.HasKey(key_name);
 }

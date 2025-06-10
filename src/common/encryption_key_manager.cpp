@@ -36,9 +36,26 @@ void EncryptionKey::LockEncryptionKey(data_ptr_t key) {
 void EncryptionKey::UnlockEncryptionKey(data_ptr_t key) {
 	memset(key, 0, EncryptionKeyManager::DERIVED_KEY_LENGTH);
 #if defined(_WIN32)
-	VirtualUnlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	VirtualUnlock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
 #else
-	munlock(static_cast<void *>(&key[0]), EncryptionKeyManager::DERIVED_KEY_LENGTH);
+	munlock(key, EncryptionKeyManager::DERIVED_KEY_LENGTH);
+#endif
+}
+
+void EncryptionKey::LockEncryptionKey(data_ptr_t key, const idx_t size) {
+#if defined(_WIN32)
+	VirtualLock(key, size);
+#else
+	mlock(key, size);
+#endif
+}
+
+void EncryptionKey::UnlockEncryptionKey(data_ptr_t key, const idx_t size) {
+	memset(key, 0, size);
+#if defined(_WIN32)
+	VirtualUnlock(key, size);
+#else
+	munlock(key, size);
 #endif
 }
 
@@ -85,17 +102,23 @@ void EncryptionKeyManager::DeleteKey(const string &key_name) {
 	derived_keys.erase(key_name);
 }
 
-void EncryptionKeyManager::KeyDerivationFunctionSHA256(const string &user_key, data_ptr_t salt,
+void EncryptionKeyManager::KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
                                                        data_ptr_t derived_key) {
 	//! For now, we are only using SHA256 for key derivation
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 	state.AddSalt(salt, MainHeader::SALT_LEN);
-	state.AddBytes(duckdb::data_ptr_t(reinterpret_cast<const uint8_t *>(user_key.data())), user_key.size());
+	state.AddBytes(user_key, user_key_size);
 	state.FinalizeDerivedKey(derived_key);
 }
 
 void EncryptionKeyManager::DeriveKey(const string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
-	KeyDerivationFunctionSHA256(user_key, salt, derived_key);
+	KeyDerivationFunctionSHA256(data_ptr_t(reinterpret_cast<const uint8_t *>(user_key.data())), user_key.size(), salt,
+	                            derived_key);
+}
+
+void EncryptionKeyManager::DeriveKey(data_ptr_t user_key, data_ptr_t salt, data_ptr_t derived_key) {
+	// this key (master key) is already derived
+	KeyDerivationFunctionSHA256(user_key, DERIVED_KEY_LENGTH, salt, derived_key);
 }
 
 string EncryptionKeyManager::ObjectType() {

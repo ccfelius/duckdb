@@ -19,7 +19,7 @@ public:
 
 public:
 	static const_data_ptr_t GetKeyFromCache(DatabaseInstance &db, const string &key_name);
-	bool ContainsKey(DatabaseInstance &db, const string &key_name) const;
+	static bool ContainsKey(DatabaseInstance &db, const string &key_name);
 	static void AddKeyToCache(DatabaseInstance &db, data_ptr_t key, const string &key_name, bool wipe = true);
 	static string AddKeyToCache(DatabaseInstance &db, data_ptr_t key);
 	static void AddTempKeyToCache(DatabaseInstance &db);

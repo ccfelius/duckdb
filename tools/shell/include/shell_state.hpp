@@ -113,6 +113,10 @@ public:
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
 	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
+	//! If duckdb is opened with a password for encryption
+	string user_key;
+	string master_key;
+	bool full_encryption = false;
 	//! Decimal separator (if any)
 	char decimal_separator = '\0';
 	//! Thousand separator (if any)

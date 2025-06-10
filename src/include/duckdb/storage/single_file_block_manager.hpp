@@ -61,10 +61,11 @@ public:
 
 	FileOpenFlags GetFileFlags(bool create_new) const;
 	//! Creates a new database.
-	void CreateNewDatabase(optional_ptr<ClientContext> context, optional_ptr<string> encryption_key = nullptr);
+	void CreateNewDatabase(optional_ptr<ClientContext> context, optional_ptr<string> encryption_key = nullptr,
+	                       bool encryption_on_attach = false);
 	//! Loads an existing database. We pass the provided block allocation size as a parameter
 	//! to detect inconsistencies with the file header.
-	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr);
+	void LoadExistingDatabase(optional_ptr<string> encryption_key = nullptr, bool encryption_on_attach = false);
 
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) override;
@@ -131,6 +132,8 @@ private:
 	static void StoreEncryptedCanary(DatabaseInstance &db, MainHeader &main_header, const string &key_id);
 	static void StoreSalt(MainHeader &main_header, data_ptr_t salt);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
+	void CheckKey(MainHeader &main_header, const_data_ptr_t derived_key) const;
+	void CheckAndAddEncryptionKey(MainHeader &main_header, const string &user_key, bool is_master_key = false);
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<MetadataHandle> GetFreeListBlocks();
