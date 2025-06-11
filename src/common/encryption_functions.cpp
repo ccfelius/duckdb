@@ -41,8 +41,20 @@ void EncryptionEngine::AddMasterKey(DatabaseInstance &db, DBConfigOptions &confi
 	}
 
 	if (!keys.HasMasterKey()) {
-		// set the master key
-		keys.SetMasterKey(data_ptr_t(config_options.master_key.data()), config_options.master_key.size());
+		// set the master key if it is not in cache
+		// base64 decode the key first
+		string decoded_key;
+
+		try {
+			//! Key is base64 encoded
+			//! TODO change base64 function to not cast back to string
+			decoded_key = EncryptionKeyManager::Base64Decode(config_options.master_key);
+		} catch (const ConversionException &e) {
+			//! Todo; check if valid utf-8
+			decoded_key = config_options.master_key;
+		}
+
+		keys.SetMasterKey(data_ptr_t(decoded_key.data()), decoded_key.size());
 	}
 
 	// wipe out the key
