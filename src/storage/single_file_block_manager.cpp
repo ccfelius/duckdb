@@ -347,7 +347,6 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	//! Check if the correct key is used to decrypt the database
 	// Derive the encryption key and add it to cache
 	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-	//! todo; wipe out user key
 	EncryptionKeyManager::DeriveKey(user_key, salt, derived_key);
 	auto encryption_state = db.GetDatabase().GetEncryptionUtil()->CreateEncryptionState(
 	    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
@@ -399,12 +398,14 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 			EncryptionKeyManager::DeriveKey(config.options.user_key, salt, derived_key);
 		} else if (config.options.full_encryption && !config.options.master_key.empty()) {
 			//! master key used to encrypt/decrypt all files (in cli with -master_key '')
+			//! TODO; base64 decode masterkey if its added
 			EncryptionEngine::AddMasterKey(db.GetDatabase(), config.options);
 			EncryptionKeyManager::DeriveKey(config.options.master_key, salt, derived_key);
 		} else {
 			throw CatalogException("Cannot create a new database without a key");
 		}
 
+		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
 
 		//! Store all metadata in the main header

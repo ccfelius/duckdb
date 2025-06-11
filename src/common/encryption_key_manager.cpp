@@ -1,5 +1,8 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 #if defined(_WIN32)
 #include "duckdb/common/windows.hpp"
@@ -99,17 +102,41 @@ void EncryptionKeyManager::KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_
 	KeyDerivationFunctionSHA256(reinterpret_cast<const_data_ptr_t>(user_key), user_key_size, salt, derived_key);
 }
 
-void EncryptionKeyManager::DeriveKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
-                                     data_ptr_t derived_key) {
-	KeyDerivationFunctionSHA256(master_key, key_size, salt, derived_key);
+string EncryptionKeyManager::Base64Decode(const string &key) {
+	auto result_size = Blob::FromBase64Size(key);
+	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
+	Blob::FromBase64(key, output.get(), result_size);
+	string decoded_key(reinterpret_cast<const char *>(output.get()), result_size);
+	memset(output.get(), 0, result_size);
+	return decoded_key;
 }
 
 void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
-	DeriveKey(reinterpret_cast<const_data_ptr_t>(&user_key), user_key.size(), salt, derived_key);
+	string decoded_key;
 
-	//! Clear user key
+	try {
+		//! Key is base64 encoded
+		decoded_key = Base64Decode(user_key);
+	} catch (const ConversionException &e) {
+		//! Todo; check if valid utf-8
+		decoded_key = user_key;
+	}
+
+	KeyDerivationFunctionSHA256(reinterpret_cast<const_data_ptr_t>(decoded_key.data()), decoded_key.size(), salt,
+	                            derived_key);
+
+	// wipe the original and decoded key
 	std::fill(user_key.begin(), user_key.end(), 0);
+	std::fill(decoded_key.begin(), decoded_key.end(), 0);
 	user_key.clear();
+	decoded_key.clear();
+}
+
+void EncryptionKeyManager::DeriveKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
+                                     data_ptr_t derived_key) {
+	//! If the master key is base64, it is already decoded earlier (and stored decoded)
+	//! A master key is also not wiped
+	KeyDerivationFunctionSHA256(master_key, key_size, salt, derived_key);
 }
 
 string EncryptionKeyManager::ObjectType() {
