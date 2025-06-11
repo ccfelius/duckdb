@@ -136,6 +136,7 @@ void EncryptionKeyManager::DeriveKey(const_data_ptr_t master_key, idx_t key_size
                                      data_ptr_t derived_key) {
 	//! If the master key is base64, it is already decoded earlier (and stored decoded)
 	//! A master key is also not wiped
+	//! THE BASE64 DECODED MASTER KEY NEEDS ALSO ALREADY TO BE IMPLEMENTED
 	KeyDerivationFunctionSHA256(master_key, key_size, salt, derived_key);
 }
 

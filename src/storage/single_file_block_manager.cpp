@@ -357,15 +357,15 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
 }
 
-void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, StorageOptions &storage_options) {
-	return CheckAndAddEncryptionKey(main_header, storage_options.encryption_key);
+void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header) {
+	return CheckAndAddEncryptionKey(main_header, *options.encryption_options.user_key);
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, DBConfigOptions &config_options) {
 	return CheckAndAddEncryptionKey(main_header, config_options.user_key);
 }
 
-void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context, StorageOptions &storage_options) {
+void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> context) {
 	auto flags = GetFileFlags(true);
 
 	// open the RDBMS handle
@@ -378,33 +378,43 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+	auto &config = DBConfig::GetConfig(db.GetDatabase());
+
+	// Derive the encryption key and add it to cache
+	// Unused for plain databases
+	uint8_t salt[MainHeader::SALT_LEN];
+	data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
 
 	if (options.encryption_options.encryption_enabled) {
-		auto &config = DBConfig::GetConfig(db.GetDatabase());
-		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
-
+		//! key given with ATTACH, use the user key pointer in encryption options
 		//! we generate a random salt for each password
-		uint8_t salt[MainHeader::SALT_LEN];
 		GenerateSalt(db, salt, options);
+		EncryptionKeyManager::DeriveKey(*options.encryption_options.user_key, salt, derived_key);
+		options.encryption_options.user_key = nullptr;
+	} else if (!config.options.user_key.empty()) {
+		//! user key given in cli (with -key '')
+		//! we generate a random salt for each password
+		GenerateSalt(db, salt, options);
+		EncryptionKeyManager::DeriveKey(config.options.user_key, salt, derived_key);
+		options.encryption_options.encryption_enabled = true;
+	} else if (config.options.full_encryption && !config.options.master_key.empty()) {
+		//! master key used to encrypt/decrypt all files (in cli with -master_key '')
+		//! TODO; base64 decode masterkey if its added
+		//! we generate a random salt for each password
+		GenerateSalt(db, salt, options);
+		EncryptionEngine::AddMasterKey(db.GetDatabase(), config.options);
+		EncryptionKeyManager::DeriveKey(config.options.master_key, salt, derived_key);
+		options.encryption_options.encryption_enabled = true;
+	} else if (EncryptionEngine::HasMasterKey(db.GetDatabase())) {
+		GenerateSalt(db, salt, options);
+		auto master_key_ptr = EncryptionEngine::GetMasterKey(db.GetDatabase());
+		auto master_key_size = EncryptionEngine::GetMasterKeySize(db.GetDatabase());
+		EncryptionKeyManager::DeriveKey(master_key_ptr, master_key_size, salt, derived_key);
+		options.encryption_options.encryption_enabled = true;
+	}
 
-		// Derive the encryption key and add it to cache
-		data_t derived_key[MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH];
-
-		if (storage_options.encryption) {
-			//! key given with ATTACH
-			EncryptionKeyManager::DeriveKey(storage_options.encryption_key, salt, derived_key);
-		} else if (!config.options.user_key.empty()) {
-			//! user key given in cli (with -key '')
-			EncryptionKeyManager::DeriveKey(config.options.user_key, salt, derived_key);
-		} else if (config.options.full_encryption && !config.options.master_key.empty()) {
-			//! master key used to encrypt/decrypt all files (in cli with -master_key '')
-			//! TODO; base64 decode masterkey if its added
-			EncryptionEngine::AddMasterKey(db.GetDatabase(), config.options);
-			EncryptionKeyManager::DeriveKey(config.options.master_key, salt, derived_key);
-		} else {
-			throw CatalogException("Cannot create a new database without a key");
-		}
-
+	if (options.encryption_options.encryption_enabled) {
+		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
 		//! the derived key is wiped in addkeytocache
 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
 
@@ -455,7 +465,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
 	max_block = 0;
 }
 
-void SingleFileBlockManager::LoadExistingDatabase(StorageOptions &storage_options) {
+void SingleFileBlockManager::LoadExistingDatabase() {
 	auto flags = GetFileFlags(false);
 
 	// open the RDBMS handle
@@ -487,39 +497,53 @@ void SingleFileBlockManager::LoadExistingDatabase(StorageOptions &storage_option
 		throw CatalogException("A key is specified, but database \"%s\" is not encrypted", path);
 	}
 
-	if (main_header.IsEncrypted() && !options.encryption_options.encryption_enabled) {
-		// TODO; look if keys are stored in DuckDB secrets
-		// then automatically derive that key
-		throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
-	} else if (main_header.IsEncrypted() && options.encryption_options.encryption_enabled &&
-	           storage_options.encryption) {
+	if (main_header.IsEncrypted()) {
 		// encryption is set, check if the given key upon attach is correct
 		//! Get the stored salt
-		CheckAndAddEncryptionKey(main_header, storage_options);
-	} else if (main_header.IsEncrypted() && !config.options.user_key.empty()) {
-		//! A new (encrypted) database is added through the CLI
-		//! If a user key is given, let's try this key
-		//! If it succeeds, we put the key in cache
-		CheckAndAddEncryptionKey(main_header, config.options.user_key);
-	} else if (config.options.full_encryption) {
-		auto has_master_key = EncryptionEngine::HasMasterKey(db.GetDatabase());
-		if (has_master_key) {
-			//! If the master key is already in cache
-			//! Check if the derived key is correct
-			//! And put the derived key in cache - if it is correct
-			CheckAndAddDerivedMasterKey(main_header, EncryptionEngine::GetMasterKey(db.GetDatabase()),
-			                            EncryptionEngine::GetMasterKeySize(db.GetDatabase()));
-		} else if (!config.options.master_key.empty() && !has_master_key) {
-			//! if a master key is present, and cache does not contain master key
-			//! add master key to cache (note; in plaintext)
-			EncryptionEngine::AddMasterKey(db.GetDatabase(), config.options);
-			//! Check if master key is correct, and add the derived master key
-			CheckAndAddDerivedMasterKey(main_header, EncryptionEngine::GetMasterKey(db.GetDatabase()),
-			                            EncryptionEngine::GetMasterKeySize(db.GetDatabase()));
-		} else if (!has_master_key) {
-			//! no master key given and key is not in cache, but full encryption is set
-			throw CatalogException(
-			    "Full encryption is set, but cannot encrypt or decrypt a database without a master key", path);
+		uint8_t salt[MainHeader::SALT_LEN];
+		memset(salt, 0, MainHeader::SALT_LEN);
+		memcpy(salt, main_header.GetSalt(), MainHeader::SALT_LEN);
+
+		if (options.encryption_options.encryption_enabled) {
+			//! Key given with attach
+			//! Check if the correct key is used to decrypt the database
+			// Derive the encryption key and add it to cache
+			CheckAndAddEncryptionKey(main_header);
+			// delete user key ptr
+			options.encryption_options.user_key = nullptr;
+		} else if (!config.options.user_key.empty()) {
+			//! A new (encrypted) database is added through the Command Line
+			//! If a user key is given, let's try this key
+			//! If it succeeds, we put the key in cache
+			//! input key is with -key in the command line
+			CheckAndAddEncryptionKey(main_header, config.options.user_key);
+		} else if (config.options.full_encryption) {
+			auto has_master_key = EncryptionEngine::HasMasterKey(db.GetDatabase());
+			if (has_master_key) {
+				//! If the master key is already in cache
+				//! Check if the derived key is correct
+				//! And put the derived key in cache - if it is correct
+				CheckAndAddDerivedMasterKey(main_header, EncryptionEngine::GetMasterKey(db.GetDatabase()),
+				                            EncryptionEngine::GetMasterKeySize(db.GetDatabase()));
+			} else if (!config.options.master_key.empty() && !has_master_key) {
+				//! if a master key is present, and cache does not contain master key
+				//! add master key to cache (note; in plaintext)
+				// somewherehere, d also decode from base64 if possisble
+				EncryptionEngine::AddMasterKey(db.GetDatabase(), config.options);
+				//! Check if master key is correct, and add the derived master key
+				CheckAndAddDerivedMasterKey(main_header, EncryptionEngine::GetMasterKey(db.GetDatabase()),
+				                            EncryptionEngine::GetMasterKeySize(db.GetDatabase()));
+			} else if (!has_master_key) {
+				//! no master key given and key is not in cache, but full encryption is set
+				throw CatalogException(
+				    "Full encryption is set, but cannot encrypt or decrypt a database without a master key", path);
+			}
+		}
+
+		// the underlying needs to be put down (if no user key nor master key)
+		if (!options.encryption_options.encryption_enabled) {
+			// if encrypted, but no encryption
+			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
 		}
 	}
 
