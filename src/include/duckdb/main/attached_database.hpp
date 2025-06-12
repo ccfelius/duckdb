@@ -79,6 +79,10 @@ public:
 		return storage_extension;
 	}
 
+	bool IsEncrypted() const {
+		return is_encrypted;
+	}
+
 	const string &GetName() const {
 		return name;
 	}
@@ -103,6 +107,17 @@ private:
 	optional_ptr<StorageExtension> storage_extension;
 	bool is_initial_database = false;
 	bool is_closed = false;
+
+	void SetEncryptionKeyId(const string &key_id) {
+		encryption_key_id = key_id;
+	};
+
+	string &GetEncryptionKeyId() {
+		return encryption_key_id;
+	};
+
+	string encryption_key_id;
+	bool is_encrypted = false;
 };
 
 } // namespace duckdb

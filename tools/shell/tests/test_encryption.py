@@ -174,10 +174,6 @@ def test_user_key_no_database(shell):
     result.check_stderr('Error: key specified but no database found')
 
 
-# Long test key: test_key_U2FsdGVkX18+0aLSpbJ9V0hVTVV1oYlJbVhGZ0NMTkpqaWp4R3hNR2VaUkVHaVRqR1htR3V1QXZmc0NtbUxSaUlwWVdoVkNrT0RUR2pqUGxkUVdtSmtOUldHWlJRa05JUWlVSkZaVk10aEZXR2FRa0Z6eEx0VlZIVG9LR0UwRkdNZ0xXaEpKWkNKRW5BaXlLSnNWTkdWTkpHZ0ZR
-#
-
-
 def test_long_base64_user_key(shell):
     """
     Opened with a long -key
