@@ -330,7 +330,8 @@ void SingleFileBlockManager::CheckAndAddDerivedMasterKey(MainHeader &main_header
 	    derived_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
 
 	if (!DecryptCanary(main_header, encryption_state, derived_key)) {
-		throw IOException("Wrong encryption key used to open the database file");
+		throw IOException("Master key found in cache, but wrong encryption key used to open the database file.\nTry to "
+		                  "explicitly define an ENCRYPTION_KEY with ATTACH");
 	}
 
 	options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);

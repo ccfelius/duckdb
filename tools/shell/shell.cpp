@@ -4935,11 +4935,12 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			bail_on_error = true;
 		} else if (strcmp(z, "-key") == 0) {
 			// only possible if there is a database file as input
-			data.user_key = cmdline_option_value(argc, argv, ++i);
+			data.user_key = string(cmdline_option_value(argc, argv, ++i));
+			data.contains_user_key = true;
 			data.openFlags |= DUCKDB_ENCRYPTION_KEY;
 		} else if (strcmp(z, "-master_key") == 0) {
 			// add a master key and set the database to full encryption
-			data.master_key = cmdline_option_value(argc, argv, ++i);
+			data.master_key = string(cmdline_option_value(argc, argv, ++i));
 			data.openFlags |= DUCKDB_MASTER_KEY;
 			data.use_master_key = true;
 		}
@@ -4962,6 +4963,10 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 #endif
 
 	if (data.zDbFilename.empty()) {
+		if (data.contains_user_key) {
+			utf8_printf(stderr, "Error: key specified but no database found");
+			return SQLITE_ERROR;
+		}
 #ifndef SQLITE_OMIT_MEMORYDB
 		data.zDbFilename = ":memory:";
 		warnInmemoryDb = argc == 1;
@@ -5054,16 +5059,21 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 		} else if (strcmp(z, "-bail") == 0) {
 			bail_on_error = true;
 		} else if (strcmp(z, "-master_key") == 0) {
+			if (data.contains_user_key) {
+				utf8_printf(stderr, "Cannot specify both -key and -master_key.\n");
+				return SQLITE_ERROR;
+			}
 			data.openFlags |= DUCKDB_MASTER_KEY;
-			// fetch the encryption key
 			data.master_key = cmdline_option_value(argc, argv, ++i);
+			data.use_master_key = true;
 		} else if (strcmp(z, "-key") == 0) {
 			if (data.use_master_key) {
-				utf8_printf(stderr,
-				            "Error: it is not possible to set a master key and user key. Add user key through ATTACH");
+				utf8_printf(stderr, "Cannot specify both -key and -master_key.\n");
+				return SQLITE_ERROR;
 			}
 			data.openFlags |= DUCKDB_ENCRYPTION_KEY;
 			data.user_key = cmdline_option_value(argc, argv, ++i);
+			data.contains_user_key = true;
 		} else if (strcmp(z, "-version") == 0) {
 			printf("%s (%s) %s\n", duckdb::DuckDB::LibraryVersion(), duckdb::DuckDB::ReleaseCodename(),
 			       duckdb::DuckDB::SourceID());

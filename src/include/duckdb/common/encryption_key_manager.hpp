@@ -49,13 +49,17 @@ class MasterKey {
 public:
 	explicit MasterKey(data_ptr_t input_key, idx_t input_size) : master_key(nullptr), key_size(0) {
 		// A master key can be of variable size
-		AllocateMasterKey(input_key, input_size);
+		master_key = new data_t[input_size];
+		memcpy(master_key, input_key, input_size);
+		key_size = input_size;
+
 		EncryptionKey::LockEncryptionKey(master_key, key_size);
 	}
 
 	~MasterKey() {
 		EncryptionKey::UnlockEncryptionKey(master_key, key_size);
 		delete[] master_key;
+		key_size = 0;
 	};
 
 	MasterKey(const MasterKey &) = delete;
@@ -76,19 +80,6 @@ public:
 private:
 	data_ptr_t master_key;
 	idx_t key_size;
-
-	void AllocateMasterKey(data_ptr_t input_key, idx_t input_size) {
-
-		if (master_key != nullptr) {
-			// zero out the previous master key
-			memset(master_key, 0, key_size);
-			delete[] master_key;
-		}
-
-		master_key = new data_t[input_size];
-		memcpy(master_key, input_key, input_size);
-		key_size = input_size;
-	}
 };
 
 class EncryptionKeyManager : public ObjectCacheEntry {

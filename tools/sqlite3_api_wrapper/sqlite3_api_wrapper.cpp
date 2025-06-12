@@ -124,6 +124,10 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_LATEST_STORAGE_VERSION) {
 			config.options.serialization_compatibility = SerializationCompatibility::FromString("latest");
 		}
+		if ((flags & DUCKDB_ENCRYPTION_KEY) && (flags & DUCKDB_MASTER_KEY)) {
+			fprintf(stderr, "Cannot specify both -key and -master_key.\n");
+			return SQLITE_ERROR;
+		}
 		if (flags & DUCKDB_ENCRYPTION_KEY) {
 			//! todo, make sure that pwd is valid utf-8 or base64
 			config.options.contains_user_key = true;
