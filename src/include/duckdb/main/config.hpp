@@ -269,6 +269,7 @@ struct DBConfigOptions {
 	//! Database encryption key (plaintext)
 	//! This key corresponds to one database
 	string user_key;
+	bool contains_user_key = false;
 	//! Database encryption master key
 	//! If this key is added by the user
 	//! All database files will be [en/de]crypted with the master key
@@ -276,7 +277,7 @@ struct DBConfigOptions {
 	string master_key;
 	//! If a master key is given
 	//! All db files are encrypted
-	bool full_encryption = false;
+	bool use_master_key = false;
 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
 	//! The default block header size for new duckdb database files.

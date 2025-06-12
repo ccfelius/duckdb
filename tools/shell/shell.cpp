@@ -2369,7 +2369,7 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 void ShellState::OpenDB(int flags) {
 
 	const char *password = nullptr;
-	if (full_encryption) {
+	if (use_master_key) {
 		password = master_key.c_str();
 	} else if (!user_key.empty()) {
 		password = user_key.c_str();
@@ -4939,7 +4939,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			// add a master key and set the database to full encryption
 			data.master_key = cmdline_option_value(argc, argv, ++i);
 			data.openFlags |= DUCKDB_MASTER_KEY;
-			data.full_encryption = true;
+			data.use_master_key = true;
 		}
 	}
 	verify_uninitialized();
@@ -5056,7 +5056,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			// fetch the encryption key
 			data.master_key = cmdline_option_value(argc, argv, ++i);
 		} else if (strcmp(z, "-key") == 0) {
-			if (data.full_encryption) {
+			if (data.use_master_key) {
 				utf8_printf(stderr,
 				            "Error: it is not possible to set a master key and user key. Add user key through ATTACH");
 			}

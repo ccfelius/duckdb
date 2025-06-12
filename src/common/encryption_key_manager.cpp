@@ -88,12 +88,12 @@ void EncryptionKeyManager::DeleteKey(const string &key_name) {
 	derived_keys.erase(key_name);
 }
 
-void EncryptionKeyManager::KeyDerivationFunctionSHA256(const_data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
+void EncryptionKeyManager::KeyDerivationFunctionSHA256(const_data_ptr_t key, idx_t key_size, data_ptr_t salt,
                                                        data_ptr_t derived_key) {
 	//! For now, we are only using SHA256 for key derivation
 	duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 	state.AddSalt(salt, MainHeader::SALT_LEN);
-	state.AddBytes(user_key, user_key_size);
+	state.AddBytes(key, key_size);
 	state.FinalizeDerivedKey(derived_key);
 }
 
@@ -110,6 +110,13 @@ string EncryptionKeyManager::Base64Decode(const string &key) {
 	memset(output.get(), 0, result_size);
 	return decoded_key;
 }
+
+// data_ptr_t EncryptionKeyManager::Base64Decode(const string &key) {
+// 	auto result_size = Blob::FromBase64Size(key);
+// 	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
+// 	Blob::FromBase64(key, output.get(), result_size);
+// 	return decoded_key;
+// }
 
 void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
 	string decoded_key;
@@ -132,8 +139,16 @@ void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr
 	decoded_key.clear();
 }
 
-void EncryptionKeyManager::DeriveKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
-                                     data_ptr_t derived_key) {
+// void EncryptionKeyManager::DeriveMasterKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
+// 				     data_ptr_t derived_key) {
+// 	//! If the master key is base64, it is already decoded earlier (and stored decoded)
+// 	//! A master key is also not wiped
+// 	//! THE BASE64 DECODED MASTER KEY NEEDS ALSO ALREADY TO BE IMPLEMENTED
+// 	KeyDerivationFunctionSHA256(master_key, key_size, salt, derived_key);
+// }
+
+void EncryptionKeyManager::DeriveMasterKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
+                                           data_ptr_t derived_key) {
 	//! If the master key is base64, it is already decoded earlier (and stored decoded)
 	//! A master key is also not wiped
 	//! THE BASE64 DECODED MASTER KEY NEEDS ALSO ALREADY TO BE IMPLEMENTED

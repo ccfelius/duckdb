@@ -33,21 +33,20 @@ idx_t EncryptionEngine::GetMasterKeySize(DatabaseInstance &db) {
 	return keys.GetMasterKeySize();
 }
 
-void EncryptionEngine::AddMasterKey(DatabaseInstance &db, DBConfigOptions &config_options) {
+void EncryptionEngine::AddMasterKey(DatabaseInstance &db) {
 	auto &keys = EncryptionKeyManager::Get(db);
+	auto config_options = db.config.options;
 
 	if (config_options.master_key.empty()) {
 		throw InvalidInputException("Cannot add master key: no master key found.");
 	}
 
+	//! TODO change base64 function to not cast back to string
 	if (!keys.HasMasterKey()) {
-		// set the master key if it is not in cache
-		// base64 decode the key first
 		string decoded_key;
 
 		try {
 			//! Key is base64 encoded
-			//! TODO change base64 function to not cast back to string
 			decoded_key = EncryptionKeyManager::Base64Decode(config_options.master_key);
 		} catch (const ConversionException &e) {
 			//! Todo; check if valid utf-8
@@ -55,9 +54,11 @@ void EncryptionEngine::AddMasterKey(DatabaseInstance &db, DBConfigOptions &confi
 		}
 
 		keys.SetMasterKey(data_ptr_t(decoded_key.data()), decoded_key.size());
+		std::fill(decoded_key.begin(), decoded_key.end(), 0);
+		decoded_key.clear();
 	}
 
-	// wipe out the key
+	// wipe out the master key from unsecure memory
 	std::fill(config_options.master_key.begin(), config_options.master_key.end(), 0);
 	config_options.master_key.clear();
 }

@@ -115,8 +115,9 @@ public:
 	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
 	//! If duckdb is opened with a password for encryption
 	string user_key;
+	bool contains_user_key = false;
 	string master_key;
-	bool full_encryption = false;
+	bool use_master_key = false;
 	//! Decimal separator (if any)
 	char decimal_separator = '\0';
 	//! Thousand separator (if any)

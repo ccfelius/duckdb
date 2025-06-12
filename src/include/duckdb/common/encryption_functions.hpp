@@ -26,7 +26,7 @@ public:
 	static void AddTempKeyToCache(DatabaseInstance &db);
 
 	//! Master key management wrapper functions
-	static void AddMasterKey(DatabaseInstance &db, DBConfigOptions &config_options);
+	static void AddMasterKey(DatabaseInstance &db);
 	static bool HasMasterKey(DatabaseInstance &db);
 	static const_data_ptr_t GetMasterKey(DatabaseInstance &db);
 	static idx_t GetMasterKeySize(DatabaseInstance &db);

@@ -80,17 +80,14 @@ private:
 	void AllocateMasterKey(data_ptr_t input_key, idx_t input_size) {
 
 		if (master_key != nullptr) {
+			// zero out the previous master key
+			memset(master_key, 0, key_size);
 			delete[] master_key;
 		}
 
-		master_key = nullptr;
-
-		if (input_key != nullptr && input_size > 0) {
-			data_ptr_t temp_buffer = new data_t[input_size];
-			memcpy(temp_buffer, input_key, input_size);
-			master_key = temp_buffer;
-			key_size = input_size;
-		}
+		master_key = new data_t[input_size];
+		memcpy(master_key, input_key, input_size);
+		key_size = input_size;
 	}
 };
 
@@ -136,7 +133,7 @@ public:
 
 public:
 	static void DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key);
-	static void DeriveKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt, data_ptr_t derived_key);
+	static void DeriveMasterKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt, data_ptr_t derived_key);
 	static void KeyDerivationFunctionSHA256(const_data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
 	                                        data_ptr_t derived_key);
 	static void KeyDerivationFunctionSHA256(data_ptr_t user_key, idx_t user_key_size, data_ptr_t salt,
