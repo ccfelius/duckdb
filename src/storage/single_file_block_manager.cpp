@@ -499,12 +499,12 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
 		// database is not encrypted, but is tried to be opened with a key
-	} else if (!main_header.IsEncrypted() && config.options.use_master_key) {
-		// We cannot open an unencrypted database when a master key is found
-		throw CatalogException("A master key is found, but database \"%s\" is not encrypted", path);
 	} else if (!main_header.IsEncrypted() && config.options.contains_user_key) {
 		// We provide a -key, but database is not encrypted
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
+	} else if (!main_header.IsEncrypted() && config.options.use_master_key) {
+		// We cannot open an unencrypted database when a master key is found
+		throw CatalogException("A master key is found, but database \"%s\" is not encrypted", path);
 	}
 
 	if (main_header.IsEncrypted()) {
