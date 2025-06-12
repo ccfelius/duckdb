@@ -12,16 +12,14 @@
 #include <string>
 #include <cstdint>
 #include <memory>
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/unique_ptr.hpp"
 
 struct sqlite3;
 struct sqlite3_stmt;
 enum class MetadataResult : uint8_t;
 
 namespace duckdb_shell {
-using duckdb::unique_ptr;
 using std::string;
+using std::unique_ptr;
 using std::vector;
 struct ColumnarResult;
 struct RowResult;
@@ -71,7 +69,7 @@ enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 #define SHFLG_HeaderSet     0x00000080 /* .header has been used */
 
 /* ctype macros that work with signed characters */
-#define IsSpace(X) duckdb::StringUtil::CharacterIsSpace((unsigned char)X)
+#define IsSpace(X) isspace((unsigned char)X)
 #define IsDigit(X) isdigit((unsigned char)X)
 #define ToLower(X) (char)tolower((unsigned char)X)
 
@@ -115,6 +113,11 @@ public:
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
 	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
+	//! If duckdb is opened with a password for encryption
+	string user_key;
+	bool contains_user_key = false;
+	string master_key;
+	bool use_master_key = false;
 	//! Decimal separator (if any)
 	char decimal_separator = '\0';
 	//! Thousand separator (if any)

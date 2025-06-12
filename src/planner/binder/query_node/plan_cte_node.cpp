@@ -14,7 +14,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTENode &node) {
 	auto cte_child = CreatePlan(*node.child);
 
 	auto root = make_uniq<LogicalMaterializedCTE>(node.ctename, node.setop_index, node.types.size(),
-	                                              std::move(cte_query), std::move(cte_child), node.materialized);
+	                                              std::move(cte_query), std::move(cte_child));
 
 	// check if there are any unplanned subqueries left in either child
 	has_unplanned_dependent_joins = has_unplanned_dependent_joins || node.child_binder->has_unplanned_dependent_joins ||
@@ -45,9 +45,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTENode &node, unique_ptr<Lo
 		while (cte_child.get()->children.size() == 1 && cte_child.get()->type != LogicalOperatorType::LOGICAL_CTE_REF) {
 			cte_child = cte_child.get()->children[0];
 		}
-		cte_child.get() =
-		    make_uniq<LogicalMaterializedCTE>(node.ctename, node.setop_index, node.types.size(), std::move(cte_query),
-		                                      std::move(cte_child.get()), node.materialized);
+		cte_child.get() = make_uniq<LogicalMaterializedCTE>(node.ctename, node.setop_index, node.types.size(),
+		                                                    std::move(cte_query), std::move(cte_child.get()));
 
 		// check if there are any unplanned subqueries left in either child
 		has_unplanned_dependent_joins = has_unplanned_dependent_joins ||

@@ -16,7 +16,7 @@ namespace duckdb {
 
 class PhysicalMaterializedCollector : public PhysicalResultCollector {
 public:
-	PhysicalMaterializedCollector(PhysicalPlan &physical_plan, PreparedStatementData &data, bool parallel);
+	PhysicalMaterializedCollector(PreparedStatementData &data, bool parallel);
 
 	bool parallel;
 

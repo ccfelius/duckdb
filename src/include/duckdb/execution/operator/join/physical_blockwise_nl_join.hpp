@@ -20,9 +20,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BLOCKWISE_NL_JOIN;
 
 public:
-	PhysicalBlockwiseNLJoin(PhysicalPlan &physical_plan, LogicalOperator &op, PhysicalOperator &left,
-	                        PhysicalOperator &right, unique_ptr<Expression> condition, JoinType join_type,
-	                        idx_t estimated_cardinality);
+	PhysicalBlockwiseNLJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+	                        unique_ptr<Expression> condition, JoinType join_type, idx_t estimated_cardinality);
 
 	unique_ptr<Expression> condition;
 

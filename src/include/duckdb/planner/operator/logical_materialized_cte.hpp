@@ -22,13 +22,10 @@ public:
 
 public:
 	LogicalMaterializedCTE(string ctename_p, idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> cte,
-	                       unique_ptr<LogicalOperator> child, CTEMaterialize materialize)
+	                       unique_ptr<LogicalOperator> child)
 	    : LogicalCTE(std::move(ctename_p), table_index, column_count, std::move(cte), std::move(child),
-	                 LogicalOperatorType::LOGICAL_MATERIALIZED_CTE),
-	      materialize(materialize) {
+	                 LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 	}
-
-	CTEMaterialize materialize = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

@@ -12,12 +12,6 @@
 
 #include "re2/re2.h"
 
-#ifndef DUCKDB_BASE_STD
-namespace duckdb_base_std {
-	using ::std::unique_ptr;
-} // namespace duckdb_base_std
-#endif
-
 namespace duckdb_re2 {
 class Prog;
 class Regexp;
@@ -83,7 +77,7 @@ class RE2::Set {
   std::vector<Elem> elem_;
   bool compiled_;
   int size_;
-  duckdb_base_std::unique_ptr<duckdb_re2::Prog> prog_;
+  std::unique_ptr<duckdb_re2::Prog> prog_;
 };
 
 }  // namespace re2

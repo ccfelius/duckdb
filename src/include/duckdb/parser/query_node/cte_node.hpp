@@ -30,8 +30,6 @@ public:
 	//! Aliases of the CTE node
 	vector<string> aliases;
 
-	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
-
 	const vector<unique_ptr<ParsedExpression>> &GetSelectList() const override {
 		return query->GetSelectList();
 	}

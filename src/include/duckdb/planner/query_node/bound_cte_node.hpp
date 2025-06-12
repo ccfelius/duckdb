@@ -35,8 +35,6 @@ public:
 	//! The binder used by the child side of the CTE
 	shared_ptr<Binder> child_binder;
 
-	CTEMaterialize materialized = CTEMaterialize::CTE_MATERIALIZE_DEFAULT;
-
 public:
 	idx_t GetRootIndex() override {
 		return child->GetRootIndex();

@@ -940,12 +940,11 @@ duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTableInternal(idx_t batch_size, 
 		ScopedConfigSetting scoped_setting(
 		    config,
 		    [&batch_size](ClientConfig &config) {
-			    config.get_result_collector = [&batch_size](ClientContext &context,
-			                                                PreparedStatementData &data) -> PhysicalOperator & {
+			    config.result_collector = [&batch_size](ClientContext &context, PreparedStatementData &data) {
 				    return PhysicalArrowCollector::Create(context, data, batch_size);
 			    };
 		    },
-		    [](ClientConfig &config) { config.get_result_collector = nullptr; });
+		    [](ClientConfig &config) { config.result_collector = nullptr; });
 		ExecuteOrThrow();
 	}
 	AssertResultOpen();

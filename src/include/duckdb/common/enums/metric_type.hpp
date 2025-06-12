@@ -71,7 +71,6 @@ enum class MetricsType : uint8_t {
     OPTIMIZER_MATERIALIZED_CTE,
     OPTIMIZER_SUM_REWRITER,
     OPTIMIZER_LATE_MATERIALIZATION,
-    OPTIMIZER_CTE_INLINING,
 };
 
 struct MetricsTypeHashFunction {

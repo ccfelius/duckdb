@@ -5,9 +5,8 @@
 
 namespace duckdb {
 
-PhysicalMaterializedCollector::PhysicalMaterializedCollector(PhysicalPlan &physical_plan, PreparedStatementData &data,
-                                                             bool parallel)
-    : PhysicalResultCollector(physical_plan, data), parallel(parallel) {
+PhysicalMaterializedCollector::PhysicalMaterializedCollector(PreparedStatementData &data, bool parallel)
+    : PhysicalResultCollector(data), parallel(parallel) {
 }
 
 SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, DataChunk &chunk,
