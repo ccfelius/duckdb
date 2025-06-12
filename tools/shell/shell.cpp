@@ -2369,9 +2369,9 @@ int deduceDatabaseType(const char *zName, int dfltZip) {
 void ShellState::OpenDB(int flags) {
 
 	const char *password = nullptr;
-	if (use_master_key) {
+	if (use_master_key && !master_key.empty()) {
 		password = master_key.c_str();
-	} else if (!user_key.empty()) {
+	} else if (contains_user_key && !user_key.empty()) {
 		password = user_key.c_str();
 	}
 
@@ -2385,8 +2385,6 @@ void ShellState::OpenDB(int flags) {
 		}
 		switch (openMode) {
 		case SHELL_OPEN_APPENDVFS: {
-			// sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | openFlags,
-			//                 "apndvfs");
 			sqlite3_open_v2(zDbFilename.c_str(), &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | openFlags, "apndvfs",
 			                password);
 			break;

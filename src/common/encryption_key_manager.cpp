@@ -111,13 +111,6 @@ string EncryptionKeyManager::Base64Decode(const string &key) {
 	return decoded_key;
 }
 
-// data_ptr_t EncryptionKeyManager::Base64Decode(const string &key) {
-// 	auto result_size = Blob::FromBase64Size(key);
-// 	auto output = duckdb::unique_ptr<unsigned char[]>(new unsigned char[result_size]);
-// 	Blob::FromBase64(key, output.get(), result_size);
-// 	return decoded_key;
-// }
-
 void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr_t derived_key) {
 	string decoded_key;
 
@@ -139,19 +132,10 @@ void EncryptionKeyManager::DeriveKey(string &user_key, data_ptr_t salt, data_ptr
 	decoded_key.clear();
 }
 
-// void EncryptionKeyManager::DeriveMasterKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
-// 				     data_ptr_t derived_key) {
-// 	//! If the master key is base64, it is already decoded earlier (and stored decoded)
-// 	//! A master key is also not wiped
-// 	//! THE BASE64 DECODED MASTER KEY NEEDS ALSO ALREADY TO BE IMPLEMENTED
-// 	KeyDerivationFunctionSHA256(master_key, key_size, salt, derived_key);
-// }
-
 void EncryptionKeyManager::DeriveMasterKey(const_data_ptr_t master_key, idx_t key_size, data_ptr_t salt,
                                            data_ptr_t derived_key) {
-	//! If the master key is base64, it is already decoded earlier (and stored decoded)
-	//! A master key is also not wiped
-	//! THE BASE64 DECODED MASTER KEY NEEDS ALSO ALREADY TO BE IMPLEMENTED
+	//! If the master key is base64, it is already decoded
+	//! A master key is also NOT wiped, but reused
 	KeyDerivationFunctionSHA256(master_key, key_size, salt, derived_key);
 }
 

@@ -149,7 +149,6 @@ def test_explicit_user_key_and_master_key(shell):
     """
     Encrypted database created with user_key
     Opened with 'created_with_user_key.db' -master_key masterkey -user_key userkey
-    should work, because user_key is correct
     """
 
     test = ShellTest(
@@ -173,3 +172,47 @@ def test_user_key_no_database(shell):
 
     result = test.run()
     result.check_stderr('Error: key specified but no database found')
+
+
+# Long test key: test_key_U2FsdGVkX18+0aLSpbJ9V0hVTVV1oYlJbVhGZ0NMTkpqaWp4R3hNR2VaUkVHaVRqR1htR3V1QXZmc0NtbUxSaUlwWVdoVkNrT0RUR2pqUGxkUVdtSmtOUldHWlJRa05JUWlVSkZaVk10aEZXR2FRa0Z6eEx0VlZIVG9LR0UwRkdNZ0xXaEpKWkNKRW5BaXlLSnNWTkdWTkpHZ0ZR
+#
+
+
+def test_long_base64_user_key(shell):
+    """
+    Opened with a long -key
+    """
+
+    test = ShellTest(
+        shell,
+        arguments=[
+            'test/storage/encryption/base64_encrypted.db',
+            '-key',
+            'test_key_U2FsdGVkX18+0aLSpbJ9V0hVTVV1oYlJbVhGZ0NMTkpqaWp4R3hNR2VaUkVHaVRqR1htR3V1QXZmc0NtbUxSaUlwWVdoVkNrT0RUR2pqUGxkUVdtSmtOUldHWlJRa05JUWlVSkZaVk10aEZXR2FRa0Z6eEx0VlZIVG9LR0UwRkdNZ0xXaEpKWkNKRW5BaXlLSnNWTkdWTkpHZ0ZR',
+        ],
+    ).statement("select l_orderkey from lineitem limit 1;")
+
+    result = test.run()
+    result.check_stdout('1')
+
+
+def test_long_base64_master_key(shell):
+    """
+    Opened with a long -master_key
+    """
+
+    test = (
+        ShellTest(
+            shell,
+            arguments=[
+                '-master_key',
+                'test_key_U2FsdGVkX18+0aLSpbJ9V0hVTVV1oYlJbVhGZ0NMTkpqaWp4R3hNR2VaUkVHaVRqR1htR3V1QXZmc0NtbUxSaUlwWVdoVkNrT0RUR2pqUGxkUVdtSmtOUldHWlJRa05JUWlVSkZaVk10aEZXR2FRa0Z6eEx0VlZIVG9LR0UwRkdNZ0xXaEpKWkNKRW5BaXlLSnNWTkdWTkpHZ0ZR',
+            ],
+        )
+        .statement("ATTACH 'test/storage/encryption/base64_encrypted.db' as enc")
+        .statement("USE enc")
+        .statement("select l_orderkey from lineitem limit 1;")
+    )
+
+    result = test.run()
+    result.check_stdout('1')

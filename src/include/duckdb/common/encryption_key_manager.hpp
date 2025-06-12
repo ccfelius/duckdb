@@ -47,7 +47,7 @@ private:
 class MasterKey {
 
 public:
-	explicit MasterKey(data_ptr_t input_key, idx_t input_size) : master_key(nullptr), key_size(0) {
+	explicit MasterKey(data_ptr_t input_key, idx_t input_size) {
 		// A master key can be of variable size
 		master_key = new data_t[input_size];
 		memcpy(master_key, input_key, input_size);
@@ -59,6 +59,7 @@ public:
 	~MasterKey() {
 		EncryptionKey::UnlockEncryptionKey(master_key, key_size);
 		delete[] master_key;
+		master_key = nullptr;
 		key_size = 0;
 	};
 
@@ -105,7 +106,7 @@ public:
 		master_key = make_uniq<MasterKey>(input_key, input_size);
 	}
 
-	void UnSetMasterKey() {
+	void ClearMasterKey() {
 		master_key = nullptr;
 		master_key_initialized = false;
 	}
