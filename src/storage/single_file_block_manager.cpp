@@ -497,11 +497,13 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	auto &config = DBConfig::GetConfig(db.GetDatabase());
 
 	if (!main_header.IsEncrypted() && options.encryption_options.encryption_enabled) {
+		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
 		// database is not encrypted, but is tried to be opened with a key
-		if (config.options.use_master_key) {
-			// TODO: we should also be able to open an unencrypted database when a master key is found
-			throw CatalogException("A master key is found, but database \"%s\" is not encrypted", path);
-		}
+	} else if (!main_header.IsEncrypted() && config.options.use_master_key) {
+		// We cannot open an unencrypted database when a master key is found
+		throw CatalogException("A master key is found, but database \"%s\" is not encrypted", path);
+	} else if (!main_header.IsEncrypted() && config.options.contains_user_key) {
+		// We provide a -key, but database is not encrypted
 		throw CatalogException("A key is explicitly specified, but database \"%s\" is not encrypted", path);
 	}
 

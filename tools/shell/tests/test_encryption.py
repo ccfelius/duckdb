@@ -25,6 +25,34 @@ def test_no_key(shell):
     )
 
 
+def test_unencrypted_database_user_key(shell):
+    """
+    Unencrypted database opened with -key
+    throws an error
+    """
+
+    test = ShellTest(shell, arguments=['test/storage/encryption/unencrypted.db', '-key', 'userkey'])
+
+    result = test.run()
+    result.check_stderr(
+        'Error: unable to open database "test/storage/encryption/unencrypted.db": Catalog Error: A key is explicitly specified, but database "test/storage/encryption/unencrypted.db" is not encrypted'
+    )
+
+
+def test_unencrypted_database_master_key(shell):
+    """
+    Unencrypted database opened with -master_key
+    throws an error
+    """
+
+    test = ShellTest(shell, arguments=['test/storage/encryption/unencrypted.db', '-master_key', 'masterkey'])
+
+    result = test.run()
+    result.check_stderr(
+        'Error: unable to open database "test/storage/encryption/unencrypted.db": Catalog Error: A master key is found, but database "test/storage/encryption/unencrypted.db" is not encrypted'
+    )
+
+
 def test_correct_master_key(shell):
     """
     Encrypted database created with -master_key in the command line
