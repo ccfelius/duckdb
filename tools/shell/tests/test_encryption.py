@@ -31,11 +31,11 @@ def test_unencrypted_database_key(shell):
     throws an error
     """
 
-    test = ShellTest(shell, arguments=['test/storage/encryption/unencrypted.db', '-key', 'userkey'])
+    test = ShellTest(shell, arguments=['test/storage/encryption/plaintext.db', '-key', 'userkey'])
 
     result = test.run()
     result.check_stderr(
-        'Error: unable to open database "test/storage/encryption/unencrypted.db": Catalog Error: A key is explicitly specified, but database "test/storage/encryption/unencrypted.db" is not encrypted'
+        'Error: unable to open database "test/storage/encryption/plaintext.db": Catalog Error: A key is explicitly specified, but database "test/storage/encryption/plaintext.db" is not encrypted'
     )
 
 
@@ -45,11 +45,11 @@ def test_unencrypted_database_master_key(shell):
     throws an error
     """
 
-    test = ShellTest(shell, arguments=['test/storage/encryption/unencrypted.db', '-master_key', 'masterkey'])
+    test = ShellTest(shell, arguments=['test/storage/encryption/plaintext.db', '-master_key', 'masterkey'])
 
     result = test.run()
     result.check_stderr(
-        'Error: unable to open database "test/storage/encryption/unencrypted.db": Catalog Error: A master key is found, but database "test/storage/encryption/unencrypted.db" is not encrypted'
+        'Error: unable to open database "test/storage/encryption/plaintext.db": Catalog Error: A master key is found, but database "test/storage/encryption/plaintext.db" is not encrypted'
     )
 
 
