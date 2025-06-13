@@ -6,8 +6,7 @@
 
 namespace duckdb {
 
-PhysicalBatchCollector::PhysicalBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data)
-    : PhysicalResultCollector(physical_plan, data) {
+PhysicalBatchCollector::PhysicalBatchCollector(PreparedStatementData &data) : PhysicalResultCollector(data) {
 }
 
 SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, DataChunk &chunk,

@@ -373,6 +373,12 @@ void Executor::VerifyPipelines() {
 #endif
 }
 
+void Executor::Initialize(unique_ptr<PhysicalOperator> physical_plan_p) {
+	Reset();
+	owned_plan = std::move(physical_plan_p);
+	InitializeInternal(*owned_plan);
+}
+
 void Executor::Initialize(PhysicalOperator &plan) {
 	Reset();
 	InitializeInternal(plan);
@@ -583,11 +589,6 @@ PendingExecutionResult Executor::ExecuteTask(bool dry_run) {
 		if (!HasError()) {
 			// we (partially) processed a task and no exceptions were thrown
 			// give back control to the caller
-			if (task && DBConfig::GetConfig(context).options.scheduler_process_partial) {
-				auto &token = *task->token;
-				TaskScheduler::GetScheduler(context).ScheduleTask(token, task);
-				task.reset();
-			}
 			return PendingExecutionResult::RESULT_NOT_READY;
 		}
 		execution_result = PendingExecutionResult::EXECUTION_ERROR;
@@ -615,6 +616,7 @@ void Executor::Reset() {
 	lock_guard<mutex> elock(executor_lock);
 	physical_plan = nullptr;
 	cancelled = false;
+	owned_plan.reset();
 	root_executor.reset();
 	root_pipelines.clear();
 	root_pipeline_idx = 0;

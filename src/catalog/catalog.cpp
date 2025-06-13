@@ -1201,9 +1201,6 @@ void Catalog::Initialize(optional_ptr<ClientContext> context, bool load_builtin)
 	Initialize(load_builtin);
 }
 
-void Catalog::FinalizeLoad(optional_ptr<ClientContext> context) {
-}
-
 void Catalog::OnDetach(ClientContext &context) {
 }
 

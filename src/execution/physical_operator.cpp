@@ -6,7 +6,6 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -15,12 +14,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
-
-PhysicalOperator::PhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type, vector<LogicalType> types,
-                                   idx_t estimated_cardinality)
-    : children(physical_plan.ArenaRef()), type(type), types(std::move(types)),
-      estimated_cardinality(estimated_cardinality) {
-}
 
 string PhysicalOperator::GetName() const {
 	return PhysicalOperatorToString(type);
@@ -209,53 +202,50 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 	op_state.reset();
 
 	auto &state = meta_pipeline.GetState();
-	if (!IsSink() && children.empty()) {
-		// Operator is a source.
-		state.SetPipelineSource(current, *this);
-		return;
-	}
-
-	if (children.size() != 1) {
-		throw InternalException("Operator not supported in BuildPipelines");
-	}
-
 	if (IsSink()) {
-		// Operator is a sink.
+		// operator is a sink, build a pipeline
 		sink_state.reset();
+		D_ASSERT(children.size() == 1);
 
-		// It becomes the data source of the current pipeline.
+		// single operator: the operator becomes the data source of the current pipeline
 		state.SetPipelineSource(current, *this);
 
-		// Create a new pipeline starting at the child.
+		// we create a new pipeline starting from the child
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-		child_meta_pipeline.Build(children[0].get());
-		return;
+		child_meta_pipeline.Build(children[0]);
+	} else {
+		// operator is not a sink! recurse in children
+		if (children.empty()) {
+			// source
+			state.SetPipelineSource(current, *this);
+		} else {
+			if (children.size() != 1) {
+				throw InternalException("Operator not supported in BuildPipelines");
+			}
+			state.AddPipelineOperator(current, *this);
+			children[0].get().BuildPipelines(current, meta_pipeline);
+		}
 	}
-
-	// Recurse into the child.
-	state.AddPipelineOperator(current, *this);
-	children[0].get().BuildPipelines(current, meta_pipeline);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
 	vector<const_reference<PhysicalOperator>> result;
-	if (!IsSink() && children.empty()) {
-		// Operator is a source.
-		result.push_back(*this);
-		return result;
-	}
-
-	if (children.size() != 1) {
-		throw InternalException("Operator not supported in GetSource");
-	}
-
 	if (IsSink()) {
+		D_ASSERT(children.size() == 1);
 		result.push_back(*this);
 		return result;
+	} else {
+		if (children.empty()) {
+			// source
+			result.push_back(*this);
+			return result;
+		} else {
+			if (children.size() != 1) {
+				throw InternalException("Operator not supported in GetSource");
+			}
+			return children[0].get().GetSources();
+		}
 	}
-
-	// Recurse into the child.
-	return children[0].get().GetSources();
 }
 
 bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
@@ -298,9 +288,9 @@ bool CachingPhysicalOperator::CanCacheType(const LogicalType &type) {
 	}
 }
 
-CachingPhysicalOperator::CachingPhysicalOperator(PhysicalPlan &physical_plan, PhysicalOperatorType type,
-                                                 vector<LogicalType> types_p, idx_t estimated_cardinality)
-    : PhysicalOperator(physical_plan, type, std::move(types_p), estimated_cardinality) {
+CachingPhysicalOperator::CachingPhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types_p,
+                                                 idx_t estimated_cardinality)
+    : PhysicalOperator(type, std::move(types_p), estimated_cardinality) {
 
 	caching_supported = true;
 	for (auto &col_type : types) {

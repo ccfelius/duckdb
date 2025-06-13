@@ -571,7 +571,6 @@ void LogicalMaterializedCTE::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<idx_t>(200, "table_index", table_index);
 	serializer.WritePropertyWithDefault<idx_t>(201, "column_count", column_count);
 	serializer.WritePropertyWithDefault<string>(202, "ctename", ctename);
-	serializer.WritePropertyWithDefault<CTEMaterialize>(203, "materialize", materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 }
 
 unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &deserializer) {
@@ -579,7 +578,6 @@ unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(Deserializer &de
 	deserializer.ReadPropertyWithDefault<idx_t>(200, "table_index", result->table_index);
 	deserializer.ReadPropertyWithDefault<idx_t>(201, "column_count", result->column_count);
 	deserializer.ReadPropertyWithDefault<string>(202, "ctename", result->ctename);
-	deserializer.ReadPropertyWithExplicitDefault<CTEMaterialize>(203, "materialize", result->materialize, CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	return std::move(result);
 }
 

@@ -123,7 +123,6 @@ static const DefaultExtension internal_extensions[] = {
     {"delta", "Adds support for Delta Lake", false},
     {"fts", "Adds support for Full-Text Search Indexes", false},
     {"ui", "Adds local UI for DuckDB", false},
-    {"ducklake", "Adds support for DuckLake, SQL as a Lakehouse Format", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -141,9 +140,9 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
-static const char *const auto_install[] = {
-    "motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner", "delta", "iceberg", "uc_catalog",
-    "ui",         "ducklake",         nullptr};
+static const char *const auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner",
+                                           "delta",      "iceberg",          "uc_catalog",    "ui",
+                                           nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {

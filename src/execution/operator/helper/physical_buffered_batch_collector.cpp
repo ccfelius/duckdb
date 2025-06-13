@@ -9,8 +9,8 @@
 
 namespace duckdb {
 
-PhysicalBufferedBatchCollector::PhysicalBufferedBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data)
-    : PhysicalResultCollector(physical_plan, data) {
+PhysicalBufferedBatchCollector::PhysicalBufferedBatchCollector(PreparedStatementData &data)
+    : PhysicalResultCollector(data) {
 }
 
 //===--------------------------------------------------------------------===//

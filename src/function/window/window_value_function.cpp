@@ -653,13 +653,7 @@ static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_vali
 	const auto x0 = LossyFillCast<double>(cursor.GetCell<T>(0, prev_valid));
 	const auto x1 = LossyFillCast<double>(cursor.GetCell<T>(0, next_valid));
 
-	const auto den = (x1 - x0);
-	if (den == 0) {
-		// Duplicate X values, so pick the first.
-		return 0;
-	}
-	const auto num = (x - x0);
-	return num / den;
+	return (x - x0) / (x1 - x0);
 }
 
 typedef double (*fill_slope_t)(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid);
@@ -789,7 +783,7 @@ static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {
 	case PhysicalType::DOUBLE:
 		return FillInterpolateFunc<double>;
 	default:
-		throw InternalException("Unsupported FILL interpolation type.");
+		throw InternalException("Unsupported FILL interpolationtype.");
 	}
 }
 

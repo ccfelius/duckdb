@@ -15,7 +15,7 @@ namespace duckdb {
 
 class PhysicalBatchCollector : public PhysicalResultCollector {
 public:
-	PhysicalBatchCollector(PhysicalPlan &physical_plan, PreparedStatementData &data);
+	explicit PhysicalBatchCollector(PreparedStatementData &data);
 
 public:
 	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
