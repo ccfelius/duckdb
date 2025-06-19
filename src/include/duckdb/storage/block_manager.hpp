@@ -112,9 +112,6 @@ public:
 	}
 	//! Block header size including the 8-byte checksum
 	inline idx_t GetBlockHeaderSize() const {
-		if (!block_header_size.IsValid()) {
-			return Storage::DEFAULT_BLOCK_HEADER_SIZE;
-		}
 		return block_header_size.GetIndex();
 	}
 	//! Size of the block available for the user
