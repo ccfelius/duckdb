@@ -43,6 +43,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	if (source) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
+		tmp->Restructure(size, block_header_size);
 		result = make_uniq<FileBuffer>(*tmp, type);
 	} else {
 		// non re-usable buffer: allocate a new buffer
@@ -373,6 +374,10 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		} else {
 			// now we can actually load the current block
 			D_ASSERT(handle->Readers() == 0);
+			if (reusable_buffer) {
+				// a reusable buffer can have a different layout internally
+				reusable_buffer->Restructure(handle->block_manager);
+			}
 			buf = handle->Load(std::move(reusable_buffer));
 			if (!buf.IsValid()) {
 				reservation.Resize(0);
