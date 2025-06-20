@@ -369,6 +369,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 	auto &buffer_manager = block_manager.buffer_manager;
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 
+	// auto max_block_size = MaxValue<idx_t>(segment.segment_size, block_manager.GetBlockSize());
 	D_ASSERT(block != INVALID_BLOCK);
 	D_ASSERT(offset < NumericCast<int32_t>(block_manager.GetBlockSize()));
 
@@ -386,7 +387,9 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		BufferHandle target_handle;
 		string_t overflow_string;
 		data_ptr_t target_ptr;
-		bool allocate_block = length >= block_manager.GetBlockSize();
+		// I think here we need to put the segment size?
+		bool allocate_block = length >= segment.SegmentSize();
+		// bool allocate_block = length >= block_manager.GetBlockSize();
 		if (allocate_block) {
 			// overflow string is bigger than a block - allocate a temporary buffer for it
 			target_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, length);

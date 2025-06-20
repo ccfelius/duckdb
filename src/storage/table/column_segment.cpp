@@ -54,6 +54,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	// Allocate a buffer for the uncompressed segment.
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	D_ASSERT(&buffer_manager == &block_manager.buffer_manager);
+
 	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_manager);
 
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, function,

@@ -339,6 +339,9 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 	queue.IterateUnloadableBlocks([&](BufferEvictionNode &, const shared_ptr<BlockHandle> &handle, BlockLock &lock) {
 		// hooray, we can unload the block
+		// the above function tries to see whether we can reuse a buffer. However, some buffers are constructed
+		// differently?
+
 		if (buffer && handle->GetBuffer(lock)->AllocSize() == extra_memory) {
 			// we can re-use the memory directly
 			*buffer = handle->UnloadAndTakeBlock(lock);

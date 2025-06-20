@@ -61,6 +61,8 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
                                 block_id_t block_id) {
 	if (reusable_buffer) {
 		// re-usable buffer: re-use it
+		// we first restructure the filebuffer (if necessary)
+		// reusable_buffer->Restructure(block_manager);
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
 			// we can reuse the buffer entirely
 			auto &block = reinterpret_cast<Block &>(*reusable_buffer);
@@ -171,6 +173,7 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock) {
 
 	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
 		// temporary block that cannot be destroyed upon evict/unpin: write to temporary file
+		// here, a block gets written to tmp files.
 		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
 	}
 	memory_charge.Resize(0);

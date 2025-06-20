@@ -66,6 +66,8 @@ public:
 	//! The allocated memory is released when the buffer handle is destroyed.
 	DUCKDB_API shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,
 	                                                           bool can_destroy = true) final;
+	DUCKDB_API shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
+	                                                           bool can_destroy) final;
 	DUCKDB_API shared_ptr<BlockHandle> AllocateMemory(MemoryTag tag, BlockManager *block_manager,
 	                                                  bool can_destroy = true) final;
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) final;

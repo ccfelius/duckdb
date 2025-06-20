@@ -13,6 +13,12 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p), size(0) {
+	// hello
+	if (capacity_p > 262136) {
+		printf("WARNING: Capacity is %llu\n", (unsigned long long)capacity_p);
+		// throw InternalException("stop!");
+	}
+
 	auto buffer_handle = buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false);
 	handle = buffer_handle.GetBlockHandle();
 }
@@ -167,8 +173,8 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 
 			// Build the next part
 			auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
-			auto &chunk_part =
-			    chunk.AddPart(segment, BuildChunkPart(pin_state, chunk_state, append_offset + offset, next, chunk));
+			auto &chunk_part = chunk.AddPart(
+			    segment, BuildChunkPart(segment, pin_state, chunk_state, append_offset + offset, next, chunk));
 			next = chunk_part.count;
 
 			segment.count += next;
@@ -208,12 +214,20 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 	segment.Verify();
 }
 
-TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
-                                                      const idx_t append_offset, const idx_t append_count,
-                                                      TupleDataChunk &chunk) {
+TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataSegment &segment, TupleDataPinState &pin_state,
+                                                      TupleDataChunkState &chunk_state, const idx_t append_offset,
+                                                      const idx_t append_count, TupleDataChunk &chunk) {
 	D_ASSERT(append_count != 0);
 	TupleDataChunkPart result(*chunk.lock);
+	// change it here
 	const auto block_size = buffer_manager.GetBlockSize();
+	// const auto block_size = 262104;
+	auto seg_size = segment.SizeInBytes();
+	if (segment.SizeInBytes() < buffer_manager.GetBlockSize()) {
+		if (segment.SizeInBytes() == 262128) {
+			printf("Segmentsize %llu, buf size: %llu \n", seg_size, buffer_manager.GetBlockSize());
+		}
+	}
 
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
@@ -265,6 +279,7 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 			} else {
 				// Allocate heap block (if needed)
 				if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
+					printf("heap_sizes[append_offset]: %llu \n", heap_sizes[append_offset]);
 					const auto size = MaxValue<idx_t>(block_size, heap_sizes[append_offset]);
 					heap_blocks.emplace_back(buffer_manager, size);
 					if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits

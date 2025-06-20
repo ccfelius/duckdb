@@ -219,6 +219,7 @@ public:
 
 	inline static string_t FetchStringFromDict(ColumnSegment &segment, uint32_t dict_end_offset, Vector &result,
 	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
+
 		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
 		if (DUCKDB_LIKELY(dict_offset >= 0)) {
 			// regular string - fetch from dictionary

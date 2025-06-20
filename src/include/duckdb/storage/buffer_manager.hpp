@@ -45,6 +45,8 @@ public:
 	//! Allocate temporary memory of size block_size.
 	virtual shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,
 	                                                        bool can_destroy = true) = 0;
+	virtual shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
+	                                                        bool can_destroy = true) = 0;
 	//! Allocate block-based memory.
 	//! The block manager provides the block size, and the block header size.
 	//! Returns the BlockHandle managing the registered memory.

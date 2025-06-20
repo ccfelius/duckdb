@@ -42,6 +42,10 @@ public:
 	shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size, bool can_destroy = true) override {
 		return buffer_manager.AllocateTemporaryMemory(tag, block_size, can_destroy);
 	}
+	shared_ptr<BlockHandle> AllocateTemporaryMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
+	                                                bool can_destroy = true) override {
+		return buffer_manager.AllocateTemporaryMemory(tag, block_size, block_header_size, can_destroy);
+	}
 	shared_ptr<BlockHandle> AllocateMemory(MemoryTag tag, BlockManager *block_manager,
 	                                       bool can_destroy = true) override {
 		return buffer_manager.AllocateMemory(tag, block_manager, can_destroy);

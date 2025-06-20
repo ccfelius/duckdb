@@ -1,0 +1,75 @@
+# name: test/sql/storage/temp_directory/temp_out_of_core.test
+# description: Encrypted large joins in persistent databases have a leftover temporary directory.
+# group: [temp_directory]
+
+require tpch
+
+load __TEST_DIR__/leftover_temp_files.db
+
+# statement ok
+# PRAGMA enable_temp_files_encryption;
+#
+# statement ok
+# ATTACH '__TEST_DIR__/encrypted.db' as enc (BLOCK_SIZE 32768);
+
+# statement ok
+# ATTACH '__TEST_DIR__/encrypted.db' as enc;
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.db' as enc (ENCRYPTION_KEY 'asdf');
+
+statement ok
+USE enc;
+
+statement ok
+SET threads=8;
+
+# limit for enc buf is 19
+# plaintext is 17
+statement ok
+SET memory_limit='1GB';
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+CREATE table tb1 as select * from lineitem ORDER BY lineitem.l_orderkey, lineitem.l_returnflag;
+
+
+# statement ok
+# CREATE TABLE ans as select l1.* from lineitem l1 ORDER BY l_orderkey, l_returnflag;
+
+# statement ok
+# CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l1.* from lineitem1 l1 ORDER BY l_orderkey, l_returnflag;
+#
+# # creating and dropping a table with an ORDER BY should not leave temp files
+# # statement ok
+# # CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l1.* from lineitem1 l1;
+#
+# # #creating and dropping a table with an ORDER BY should not leave temp files
+# # statement ok
+# # CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l1.* from lineitem1 l1 ORDER BY l_orderkey, l_returnflag;
+# #
+# statement ok
+# DROP TABLE ans;
+#
+# #performing a small hash join should not leave temp files
+# statement ok
+# CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN (FROM lineitem2 l2 WHERE l_orderkey<10000) AS l2 USING (l_orderkey, l_linenumber)
+#
+# statement ok
+# DROP TABLE ans;
+#
+# #performing a large window function
+# statement ok
+# CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, row_number() OVER (PARTITION BY l_orderkey, l_linenumber ORDER BY l_orderkey) from lineitem1 l1
+#
+# statement ok
+# DROP TABLE ans;
+#
+# # performing a large hash join should not leave temp files
+# statement ok
+# CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
+#
+# statement ok
+# DROP TABLE ans;

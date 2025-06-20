@@ -133,7 +133,6 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size, BlockManager &block_manager) {
 	D_ASSERT(size <= block_manager.GetBlockSize());
-
 	// This comparison is the reason behind passing block_size through transient memory creation.
 	// Otherwise, any non-default block size would register as small memory, causing problems when
 	// trying to convert that memory to consistent blocks later on.
@@ -150,6 +149,10 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 	auto reservation = EvictBlocksOrThrow(tag, size, nullptr, "could not allocate block of size %s%s",
 	                                      StringUtil::BytesToHumanReadableString(size));
 
+	if (size > 262103) {
+		throw InternalException("this is too ig");
+	}
+
 	auto buffer = ConstructManagedBuffer(size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, nullptr, FileBufferType::TINY_BUFFER);
 
 	// Create a new block pointer for this block.
@@ -164,6 +167,7 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag
 
 shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx_t block_size, idx_t block_header_size,
                                                               bool can_destroy) {
+
 	auto alloc_size = GetAllocSize(block_size + block_header_size);
 
 	// Evict blocks until there is enough memory to store the buffer.
@@ -185,6 +189,11 @@ shared_ptr<BlockHandle> StandardBufferManager::AllocateTemporaryMemory(MemoryTag
 	return RegisterMemory(tag, block_size, GetTemporaryBlockHeaderSize(), can_destroy);
 }
 
+shared_ptr<BlockHandle> StandardBufferManager::AllocateTemporaryMemory(MemoryTag tag, idx_t block_size,
+                                                                       idx_t block_header_size, bool can_destroy) {
+	return RegisterMemory(tag, block_size, block_header_size, can_destroy);
+}
+
 shared_ptr<BlockHandle> StandardBufferManager::AllocateMemory(MemoryTag tag, BlockManager *block_manager,
                                                               bool can_destroy) {
 	return RegisterMemory(tag, block_manager->GetBlockSize(), block_manager->GetBlockHeaderSize(), can_destroy);
@@ -201,7 +210,15 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, BlockManager *block_
 }
 
 BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bool can_destroy) {
-	auto block = AllocateTemporaryMemory(tag, block_size, can_destroy);
+
+	if (block_size != 262136) {
+		printf("block size is not so temporary!\n");
+		// throw InternalException("block size is not so temporary!");
+	}
+
+	// how the hell to pass here the correct bh size?
+	auto block_header_size = 8;
+	auto block = AllocateTemporaryMemory(tag, block_size, block_header_size, can_destroy);
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
 	// Initialize the memory with garbage data
@@ -363,6 +380,9 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		                                      "failed to pin block of size %s%s",
 		                                      StringUtil::BytesToHumanReadableString(required_memory));
 
+		// if (reusable_buffer && reusable_buffer->Size() != 262104) {
+		// 	printf("stop after evictblock");
+		// }
 		// lock the handle again and repeat the check (in case anybody loaded in the meantime)
 		auto lock = handle->GetLock();
 		// check if the block is already loaded
@@ -542,6 +562,9 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	handle->Read(&block_size, sizeof(idx_t), 0);
+
+	// block handle
+	auto bh_size = block.block_manager.GetBlockHeaderSize();
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
 	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));

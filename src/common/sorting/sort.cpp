@@ -300,6 +300,7 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 
 	// We should always succeed this time
 	const auto success = TryFinishSink(gstate, lstate, guard);
+
 	if (!success) {
 		throw InternalException("Unable to finish Sort::Sink");
 	}
