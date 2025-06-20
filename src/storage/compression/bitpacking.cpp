@@ -628,6 +628,11 @@ struct BitpackingScanState : public SegmentScanState {
 public:
 	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		if (handle.IsValid()) {
+			if (handle.GetFileBuffer().Size() != segment.SegmentSize()) {
+				throw InternalException("SegmentSize mismatch: seg: %llu, buffer: %llu");
+			}
+		}
 		handle = buffer_manager.Pin(segment.block);
 		auto data_ptr = handle.Ptr();
 

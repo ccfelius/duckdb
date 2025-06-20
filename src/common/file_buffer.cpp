@@ -84,7 +84,10 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size, ui
 
 void FileBuffer::ResizeInternal(uint64_t new_size, uint64_t block_header_size) {
 	auto req = CalculateMemory(new_size, block_header_size);
-	ReallocBuffer(req.alloc_size);
+
+	if (req.alloc_size != internal_size) {
+		ReallocBuffer(req.alloc_size);
+	}
 
 	if (new_size > 0) {
 		buffer = internal_buffer + req.header_size;
@@ -98,6 +101,20 @@ void FileBuffer::Resize(uint64_t new_size, BlockManager &block_manager) {
 
 void FileBuffer::Resize(BlockManager &block_manager) {
 	ResizeInternal(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
+}
+
+void FileBuffer::Resize(uint64_t new_size, uint64_t block_header_size) {
+	ResizeInternal(new_size, block_header_size);
+}
+
+void FileBuffer::Restructure(BlockManager &block_manager) {
+	buffer = internal_buffer + block_manager.GetBlockHeaderSize();
+	size = block_manager.GetBlockSize();
+}
+
+void FileBuffer::Restructure(uint64_t block_size, uint64_t block_header_size) {
+	buffer = internal_buffer + block_header_size;
+	size = block_size;
 }
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {

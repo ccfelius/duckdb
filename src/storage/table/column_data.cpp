@@ -25,6 +25,10 @@ ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t c
                        LogicalType type_p, optional_ptr<ColumnData> parent)
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
       type(std::move(type_p)), allocation_size(0), parent(parent) {
+
+	// if (block_manager.GetBlockSize() != 262104) {
+	// 	printf("ColumnData: Block size %llu is from in-mem (coldata)\n", block_manager.GetBlockSize());
+	// }
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -556,8 +560,11 @@ void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
-
+	// sometimes we get the default block manager
+	// sometimes we get the singlefileblockmanager
 	const auto block_size = block_manager.GetBlockSize();
+	const auto fb_size = 0;
+
 	const auto type_size = GetTypeIdSize(type.InternalType());
 	auto vector_segment_size = block_size;
 
@@ -569,8 +576,19 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 #endif
 	}
 
+	// if (block_manager.GetBlockSize() == 262136 && vector_segment_size == 262136) {
+	// printf("ColumnData::AppendTransientSegment - Block size %llu is default (in mem)\n", block_size);
+	//}
+
+	// if (block_manager.GetBlockSize() != 262136) {
+	// 	printf("APpendTransientSegment: Block size %llu is not default\n", block_size);
+	// }
+
 	// The segment size is bound by the block size, but can be smaller.
 	idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
+	// if (segment_size != 262136) {
+	// printf("append transient segment: seg size %llu\n", segment_size);
+	// }
 	allocation_size += segment_size;
 
 	auto &db = GetDatabase();

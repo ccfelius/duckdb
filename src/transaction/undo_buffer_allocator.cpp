@@ -31,9 +31,12 @@ UndoBufferReference UndoBufferAllocator::Allocate(idx_t alloc_len) {
 	D_ASSERT(!head || head->position <= head->capacity);
 	BufferHandle handle;
 	if (!head || head->position + alloc_len > head->capacity) {
+		// head->block->block_manager.GetBlockSize();
 		// no space in current head - allocate a new block
+		if (head) {
+			printf("now there is a head");
+		}
 		auto block_size = buffer_manager.GetBlockSize();
-		;
 		idx_t capacity;
 		if (!head && alloc_len <= 4096) {
 			capacity = 4096;

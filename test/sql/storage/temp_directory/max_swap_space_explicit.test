@@ -8,6 +8,12 @@ PRAGMA memory_limit='2MB'
 
 # --- Not changed when set explicitly by the user
 
+statement ok
+ATTACH '__TEST_DIR__/encrypted.db' as enc (ENCRYPTION_KEY 'asdf');
+
+statement ok
+USE enc;
+
 # If we set 'max_temp_directory_size' explicitly, it will not be overridden
 statement ok
 set max_temp_directory_size='15gb'

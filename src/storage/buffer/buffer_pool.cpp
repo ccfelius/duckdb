@@ -339,14 +339,21 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 	queue.IterateUnloadableBlocks([&](BufferEvictionNode &, const shared_ptr<BlockHandle> &handle, BlockLock &lock) {
 		// hooray, we can unload the block
+		// this is only the buffer ptr
 		if (buffer && handle->GetBuffer(lock)->AllocSize() == extra_memory) {
 			// we can re-use the memory directly
+			if (*buffer) {
+				if ((*buffer)->Size() != 262104) {
+					printf("size is different!");
+				}
+			}
 			*buffer = handle->UnloadAndTakeBlock(lock);
 			found = true;
 			return false;
 		}
 
 		// release the memory and mark the block as unloaded
+		// this can only happen with standard buffer size?
 		handle->Unload(lock);
 
 		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {

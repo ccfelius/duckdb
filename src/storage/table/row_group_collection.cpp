@@ -63,6 +63,13 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
                                        idx_t row_group_size_p)
     : block_manager(block_manager), row_group_size(row_group_size_p), total_rows(total_rows_p), info(std::move(info_p)),
       types(std::move(types_p)), row_start(row_start_p), allocation_size(0) {
+	// if (block_manager.GetBlockSize() != 262136) {
+	// 	throw InternalException("Block size %llu is from sf block manager", block_manager.GetBlockSize());
+	// }
+	if (block_manager.GetBlockSize() != 262104) {
+		// throw InternalException("Block size %llu is from in-mem block manager", block_manager.GetBlockSize());
+		// printf("RowGroupDataCollection: WARNING: in memory block manager used!\n");
+	}
 	row_groups = make_shared_ptr<RowGroupSegmentTree>(*this);
 }
 

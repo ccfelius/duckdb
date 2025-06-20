@@ -50,6 +50,23 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 	// Temp buffers can be larger than the storage block size.
 	// But persistent buffers cannot.
 	D_ASSERT(old_block->GetBuffer(lock)->AllocSize() <= GetBlockAllocSize());
+	// Temp buffers should have the default block header size
+	// Persistent buffers not, they can be encrypted and have different size
+	D_ASSERT(old_block->GetBuffer(lock)->Size() <= GetBlockSize());
+
+	// so, they are always the same
+	if (old_block->GetBuffer(lock)->Size() != GetBlockSize()) {
+		throw InternalException("at ConverttoPersistent. \n"
+		                        "Buffer size %llu and block mng block size %llu\n",
+		                        old_block->GetBuffer(lock)->Size(), GetBlockAllocSize());
+	}
+
+	// so, they are always the same
+	if (old_block->GetBuffer(lock)->AllocSize() != GetBlockAllocSize()) {
+		throw InternalException("at ConverttoPersistent. \n"
+		                        "Buffer alloc size %llu and block mng block alloc size %llu\n",
+		                        old_block->GetBuffer(lock)->AllocSize(), GetBlockAllocSize());
+	}
 
 	// convert the buffer to a block
 	auto converted_buffer = ConvertBlock(block_id, *old_block->GetBuffer(lock));

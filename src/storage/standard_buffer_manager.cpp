@@ -12,6 +12,8 @@
 #include "duckdb/storage/temporary_file_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
+#include <duckdb/common/types/row/block_iterator.hpp>
+
 namespace duckdb {
 
 #ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
@@ -43,6 +45,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	if (source) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
+		tmp->Restructure(size, block_header_size);
 		result = make_uniq<FileBuffer>(*tmp, type);
 	} else {
 		// non re-usable buffer: allocate a new buffer
@@ -168,6 +171,16 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 
 	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;
+	bool diff_buff_size = false;
+	if (reusable_buffer) {
+		if (reusable_buffer->Size() == GetBlockSize()) {
+			printf("This should not be the case. Temp Block Size is different from buffer size.\n");
+			diff_buff_size = true;
+		} else {
+			printf("Size: %llu, %d\n", reusable_buffer->Size(), diff_buff_size);
+		}
+		// reusable_buffer->Resize(block_size, block_header_size);
+	}
 	auto res = EvictBlocksOrThrow(tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
@@ -176,6 +189,8 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	    tag == MemoryTag::EXTERNAL_FILE_CACHE ? FileBufferType::EXTERNAL_FILE : FileBufferType::MANAGED_BUFFER;
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer), file_buffer_type);
 	const auto destroy_buffer_upon = can_destroy ? DestroyBufferUpon::EVICTION : DestroyBufferUpon::BLOCK;
+	// we create here a temporary block, one that does not get written to disk
+	// unless it is a temp file
 	return make_shared_ptr<BlockHandle>(*temp_block_manager, ++temporary_id, tag, std::move(buffer),
 	                                    destroy_buffer_upon, alloc_size, std::move(res));
 }
@@ -373,6 +388,10 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		} else {
 			// now we can actually load the current block
 			D_ASSERT(handle->Readers() == 0);
+			if (reusable_buffer) {
+				// a reusable buffer can have a different layout internally
+				reusable_buffer->Restructure(handle->block_manager);
+			}
 			buf = handle->Load(std::move(reusable_buffer));
 			if (!buf.IsValid()) {
 				reservation.Resize(0);
@@ -381,6 +400,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 			auto &memory_charge = handle->GetMemoryCharge(lock);
 			memory_charge = std::move(reservation);
 			// in the case of a variable sized block, the buffer may be smaller than a full block.
+			//! this is also the case for variable sized headers
 			int64_t delta = NumericCast<int64_t>(handle->GetBuffer(lock)->AllocSize()) -
 			                NumericCast<int64_t>(handle->GetMemoryUsage());
 			if (delta) {
@@ -508,7 +528,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	RequireTemporaryDirectory();
 
 	// Append to a few grouped files.
-	if (buffer.AllocSize() == GetBlockAllocSize()) {
+	if (buffer.AllocSize() == GetBlockAllocSize() && buffer.Size() == GetBlockSize()) {
 		evicted_data_per_tag[uint8_t(tag)] += GetBlockAllocSize();
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
 		return;

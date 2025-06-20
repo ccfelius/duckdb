@@ -520,10 +520,16 @@ void SingleFileBlockManager::ReadAndChecksum(FileBuffer &block, uint64_t locatio
 
 	//! calculate delta header bytes (if any)
 	uint64_t delta = GetBlockHeaderSize() - Storage::DEFAULT_BLOCK_HEADER_SIZE;
+	//! File buffers can be formatted differently (with the old structure);
+	idx_t block_size = block.Size();
+
+	// if (block_size > 4096) {
+	// 	auto block_size = GetBlockSize();
+	// }
 
 	if (options.encryption_options.encryption_enabled && !skip_block_header) {
 		auto key_id = options.encryption_options.derived_key_id;
-		EncryptionEngine::DecryptBlock(db.GetDatabase(), key_id, block.InternalBuffer(), block.Size(), delta);
+		EncryptionEngine::DecryptBlock(db.GetDatabase(), key_id, block.InternalBuffer(), block_size, delta);
 	}
 
 	CheckChecksum(block, location, delta, skip_block_header);
@@ -984,6 +990,7 @@ void SingleFileBlockManager::WriteHeader(optional_ptr<ClientContext> context, Da
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;
 	}
+
 	metadata_manager.Flush();
 	header.block_count = NumericCast<idx_t>(max_block);
 	header.serialization_compatibility = options.storage_version.GetIndex();

@@ -73,6 +73,7 @@ public:
 	void Read(ReadStream &source);
 
 	idx_t GetMetadataBlockSize() const;
+	idx_t GetMetadataBlockSizeHeader() const;
 
 protected:
 	BlockManager &block_manager;

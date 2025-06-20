@@ -154,6 +154,10 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 	auto &scan_state = state.scan_state->Cast<FixedSizeScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
+	if (segment.SegmentSize() != scan_state.handle.GetFileBuffer().Size()) {
+		throw InternalException("Segment Size %llu is not equal to file buffer size %llu", segment.SegmentSize(),
+		                        scan_state.handle.GetFileBuffer().Size());
+	}
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);
 
@@ -247,9 +251,11 @@ template <class T, class OP>
 idx_t FixedSizeAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
                       UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
+	D_ASSERT(segment.SegmentSize() <= append_state.handle.GetFileBuffer().Size());
 
 	auto target_ptr = append_state.handle.Ptr();
 	idx_t max_tuple_count = segment.SegmentSize() / sizeof(T);
+	// idx_t max_tuple_count = segment.SegmentSize() / sizeof(T);
 	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 
 	OP::template Append<T>(stats, target_ptr, segment.count, data, offset, copy_count);

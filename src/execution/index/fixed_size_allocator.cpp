@@ -14,7 +14,6 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
 	}
 
 	// calculate how many segments fit into one buffer (available_segments_per_buffer)
-
 	idx_t bits_per_value = sizeof(validity_t) * 8;
 	idx_t byte_count = 0;
 

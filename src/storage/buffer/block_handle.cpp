@@ -7,6 +7,8 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include <__filesystem/file_type.h>
+
 namespace duckdb {
 
 BlockHandle::BlockHandle(BlockManager &block_manager, block_id_t block_id_p, MemoryTag tag)
@@ -146,6 +148,10 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 	if (block_id < MAXIMUM_BLOCK) {
 		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 		block_manager.Read(*block);
+		if (block.get()->Size() != block_manager.GetBlockSize()) {
+			throw InternalException("Block size mismatch. Block %llu, block manager %llu\n", block.get()->Size(),
+			                        block_manager.GetBlockSize());
+		}
 		buffer = std::move(block);
 	} else {
 		if (MustWriteToTemporaryFile()) {
@@ -166,15 +172,42 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock) {
 		// already unloaded: nothing to do
 		return nullptr;
 	}
+
 	D_ASSERT(!unswizzled);
 	D_ASSERT(CanUnload());
 
+	bool equal_size = false;
+	if (buffer->Size() == block_manager.buffer_manager.GetBlockSize()) {
+		equal_size = true;
+	}
+
 	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
+		D_ASSERT(buffer->Size() == block_manager.buffer_manager.GetBlockSize());
+
+		// if (!equal_size) {
+		// 	throw InternalException("Cannot write different sized blocks to tmp memory");
+		// }
+
 		// temporary block that cannot be destroyed upon evict/unpin: write to temporary file
+		// in this case, the buffer needs to be restructured (force the default block structure).
 		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
 	}
+	// bool destr_buf;
+	// if (buffer->Size() != block_manager.buffer_manager.GetBlockSize()) {
+	// 	destr_buf = MustWriteToTemporaryFile();
+	// 	if (destr_buf) {
+	// 		throw InternalException("Cannot write different sized blocks to tmp memory");
+	// 	}
+	// 	throw InternalException("Block Sizes differ in temp memory: %llu  (buf) and %llu (temp block)", buffer->Size(),
+	// block_manager.buffer_manager.GetBlockSize());
+	// }
+
 	memory_charge.Resize(0);
 	state = BlockState::BLOCK_UNLOADED;
+	// if (buffer->Size() == block_manager.buffer_manager.GetBlockSize()){
+	// 	printf("Buffer size %llu is the standard block size: %llu.\n", buffer->Size(),
+	// block_manager.buffer_manager.GetBlockSize());
+	// }
 	return std::move(buffer);
 }
 

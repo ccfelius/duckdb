@@ -127,6 +127,9 @@ struct CompressedSegmentState {
 
 struct CompressionAppendState {
 	explicit CompressionAppendState(BufferHandle handle_p) : handle(std::move(handle_p)) {
+		if (handle.IsValid()) {
+			// printf("valid handle");
+		}
 	}
 	virtual ~CompressionAppendState() {
 	}

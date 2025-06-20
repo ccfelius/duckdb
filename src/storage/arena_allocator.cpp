@@ -11,8 +11,14 @@ namespace duckdb {
 ArenaChunk::ArenaChunk(Allocator &allocator, idx_t size) : current_position(0), maximum_size(size), prev(nullptr) {
 	D_ASSERT(size > 0);
 	data = allocator.Allocate(size);
+	// if (size > 262144) {
+	// 	printf("size: %llu\n", size);
+	// }
 }
 ArenaChunk::~ArenaChunk() {
+	// if (data.GetSize() == 262136) {
+	// 	throw InternalException("Size allocated is too large");
+	// }
 	if (next) {
 		auto current_next = std::move(next);
 		while (current_next) {

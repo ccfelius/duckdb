@@ -180,9 +180,13 @@ void MetadataManager::Flush() {
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		auto handle = buffer_manager.Pin(block.block);
-		// zero-initialize the few leftover bytes
+
+		if (handle.GetFileBuffer().Size() != block_manager.GetBlockSize()) {
+			throw InternalException("Block size mismatch");
+		}
 		memset(handle.Ptr() + total_metadata_size, 0, block_manager.GetBlockSize() - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
+		// Check if the block is transient (block_id > max_block)
 		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
 			// temporary block - convert to persistent
 			block.block = block_manager.ConvertToPersistent(kv.first, std::move(block.block), std::move(handle));
@@ -222,6 +226,10 @@ void MetadataBlock::Write(WriteStream &sink) {
 }
 
 idx_t MetadataManager::GetMetadataBlockSize() const {
+	return AlignValueFloor(block_manager.GetBlockSize() / METADATA_BLOCK_COUNT);
+}
+
+idx_t MetadataManager::GetMetadataBlockSizeHeader() const {
 	return AlignValueFloor(block_manager.GetBlockSize() / METADATA_BLOCK_COUNT);
 }
 
