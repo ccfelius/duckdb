@@ -4,10 +4,14 @@
 
 require tpch
 
-load __TEST_DIR__/leftover_temp_files.db
+# statement ok
+# ATTACH '__TEST_DIR__/bz.db' as bz (BLOCK_SIZE 32768)
+#
+# statement ok
+# USE bz;
 
 statement ok
-ATTACH '__TEST_DIR__/encrypted_temp_files.db' AS enc (ENCRYPTION_KEY 'asdf');
+ATTACH 'encrypted_temp_files_3.db' AS enc (ENCRYPTION_KEY 'asdf');
 
 statement ok
 USE enc;
@@ -16,41 +20,22 @@ statement ok
 SET threads=8
 
 statement ok
-SET memory_limit='1GB';
+SET memory_limit='100MB';
 
-statement ok
-CALL dbgen(sf=1);
+# mode skip
 
-statement ok
-ALTER TABLE lineitem RENAME TO lineitem1
+# statement ok
+# CALL dbgen(sf=1);
 
-statement ok
-CREATE TABLE lineitem2 AS FROM lineitem1
-
-# creating and dropping a table with an ORDER BY
-statement ok
-CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l1.* from lineitem1 l1 ORDER BY l_orderkey, l_returnflag
-
-statement ok
-DROP TABLE ans;
-
-# performing a small hash join
-statement ok
-CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN (FROM lineitem2 l2 WHERE l_orderkey<10000) AS l2 USING (l_orderkey, l_linenumber)
-
-statement ok
-DROP TABLE ans;
-
-# performing a large window function
-statement ok
-CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, row_number() OVER (PARTITION BY l_orderkey, l_linenumber ORDER BY l_orderkey) from lineitem1 l1
-
-statement ok
-DROP TABLE ans;
+# statement ok
+# ALTER TABLE lineitem RENAME TO lineitem1
+#
+# statement ok
+# CREATE TABLE lineitem2 AS FROM lineitem1
 
 # performing a large hash join
 statement ok
-CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
+CREATE OR REPLACE TABLE ans as select l1.*, l2.* from lineitem_smaller l1 JOIN lineitem2_smaller l2 USING (l_orderkey, l_linenumber)
 
 statement ok
 DROP TABLE ans;

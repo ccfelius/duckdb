@@ -1,0 +1,1204 @@
+diff --git a/src/common/encryption_functions.cpp b/src/common/encryption_functions.cpp
+index 50e34f8a72..53f2747472 100644
+--- a/src/common/encryption_functions.cpp
++++ b/src/common/encryption_functions.cpp
+@@ -57,8 +57,8 @@ void EncryptionEngine::AddTempKeyToCache(DatabaseInstance &db) {
+ 
+ void EncryptionEngine::EncryptBlock(DatabaseInstance &db, const string &key_id, FileBuffer &block,
+                                     FileBuffer &temp_buffer_manager, uint64_t delta) {
+-	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
+ 
++	data_ptr_t block_offset_internal = temp_buffer_manager.InternalBuffer();
+ 	auto encryption_state = db.GetEncryptionUtil()->CreateEncryptionState(GetKeyFromCache(db, key_id),
+ 	                                                                      MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+ 
+@@ -128,4 +128,272 @@ void EncryptionEngine::DecryptBlock(DatabaseInstance &db, const string &key_id,
+ 	    encryption_state->Finalize(internal_buffer + delta, 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
+ }
+ 
++void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
++                                              uint8_t *metadata) {
++
++	if (!ContainsKey(db, "temp_key")) {
++		AddTempKeyToCache(db);
++	}
++
++	auto temp_key = GetKeyFromCache(db, "temp_key");
++	auto encryption_util = db.GetEncryptionUtil();
++	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	// zero-out the metadata buffer
++	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
++
++	uint8_t tag[MainHeader::AES_TAG_LEN];
++	memset(tag, 0, MainHeader::AES_TAG_LEN);
++
++	//! a nonce is randomly generated for every block
++	uint8_t nonce[MainHeader::AES_IV_LEN];
++	memset(nonce, 0, MainHeader::AES_IV_LEN);
++
++	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
++
++	//! store the nonce at the the start of metadata buffer
++	memcpy(metadata, nonce, MainHeader::AES_NONCE_LEN);
++	encryption_state->InitializeEncryption(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN, temp_key,
++	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	auto aes_res = encryption_state->Process(input_buffer.InternalBuffer(), input_buffer.AllocSize(),
++	                                         out_buffer.InternalBuffer(), input_buffer.AllocSize());
++
++	if (aes_res != input_buffer.AllocSize()) {
++		throw IOException("Encryption failure: in- and output size differ");
++	}
++
++	//! Finalize and extract the tag
++	encryption_state->Finalize(out_buffer.InternalBuffer(), 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
++
++	//! store the generated tag after consequetively the nonce
++	memcpy(metadata + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
++	// check if tag is correctly stored
++	D_ASSERT(memcmp(tag, metadata + 12, 16) == 0);
++}
++
++void EncryptionEngine::EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, uint8_t *metadata) {
++
++	if (!ContainsKey(db, "temp_key")) {
++		AddTempKeyToCache(db);
++	}
++
++	auto temp_key = GetKeyFromCache(db, "temp_key");
++
++	auto encryption_util = db.GetEncryptionUtil();
++	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	// zero-out the metadata buffer
++	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
++
++	uint8_t tag[MainHeader::AES_TAG_LEN];
++	memset(tag, 0, MainHeader::AES_TAG_LEN);
++
++	//! a nonce is randomly generated for every block
++	uint8_t nonce[MainHeader::AES_IV_LEN];
++	memset(nonce, 0, MainHeader::AES_IV_LEN);
++
++	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
++
++	//! store the nonce at the the start of metadata buffer
++	memcpy(metadata, nonce, MainHeader::AES_NONCE_LEN);
++	encryption_state->InitializeEncryption(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN, temp_key,
++	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	auto aes_res = encryption_state->Process(input_buffer.InternalBuffer(), input_buffer.AllocSize(),
++	                                         input_buffer.InternalBuffer(), input_buffer.AllocSize());
++
++	if (aes_res != input_buffer.AllocSize()) {
++		throw IOException("Encryption failure: in- and output size differ");
++	}
++
++	//! Finalize and extract the tag
++	encryption_state->Finalize(input_buffer.InternalBuffer(), 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
++
++	//! store the generated tag after consequetively the nonce
++	memcpy(metadata + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
++
++	// check if tag is correctly stored
++	D_ASSERT(memcmp(tag, metadata + 12, 16) == 0);
++}
++
++void EncryptionEngine::EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
++                                                     AllocatedData &out_buffer, idx_t nr_bytes, uint8_t *metadata) {
++
++	// this already expects an empty ("header" of delta bytes).
++	if (!ContainsKey(db, "temp_key")) {
++		AddTempKeyToCache(db);
++	}
++	auto temp_key = GetKeyFromCache(db, "temp_key");
++
++	auto encryption_util = db.GetEncryptionUtil();
++	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	// zero-out the metadata buffer
++	memset(metadata, 0, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
++
++	uint8_t tag[MainHeader::AES_TAG_LEN];
++	memset(tag, 0, MainHeader::AES_TAG_LEN);
++
++	//! a nonce is randomly generated for every block
++	uint8_t nonce[MainHeader::AES_IV_LEN];
++	memset(nonce, 0, MainHeader::AES_IV_LEN);
++
++	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
++
++	//! store the nonce at the the start of metadata buffer
++	memcpy(metadata, nonce, MainHeader::AES_NONCE_LEN);
++	encryption_state->InitializeEncryption(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN, temp_key,
++	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	// for compressed data, there is already made some space in the header during the compression
++	auto aes_res = encryption_state->Process(input_buffer.get(), nr_bytes, out_buffer.get(), nr_bytes);
++
++	if (aes_res != nr_bytes) {
++		throw IOException("Encryption failure: in- and output size differ");
++	}
++
++	//! Finalize and extract the tag
++	encryption_state->Finalize(out_buffer.get(), 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
++	//! store the generated tag after consequetively the nonce
++	memcpy(metadata + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
++}
++
++void EncryptionEngine::EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
++                                                     AllocatedData &out_buffer, idx_t nr_bytes) {
++
++	// this already expects an empty ("header" of delta bytes).
++	auto temp_key = GetKeyFromCache(db, "temp_key");
++
++	auto encryption_util = db.GetEncryptionUtil();
++	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	uint8_t tag[MainHeader::AES_TAG_LEN];
++	memset(tag, 0, MainHeader::AES_TAG_LEN);
++
++	//! a nonce is randomly generated for every block
++	uint8_t nonce[MainHeader::AES_IV_LEN];
++	memset(nonce, 0, MainHeader::AES_IV_LEN);
++
++	encryption_state->GenerateRandomData(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN);
++
++	//! store the nonce at the start of the block
++	memcpy(out_buffer.get(), nonce, MainHeader::AES_NONCE_LEN);
++	encryption_state->InitializeEncryption(static_cast<data_ptr_t>(nonce), MainHeader::AES_NONCE_LEN, temp_key,
++	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++	auto out_buf_ptr = out_buffer.get();
++
++	auto size = nr_bytes - DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
++
++	// for compressed data, there is already made some space in the header during the compression
++	auto aes_res = encryption_state->Process(input_buffer.get() + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, size,
++	                                         out_buf_ptr + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, size);
++
++	if (aes_res != size) {
++		throw IOException("Encryption failure: in- and output size differ");
++	}
++
++	//! Finalize and extract the tag
++	encryption_state->Finalize(out_buf_ptr + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, 0, static_cast<data_ptr_t>(tag),
++	                           MainHeader::AES_TAG_LEN);
++
++	//! store the generated tag after consequetively the nonce
++	memcpy(out_buffer.get() + MainHeader::AES_NONCE_LEN, tag, MainHeader::AES_TAG_LEN);
++}
++
++void EncryptionEngine::DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, uint8_t *metadata) {
++
++	//! initialize encryption state
++	auto encryption_util = db.GetEncryptionUtil();
++	auto temp_key = GetKeyFromCache(db, "temp_key");
++	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	//! load the stored nonce
++	uint8_t nonce[MainHeader::AES_IV_LEN];
++	memset(nonce, 0, MainHeader::AES_IV_LEN);
++	memcpy(nonce, metadata, MainHeader::AES_NONCE_LEN);
++
++	//! load the tag for verification
++	uint8_t tag[MainHeader::AES_TAG_LEN];
++	memset(tag, 0, MainHeader::AES_TAG_LEN);
++	memcpy(tag, metadata + MainHeader::AES_NONCE_LEN, MainHeader::AES_TAG_LEN);
++
++	//! Initialize the decryption
++	encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, temp_key,
++	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	auto aes_res = encryption_state->Process(input_buffer.InternalBuffer(), input_buffer.AllocSize(),
++	                                         input_buffer.InternalBuffer(), input_buffer.AllocSize());
++
++	if (aes_res != input_buffer.AllocSize()) {
++		throw IOException("Encryption failure: in- and output size differ");
++	}
++
++	//! check the tag
++	encryption_state->Finalize(input_buffer.InternalBuffer(), 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
++}
++
++void EncryptionEngine::DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
++                                                     AllocatedData &out_buffer, idx_t nr_bytes) {
++
++	//! initialize encryption state
++	auto encryption_util = db.GetEncryptionUtil();
++	auto temp_key = GetKeyFromCache(db, "temp_key");
++	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	//! load the stored nonce
++	uint8_t nonce[MainHeader::AES_IV_LEN];
++	memset(nonce, 0, MainHeader::AES_IV_LEN);
++	memcpy(nonce, input_buffer.get(), MainHeader::AES_NONCE_LEN);
++
++	//! load the tag for verification
++	uint8_t tag[MainHeader::AES_TAG_LEN];
++	memcpy(tag, input_buffer.get() + MainHeader::AES_NONCE_LEN, MainHeader::AES_TAG_LEN);
++
++	//! Initialize the decryption
++	encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, temp_key,
++	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	// real buffer
++	auto size = nr_bytes - DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
++	data_ptr_t buf_ptr = input_buffer.get() + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
++
++	auto aes_res = encryption_state->Process(buf_ptr, size, out_buffer.get(), size);
++
++	if (aes_res != size) {
++		throw IOException("Encryption failure: in- and output size differ");
++	}
++
++	//! check the tag
++	encryption_state->Finalize(buf_ptr, 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
++}
++
++void EncryptionEngine::DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
++                                                     uint8_t *metadata) {
++
++	//! initialize encryption state
++	auto encryption_util = db.GetEncryptionUtil();
++	auto temp_key = GetKeyFromCache(db, "temp_key");
++	auto encryption_state = encryption_util->CreateEncryptionState(temp_key, MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++
++	//! load the stored nonce
++	uint8_t nonce[MainHeader::AES_IV_LEN];
++	memset(nonce, 0, MainHeader::AES_IV_LEN);
++	memcpy(nonce, metadata, MainHeader::AES_NONCE_LEN);
++
++	//! load the tag for verification
++	uint8_t tag[MainHeader::AES_TAG_LEN];
++	memcpy(tag, metadata + MainHeader::AES_NONCE_LEN, MainHeader::AES_TAG_LEN);
++
++	//! Initialize the decryption
++	encryption_state->InitializeDecryption(nonce, MainHeader::AES_NONCE_LEN, temp_key,
++	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
++	auto aes_res = encryption_state->Process(input_buffer.get(), nr_bytes, input_buffer.get(), nr_bytes);
++	if (aes_res != nr_bytes) {
++		throw IOException("Encryption failure: in- and output size differ");
++	}
++	//! check the tag
++	encryption_state->Finalize(input_buffer.get(), 0, static_cast<data_ptr_t>(tag), MainHeader::AES_TAG_LEN);
++}
++
+ } // namespace duckdb
+diff --git a/src/common/file_buffer.cpp b/src/common/file_buffer.cpp
+index 55315fa56b..08fbffb5eb 100644
+--- a/src/common/file_buffer.cpp
++++ b/src/common/file_buffer.cpp
+@@ -100,6 +100,21 @@ void FileBuffer::Resize(BlockManager &block_manager) {
+ 	ResizeInternal(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
+ }
+ 
++void FileBuffer::RestructureDefault() {
++	buffer = internal_buffer + DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
++	size = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
++}
++
++void FileBuffer::Restructure(BlockManager &block_manager) {
++	buffer = internal_buffer + block_manager.GetBlockHeaderSize();
++	size = block_manager.GetBlockSize();
++}
++
++void FileBuffer::Restructure(uint64_t block_size, uint64_t block_header_size) {
++	buffer = internal_buffer + block_header_size;
++	size = block_size;
++}
++
+ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
+ 	D_ASSERT(type != FileBufferType::TINY_BUFFER);
+ 	handle.Read(internal_buffer, internal_size, location);
+diff --git a/src/function/pragma/pragma_functions.cpp b/src/function/pragma/pragma_functions.cpp
+index aef0c18aaa..94ae1712e3 100644
+--- a/src/function/pragma/pragma_functions.cpp
++++ b/src/function/pragma/pragma_functions.cpp
+@@ -11,6 +11,7 @@
+ #include "duckdb/planner/expression_binder.hpp"
+ #include "duckdb/storage/buffer_manager.hpp"
+ #include "duckdb/storage/storage_manager.hpp"
++#include "duckdb/common/encryption_functions.hpp"
+ 
+ #include <cctype>
+ 
+@@ -123,6 +124,27 @@ static void PragmaDisableWalEncryption(ClientContext &context, const FunctionPar
+ 	DBConfig::GetConfig(context).options.enable_wal_encryption = false;
+ }
+ 
++static void PragmaEnableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {
++	DBConfig::GetConfig(context).options.enable_temp_file_encryption = true;
++	//! A randomly generated key for encrypting temporary files gets added
++	EncryptionEngine::AddTempKeyToCache(*context.db);
++}
++
++static void PragmaDisableTempFilesEncryption(ClientContext &context, const FunctionParameters &parameters) {
++	DBConfig::GetConfig(context).options.enable_temp_file_encryption = false;
++}
++
++static void PragmaEnableFullEncryption(ClientContext &context, const FunctionParameters &parameters) {
++	DBConfig::GetConfig(context).options.full_encryption = true;
++	//! A randomly generated key for encrypting temporary files gets added
++	EncryptionEngine::AddTempKeyToCache(*context.db);
++}
++
++// If full encryption is disabled, WAL and temp files are not encrypted.
++static void PragmaDisableFullEncryption(ClientContext &context, const FunctionParameters &parameters) {
++	DBConfig::GetConfig(context).options.full_encryption = false;
++}
++
+ static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
+ 	if (parameters.values.empty()) {
+ 		context.db->GetLogManager().SetEnableLogging(true);
+@@ -206,6 +228,13 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
+ 
+ 	set.AddFunction(PragmaFunction::PragmaStatement("debug_enable_wal_encryption", PragmaEnableWalEncryption));
+ 	set.AddFunction(PragmaFunction::PragmaStatement("debug_disable_wal_encryption", PragmaDisableWalEncryption));
++	set.AddFunction(
++	    PragmaFunction::PragmaStatement("debug_enable_temp_file_encryption", PragmaEnableTempFilesEncryption));
++	set.AddFunction(
++	    PragmaFunction::PragmaStatement("debug_disable_temp_file_encryption", PragmaDisableTempFilesEncryption));
++
++	set.AddFunction(PragmaFunction::PragmaStatement("enable_full_encryption", PragmaEnableFullEncryption));
++	set.AddFunction(PragmaFunction::PragmaStatement("disable_full_encryption", PragmaDisableFullEncryption));
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/include/duckdb/common/encryption_functions.hpp b/src/include/duckdb/common/encryption_functions.hpp
+index 41f3c43309..43196f8e24 100644
+--- a/src/include/duckdb/common/encryption_functions.hpp
++++ b/src/include/duckdb/common/encryption_functions.hpp
+@@ -25,11 +25,27 @@ public:
+ 	static string AddKeyToCache(DatabaseInstance &db, data_ptr_t key);
+ 	static void AddTempKeyToCache(DatabaseInstance &db);
+ 
+-	//! Encryption Fucntions
++	//! Encryption Functions
+ 	static void EncryptBlock(DatabaseInstance &db, const string &key_id, FileBuffer &block,
+ 	                         FileBuffer &temp_buffer_manager, uint64_t delta);
+ 	static void DecryptBlock(DatabaseInstance &db, const string &key_id, data_ptr_t internal_buffer,
+ 	                         uint64_t block_size, uint64_t delta);
++
++	// Encrypt Buffers (temp files)
++	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, FileBuffer &out_buffer,
++	                                   uint8_t *metadata);
++	static void EncryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, uint8_t *metadata);
++
++	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
++	                                          AllocatedData &out_buffer, idx_t nr_bytes);
++	static void EncryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
++	                                          AllocatedData &out_buffer, idx_t nr_bytes, uint8_t *metadata);
++
++	static void DecryptTemporaryBuffer(DatabaseInstance &db, FileBuffer &input_buffer, uint8_t *metadata);
++	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer,
++	                                          AllocatedData &out_buffer, idx_t nr_bytes);
++	static void DecryptTemporaryAllocatedData(DatabaseInstance &db, AllocatedData &input_buffer, idx_t nr_bytes,
++	                                          uint8_t *metadata);
+ };
+ 
+ class EncryptionTypes {
+diff --git a/src/include/duckdb/common/file_buffer.hpp b/src/include/duckdb/common/file_buffer.hpp
+index 44a215e244..2efbb78d5f 100644
+--- a/src/include/duckdb/common/file_buffer.hpp
++++ b/src/include/duckdb/common/file_buffer.hpp
+@@ -60,6 +60,13 @@ public:
+ 	void Resize(uint64_t user_size, BlockManager &block_manager);
+ 	void Resize(BlockManager &block_manager);
+ 
++	// Restructuring is necessary if a file buffer is reused
++	// Because the internal structure could differ
++	// This can happen e.g. with encryption
++	void Restructure(BlockManager &block_manager);
++	void Restructure(uint64_t block_size, uint64_t block_header_size);
++	void RestructureDefault();
++
+ 	uint64_t AllocSize() const {
+ 		return internal_size;
+ 	}
+diff --git a/src/include/duckdb/main/config.hpp b/src/include/duckdb/main/config.hpp
+index 4845ef010e..cada804ae1 100644
+--- a/src/include/duckdb/main/config.hpp
++++ b/src/include/duckdb/main/config.hpp
+@@ -270,6 +270,10 @@ struct DBConfigOptions {
+ 	bool old_implicit_casting = false;
+ 	//!  By default, WAL is encrypted for encrypted databases
+ 	bool enable_wal_encryption = true;
++	//! Encrypt the temp files
++	bool enable_temp_file_encryption = false;
++	//! Full encryption mode (by default on)
++	bool full_encryption = false;
+ 	//! The default block allocation size for new duckdb database files (new as-in, they do not yet exist).
+ 	idx_t default_block_alloc_size = DUCKDB_BLOCK_ALLOC_SIZE;
+ 	//! The default block header size for new duckdb database files.
+diff --git a/src/include/duckdb/storage/standard_buffer_manager.hpp b/src/include/duckdb/storage/standard_buffer_manager.hpp
+index 8c91964e21..d0610e8646 100644
+--- a/src/include/duckdb/storage/standard_buffer_manager.hpp
++++ b/src/include/duckdb/storage/standard_buffer_manager.hpp
+@@ -42,7 +42,12 @@ public:
+ 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
+ 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
+ 	                                                          idx_t position, idx_t size,
+-	                                                          unique_ptr<FileBuffer> reusable_buffer);
++	                                                          unique_ptr<FileBuffer> reusable_buffer,
++	                                                          bool encrypted = false);
++	static unique_ptr<FileBuffer> ReadTemporaryBufferInternalEncrypted(BufferManager &buffer_manager,
++	                                                                   FileHandle &handle, idx_t position, idx_t size,
++	                                                                   unique_ptr<FileBuffer> reusable_buffer,
++	                                                                   bool encrypted = true);
+ 
+ 	//! Registers a transient memory buffer.
+ 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) final;
+diff --git a/src/include/duckdb/storage/storage_info.hpp b/src/include/duckdb/storage/storage_info.hpp
+index 6a56423deb..c08f971159 100644
+--- a/src/include/duckdb/storage/storage_info.hpp
++++ b/src/include/duckdb/storage/storage_info.hpp
+@@ -36,7 +36,8 @@ struct FileHandle;
+ #define DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE 40ULL
+ //! The configurable block allocation size.
+ #ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
+-#define DUCKDB_BLOCK_HEADER_STORAGE_SIZE DEFAULT_BLOCK_HEADER_STORAGE_SIZE
++#define DUCKDB_BLOCK_HEADER_STORAGE_SIZE     DEFAULT_BLOCK_HEADER_STORAGE_SIZE
++#define DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE 28ULL
+ #endif
+ 
+ using block_id_t = int64_t;
+diff --git a/src/include/duckdb/storage/temporary_file_manager.hpp b/src/include/duckdb/storage/temporary_file_manager.hpp
+index 952f28804e..2fd0bcc09a 100644
+--- a/src/include/duckdb/storage/temporary_file_manager.hpp
++++ b/src/include/duckdb/storage/temporary_file_manager.hpp
+@@ -46,6 +46,7 @@ struct TemporaryFileIdentifier {
+ public:
+ 	TemporaryFileIdentifier();
+ 	TemporaryFileIdentifier(TemporaryBufferSize size, idx_t file_index);
++	TemporaryFileIdentifier(DatabaseInstance &db, TemporaryBufferSize size, idx_t file_index, bool encrypted);
+ 
+ public:
+ 	//! Whether this temporary file identifier is valid (fields have been set)
+@@ -56,6 +57,8 @@ public:
+ 	TemporaryBufferSize size;
+ 	//! The index of the temp file
+ 	optional_idx file_index;
++	// Indicates whether the file is encrypted
++	bool encrypted = false;
+ };
+ 
+ struct TemporaryFileIndex {
+@@ -138,6 +141,7 @@ public:
+ 
+ 	//! Deletes the file if there are no more blocks
+ 	bool DeleteIfEmpty();
++	bool IsEncrypted() const;
+ 	//! Get information about this temporary file
+ 	TemporaryFileInformation GetTemporaryFile();
+ 
+@@ -275,6 +279,7 @@ public:
+ 	bool HasTemporaryBuffer(block_id_t block_id);
+ 	unique_ptr<FileBuffer> ReadTemporaryBuffer(block_id_t id, unique_ptr<FileBuffer> reusable_buffer);
+ 	void DeleteTemporaryBuffer(block_id_t id);
++	bool IsEncrypted() const;
+ 
+ 	//! Get the list of temporary files and their sizes
+ 	vector<TemporaryFileInformation> GetTemporaryFiles();
+diff --git a/src/storage/single_file_block_manager.cpp b/src/storage/single_file_block_manager.cpp
+index c36094048f..f3cf6c26a3 100644
+--- a/src/storage/single_file_block_manager.cpp
++++ b/src/storage/single_file_block_manager.cpp
+@@ -356,6 +356,7 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
+ 	AddStorageVersionTag();
+ 
+ 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
++	auto &config = DBConfig::GetConfig(db.GetDatabase());
+ 	// Derive the encryption key and add it to cache
+ 	// Unused for plain databases
+ 	uint8_t salt[MainHeader::SALT_LEN];
+@@ -372,6 +373,11 @@ void SingleFileBlockManager::CreateNewDatabase(optional_ptr<ClientContext> conte
+ 		// set the encrypted db bit to 0
+ 		main_header.flags[0] = MainHeader::ENCRYPTED_DATABASE_FLAG;
+ 
++		// automatically encrypt the WAL and temp files
++		config.options.enable_wal_encryption = true;
++		config.options.enable_temp_file_encryption = true;
++		config.options.full_encryption = true;
++
+ 		//! the derived key is wiped in addkeytocache
+ 		options.encryption_options.derived_key_id = EncryptionEngine::AddKeyToCache(db.GetDatabase(), derived_key);
+ 		db.SetEncryptionKeyId(options.encryption_options.derived_key_id);
+@@ -452,6 +458,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
+ 	}
+ 
+ 	if (main_header.IsEncrypted()) {
++		auto &config = DBConfig::GetConfig(db.GetDatabase());
+ 		// encryption is set, check if the given key upon attach is correct
+ 		//! Get the stored salt
+ 		uint8_t salt[MainHeader::SALT_LEN];
+@@ -471,6 +478,11 @@ void SingleFileBlockManager::LoadExistingDatabase() {
+ 			// if encrypted, but no encryption
+ 			throw CatalogException("Cannot open encrypted database \"%s\" without a key", path);
+ 		}
++
++		// automatically encrypt the WAL and temp files if we deal with an encrypted database
++		config.options.enable_wal_encryption = true;
++		config.options.enable_temp_file_encryption = true;
++		config.options.full_encryption = true;
+ 	}
+ 
+ 	options.version_number = main_header.version_number;
+@@ -830,6 +842,7 @@ bool SingleFileBlockManager::IsRemote() {
+ 
+ unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
+ 	D_ASSERT(source_buffer.AllocSize() == GetBlockAllocSize());
++	source_buffer.Restructure(*this);
+ 	return make_uniq<Block>(source_buffer, block_id);
+ }
+ 
+diff --git a/src/storage/standard_buffer_manager.cpp b/src/storage/standard_buffer_manager.cpp
+index 859e7757a3..c70b18926a 100644
+--- a/src/storage/standard_buffer_manager.cpp
++++ b/src/storage/standard_buffer_manager.cpp
+@@ -11,6 +11,7 @@
+ #include "duckdb/storage/storage_manager.hpp"
+ #include "duckdb/storage/temporary_file_manager.hpp"
+ #include "duckdb/storage/temporary_memory_manager.hpp"
++#include "duckdb/common/encryption_functions.hpp"
+ 
+ namespace duckdb {
+ 
+@@ -43,6 +44,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
+ 	if (source) {
+ 		auto tmp = std::move(source);
+ 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
++		tmp->Restructure(size, block_header_size);
+ 		result = make_uniq<FileBuffer>(*tmp, type);
+ 	} else {
+ 		// non re-usable buffer: allocate a new buffer
+@@ -473,16 +475,34 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
+ 	return result;
+ }
+ 
+-unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager,
+-                                                                          FileHandle &handle, idx_t position,
+-                                                                          idx_t size,
+-                                                                          unique_ptr<FileBuffer> reusable_buffer) {
++unique_ptr<FileBuffer>
++StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle, idx_t position,
++                                                   idx_t size, unique_ptr<FileBuffer> reusable_buffer, bool encrypted) {
+ 	auto buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
+ 	                                                    std::move(reusable_buffer));
+ 	buffer->Read(handle, position);
+ 	return buffer;
+ }
+ 
++unique_ptr<FileBuffer>
++StandardBufferManager::ReadTemporaryBufferInternalEncrypted(BufferManager &buffer_manager, FileHandle &handle,
++                                                            idx_t position, idx_t size,
++                                                            unique_ptr<FileBuffer> reusable_buffer, bool encrypted) {
++
++	auto buffer =
++	    buffer_manager.ConstructManagedBuffer(size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, std::move(reusable_buffer));
++
++	//! Read nonce and tag from file.
++	uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
++	handle.Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, position);
++
++	//! Read and decrypt the buffer.
++	buffer->Read(handle, position + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
++	EncryptionEngine::DecryptTemporaryBuffer(buffer_manager.GetDatabase(), *buffer, encryption_metadata);
++
++	return buffer;
++}
++
+ string StandardBufferManager::GetTemporaryPath(block_id_t id) {
+ 	auto &fs = FileSystem::GetFileSystem(db);
+ 	return fs.JoinPath(temporary_directory.path, "duckdb_temp_block-" + to_string(id) + ".block");
+@@ -515,15 +535,31 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
+ 	}
+ 
+ 	// Get the path to write to.
++	// These files are .block, and variable sized (larger then 256kb), as opposed to .tmp
+ 	auto path = GetTemporaryPath(block_id);
++
++	idx_t delta = 0;
++	if (db.config.options.full_encryption) {
++		delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
++	}
++
+ 	evicted_data_per_tag[uint8_t(tag)] += buffer.AllocSize();
+ 
+ 	// Create the file and write the size followed by the buffer contents.
+ 	auto &fs = FileSystem::GetFileSystem(db);
+ 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+-	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
++	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t) + delta);
++	//! for very large buffers, we store the size of the buffer in plaintext.
+ 	handle->Write(nullptr, &buffer.size, sizeof(idx_t), 0);
+-	buffer.Write(nullptr, *handle, sizeof(idx_t));
++
++	if (db.config.options.full_encryption && db.config.options.enable_temp_file_encryption) {
++		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
++		EncryptionEngine::EncryptTemporaryBuffer(db, buffer, encryption_metadata);
++		//! Write the nonce (and tag for GCM).
++		handle->Write(nullptr, encryption_metadata, delta, sizeof(idx_t));
++	}
++
++	buffer.Write(nullptr, *handle, sizeof(idx_t) + delta);
+ }
+ 
+ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag, BlockHandle &block,
+@@ -544,7 +580,15 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
+ 	handle->Read(&block_size, sizeof(idx_t), 0);
+ 
+ 	// Allocate a buffer of the file's size and read the data into that buffer.
+-	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
++	unique_ptr<FileBuffer> buffer;
++
++	if (db.config.options.full_encryption) {
++		buffer =
++		    ReadTemporaryBufferInternalEncrypted(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
++	} else {
++		buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
++	}
++
+ 	handle.reset();
+ 
+ 	// Delete the file and return the buffer.
+@@ -565,6 +609,7 @@ void StandardBufferManager::DeleteTemporaryFile(BlockHandle &block) {
+ 			return;
+ 		}
+ 	}
++
+ 	// check if we should delete the file from the shared pool of files, or from the general file system
+ 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
+ 		evicted_data_per_tag[uint8_t(block.GetMemoryTag())] -= GetBlockAllocSize();
+diff --git a/src/storage/temporary_file_manager.cpp b/src/storage/temporary_file_manager.cpp
+index dfcff91996..33ab0ed8dc 100644
+--- a/src/storage/temporary_file_manager.cpp
++++ b/src/storage/temporary_file_manager.cpp
+@@ -6,6 +6,7 @@
+ #include "duckdb/storage/buffer/temporary_file_information.hpp"
+ #include "duckdb/storage/standard_buffer_manager.hpp"
+ #include "duckdb/main/database.hpp"
++#include "duckdb/common/encryption_functions.hpp"
+ #include "zstd.h"
+ 
+ namespace duckdb {
+@@ -69,6 +70,16 @@ TemporaryFileIdentifier::TemporaryFileIdentifier(TemporaryBufferSize size_p, idx
+     : size(size_p), file_index(file_index_p) {
+ }
+ 
++TemporaryFileIdentifier::TemporaryFileIdentifier(DatabaseInstance &db, TemporaryBufferSize size_p, idx_t file_index_p,
++                                                 bool encrypted_p)
++    : size(size_p), file_index(file_index_p), encrypted(encrypted_p) {
++
++	if (encrypted) {
++		// generate a random encryption key ID and corresponding key
++		EncryptionEngine::AddTempKeyToCache(db);
++	}
++}
++
+ bool TemporaryFileIdentifier::IsValid() const {
+ 	return size != TemporaryBufferSize::INVALID && file_index.IsValid();
+ }
+@@ -199,14 +210,33 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
+                                                                 unique_ptr<FileBuffer> reusable_buffer) const {
+ 	auto &buffer_manager = BufferManager::GetBufferManager(db);
+ 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
+-		return StandardBufferManager::ReadTemporaryBufferInternal(
+-		    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
+-		    std::move(reusable_buffer));
++		if (identifier.encrypted) {
++			return StandardBufferManager::ReadTemporaryBufferInternalEncrypted(
++			    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
++			    std::move(reusable_buffer), identifier.encrypted);
++		} else {
++			return StandardBufferManager::ReadTemporaryBufferInternal(
++			    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
++			    std::move(reusable_buffer), identifier.encrypted);
++		}
+ 	}
+ 
+ 	// Read compressed buffer
+ 	auto compressed_buffer = Allocator::Get(db).Allocate(TemporaryBufferSizeToSize(identifier.size));
+-	handle->Read(compressed_buffer.get(), compressed_buffer.GetSize(), GetPositionInFile(block_index));
++
++	if (identifier.encrypted) {
++		uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
++		//! Read nonce and tag.
++		handle->Read(encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE, GetPositionInFile(block_index));
++		//! Read the encrypted compressed buffer.
++		handle->Read(compressed_buffer.get(), compressed_buffer.GetSize(),
++		             GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
++		//! Decrypt the compressed buffer.
++		EncryptionEngine::DecryptTemporaryAllocatedData(db, compressed_buffer, compressed_buffer.GetSize(),
++		                                                encryption_metadata);
++	} else {
++		handle->Read(compressed_buffer.get(), compressed_buffer.GetSize(), GetPositionInFile(block_index));
++	}
+ 
+ 	// Decompress into buffer
+ 	auto buffer = buffer_manager.ConstructManagedBuffer(
+@@ -228,10 +258,41 @@ void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t b
+ 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
+ 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
+ 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
+-		buffer.Write(nullptr, *handle, GetPositionInFile(block_index));
++		// write an UNCOMPRESSED buffer to the file
++		if (identifier.encrypted) {
++			// create a new FileBuffer and write that one to the file
++			auto temp_buf = make_uniq<FileBuffer>(Allocator::Get(db), buffer.GetBufferType(), buffer.Size(),
++			                                      DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
++
++			// nonce and tag are written separately
++			uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
++			EncryptionEngine::EncryptTemporaryBuffer(db, buffer, *temp_buf, encryption_metadata);
++			// first write 28 bytes of nonce + tag
++			handle->Write(nullptr, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE,
++			              GetPositionInFile(block_index));
++			temp_buf->Write(nullptr, *handle, GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
++		} else {
++			buffer.Write(nullptr, *handle, GetPositionInFile(block_index));
++		}
++
+ 	} else {
+-		handle->Write(nullptr, compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
+-		              GetPositionInFile(block_index));
++		if (identifier.encrypted) {
++			// write the compressed buffer to the file
++			uint8_t encryption_metadata[DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE];
++			auto encrypted_compressed_buffer = Allocator::Get(db).Allocate(TemporaryBufferSizeToSize(identifier.size));
++			EncryptionEngine::EncryptTemporaryAllocatedData(db, compressed_buffer, encrypted_compressed_buffer,
++			                                                TemporaryBufferSizeToSize(identifier.size),
++			                                                encryption_metadata);
++
++			handle->Write(nullptr, encryption_metadata, DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE,
++			              GetPositionInFile(block_index));
++			handle->Write(nullptr, encrypted_compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
++			              GetPositionInFile(block_index) + DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE);
++		} else {
++			// write compressed temp file
++			handle->Write(nullptr, compressed_buffer.get(), TemporaryBufferSizeToSize(identifier.size),
++			              GetPositionInFile(block_index));
++		}
+ 	}
+ }
+ 
+@@ -255,6 +316,10 @@ bool TemporaryFileHandle::DeleteIfEmpty() {
+ 	return true;
+ }
+ 
++bool TemporaryFileHandle::IsEncrypted() const {
++	{ return (db.config.options.full_encryption); }
++}
++
+ TemporaryFileInformation TemporaryFileHandle::GetTemporaryFile() {
+ 	TemporaryFileLock lock(file_lock);
+ 	TemporaryFileInformation info;
+@@ -289,7 +354,12 @@ void TemporaryFileHandle::RemoveTempBlockIndex(TemporaryFileLock &, idx_t index)
+ }
+ 
+ idx_t TemporaryFileHandle::GetPositionInFile(const idx_t index) const {
+-	return index * static_cast<idx_t>(identifier.size);
++	idx_t delta = 0;
++	if (identifier.encrypted) {
++		// if the file is encrypted, we need to account for the header size
++		delta = DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE;
++	}
++	return index * (static_cast<idx_t>(identifier.size) + delta);
+ }
+ 
+ //===--------------------------------------------------------------------===//
+@@ -458,7 +528,8 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer
+ 		if (!handle) {
+ 			// no existing handle to write to; we need to create & open a new file
+ 			auto &size = compression_result.size;
+-			const TemporaryFileIdentifier identifier(size, index_managers[size].GetNewBlockIndex(size));
++			const TemporaryFileIdentifier identifier(db, size, index_managers[size].GetNewBlockIndex(size),
++			                                         IsEncrypted());
+ 			auto &new_file = files.CreateFile(identifier);
+ 			index = new_file.TryGetBlockIndex();
+ 			handle = &new_file;
+@@ -572,6 +643,10 @@ void TemporaryFileManager::DecreaseSizeOnDisk(idx_t bytes) {
+ 	size_on_disk -= bytes;
+ }
+ 
++bool TemporaryFileManager::IsEncrypted() const {
++	return db.config.options.full_encryption && db.config.options.enable_temp_file_encryption;
++}
++
+ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,
+                                                                  unique_ptr<FileBuffer> reusable_buffer) {
+ 	TemporaryFileIndex index;
+diff --git a/src/storage/write_ahead_log.cpp b/src/storage/write_ahead_log.cpp
+index 8cac2868ed..900377ef49 100644
+--- a/src/storage/write_ahead_log.cpp
++++ b/src/storage/write_ahead_log.cpp
+@@ -121,7 +121,7 @@ public:
+ 		// if the config.encrypt WAL is true
+ 		// and if the attached database is encrypted
+ 		// then encrypt WAL before flushing
+-		if (wal.IsEncrypted() && wal.GetDatabase().GetIsEncrypted()) {
++		if (wal.IsEncrypted()) {
+ 			return FlushEncrypted();
+ 		}
+ 
+@@ -241,7 +241,7 @@ void WriteAheadLog::WriteVersion() {
+ 	BinarySerializer serializer(*writer);
+ 	serializer.Begin();
+ 	serializer.WriteProperty(100, "wal_type", WALType::WAL_VERSION);
+-	if (IsEncrypted() && GetDatabase().GetIsEncrypted()) {
++	if (IsEncrypted()) {
+ 		serializer.WriteProperty(101, "version", idx_t(WAL_ENCRYPTED_VERSION_NUMBER));
+ 	} else {
+ 		serializer.WriteProperty(101, "version", idx_t(WAL_VERSION_NUMBER));
+@@ -257,7 +257,7 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
+ 
+ bool WriteAheadLog::IsEncrypted() const {
+ 	const auto &config = DBConfig::GetConfig(database.GetDatabase());
+-	return config.options.enable_wal_encryption && database.GetIsEncrypted();
++	return config.options.enable_wal_encryption && database.GetIsEncrypted() && config.options.full_encryption;
+ }
+ 
+ //===--------------------------------------------------------------------===//
+diff --git a/test/sql/storage/encryption/temp_files/encrypt_asof_join_merge.test_slow b/test/sql/storage/encryption/temp_files/encrypt_asof_join_merge.test_slow
+new file mode 100644
+index 0000000000..c7f07ca591
+--- /dev/null
++++ b/test/sql/storage/encryption/temp_files/encrypt_asof_join_merge.test_slow
+@@ -0,0 +1,38 @@
++# name: test/sql/storage/encryption/temp_files/encrypt_asof_join_merge.test_slow
++# description: Test merge queue and repartitioning with encrypted temporary files
++# group: [temp_files]
++
++# statement ok
++# PRAGMA debug_enable_temp_file_encryption;
++
++statement ok
++ATTACH '__TEST_DIR__/encrypted_temp_files.db' AS enc (ENCRYPTION_KEY 'asdf');
++
++statement ok
++USE enc;
++
++statement ok
++PRAGMA memory_limit='400M'
++
++statement ok
++PRAGMA threads=4
++
++statement ok
++SET temp_directory='__TEST_DIR__/temp.tmp'
++
++# Force PhysicalAsOfJoin
++statement ok
++PRAGMA asof_loop_join_threshold = 0;
++
++query II
++WITH build AS (
++	SELECT k, ('2021-01-01'::TIMESTAMP + INTERVAL (i) SECOND) AS t, i % 37 AS v
++	FROM range(3000000) t(i), range(2) tk(k)
++), probe AS (
++	SELECT k, t
++	FROM range(2) tk(k),
++		 range('2021-01-01 00:00:30'::TIMESTAMP, '2021-02-01 00:00:30'::TIMESTAMP, INTERVAL 1 HOUR) tt(t)
++) SELECT SUM(v) AS v, COUNT(*) AS n
++FROM probe ASOF JOIN build USING(k, t)
++----
++26790	1488
+\ No newline at end of file
+diff --git a/test/sql/storage/encryption/temp_files/encrypted_max_swap_space_error.test b/test/sql/storage/encryption/temp_files/encrypted_max_swap_space_error.test
+new file mode 100644
+index 0000000000..7301cb7db2
+--- /dev/null
++++ b/test/sql/storage/encryption/temp_files/encrypted_max_swap_space_error.test
+@@ -0,0 +1,93 @@
++# name: test/sql/storage/encryption/temp_files/encrypted_max_swap_space_error.test
++# description: Test the maximum swap space.
++# group: [temp_files]
++
++require noforcestorage
++
++require skip_reload
++
++# This test performs comparisons against the DEFAULT_BLOCK_ALLOC_SIZE of 256KiB.
++require block_size 262144
++
++# The temporary directory usage changes with the vector size.
++require vector_size 2048
++
++# Set a temp_directory to offload data
++statement ok
++set temp_directory='__TEST_DIR__/max_swap_space_reached'
++
++# Ensure the temp_directory is used
++statement ok
++PRAGMA memory_limit='1024KiB'
++
++# Zero blocks
++statement ok
++set max_temp_directory_size='0KiB'
++
++statement ok
++ATTACH '__TEST_DIR__/encrypted_tmp.db' as enc (ENCRYPTION_KEY 'asdf');
++
++statement ok
++USE enc;
++
++statement error
++CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(1000000);
++----
++failed to offload data block
++
++query I
++select "size" from duckdb_temporary_files()
++----
++0
++
++# Max. one block for the default block allocation size
++statement ok
++set max_temp_directory_size='256KiB'
++
++statement error
++CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(1000000);
++----
++failed to offload data block
++
++statement error
++CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(1000000);
++----
++failed to offload data block
++
++query I
++select "size" from duckdb_temporary_files()
++----
++
++statement ok
++set max_temp_directory_size='4MB'
++
++statement ok
++pragma threads=2;
++
++statement ok
++set preserve_insertion_order=true;
++
++# Ensure the temp_directory is used
++statement ok
++PRAGMA memory_limit='1624KiB'
++
++statement ok
++CREATE OR REPLACE TABLE t2 AS SELECT random() FROM range(200000);
++
++statement error
++CREATE OR REPLACE TABLE t2 AS SELECT * FROM range(10000000);
++----
++failed to offload data block
++
++query I
++select current_setting('max_temp_directory_size')
++----
++3.8 MiB
++
++statement ok
++set max_temp_directory_size='2550KiB'
++
++query I
++select current_setting('max_temp_directory_size')
++----
++2.4 MiB
+\ No newline at end of file
+diff --git a/test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow b/test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow
+new file mode 100644
+index 0000000000..9357e88280
+--- /dev/null
++++ b/test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow
+@@ -0,0 +1,33 @@
++# name: test/sql/storage/encryption/temp_files/encrypted_offloading_block_files.test_slow
++# group: [temp_files]
++
++require block_size 262144
++
++load __TEST_DIR__/offloading_block_files.db
++
++# ATTACH DB
++statement ok
++ATTACH '__TEST_DIR__/encrypted.db' as enc (ENCRYPTION_KEY 'asdf');
++
++statement ok
++USE enc;
++
++# 500M row table.
++statement ok
++CREATE TABLE tbl AS FROM
++	range(100) t1(i)
++	CROSS JOIN range(100) t2(j)
++	CROSS JOIN range(100) t3(k)
++	CROSS JOIN range(100) t4(l)
++	CROSS JOIN range(5) t5(m)
++	SELECT row_number() OVER () AS i, random() AS random_value;
++
++statement ok
++SET max_temp_directory_size = '1GB';
++
++statement ok
++SET memory_limit = '1GB';
++
++statement error
++SELECT * FROM tbl ORDER BY random_value;
++----
+diff --git a/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
+new file mode 100644
+index 0000000000..2c2c4c22ee
+--- /dev/null
++++ b/test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
+@@ -0,0 +1,56 @@
++# name: test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow
++# description: Encrypted large joins in persistent databases have a leftover temporary directory.
++# group: [temp_files]
++
++require tpch
++
++load __TEST_DIR__/leftover_temp_files.db
++
++statement ok
++ATTACH '__TEST_DIR__/encrypted_temp_files.db' AS enc (ENCRYPTION_KEY 'asdf');
++
++statement ok
++USE enc;
++
++statement ok
++SET threads=8
++
++statement ok
++SET memory_limit='1GB';
++
++statement ok
++CALL dbgen(sf=1);
++
++statement ok
++ALTER TABLE lineitem RENAME TO lineitem1
++
++statement ok
++CREATE TABLE lineitem2 AS FROM lineitem1
++
++# creating and dropping a table with an ORDER BY
++statement ok
++CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l1.* from lineitem1 l1 ORDER BY l_orderkey, l_returnflag
++
++statement ok
++DROP TABLE ans;
++
++# performing a small hash join
++statement ok
++CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN (FROM lineitem2 l2 WHERE l_orderkey<10000) AS l2 USING (l_orderkey, l_linenumber)
++
++statement ok
++DROP TABLE ans;
++
++# performing a large window function
++statement ok
++CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, row_number() OVER (PARTITION BY l_orderkey, l_linenumber ORDER BY l_orderkey) from lineitem1 l1
++
++statement ok
++DROP TABLE ans;
++
++# performing a large hash join
++statement ok
++CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
++
++statement ok
++DROP TABLE ans;
+\ No newline at end of file
+diff --git a/test/sql/storage/encryption/temp_files/encrypted_tmp_file_pragmas.test b/test/sql/storage/encryption/temp_files/encrypted_tmp_file_pragmas.test
+new file mode 100644
+index 0000000000..387005107a
+--- /dev/null
++++ b/test/sql/storage/encryption/temp_files/encrypted_tmp_file_pragmas.test
+@@ -0,0 +1,50 @@
++# name: test/sql/storage/encryption/temp_files/encrypted_tmp_file_pragmas.test
++# group: [temp_files]
++
++require block_size 262144
++
++statement ok
++SET temp_directory='__TEST_DIR__/test_temp_dir'
++
++statement ok
++ATTACH '__TEST_DIR__/encrypted_temp_files.db' AS enc (ENCRYPTION_KEY 'asdf');
++
++statement ok
++USE enc;
++
++# we do not encrypt temporary files at all
++statement ok
++PRAGMA debug_disable_temp_file_encryption;
++
++statement ok
++SET memory_limit = '8MB';
++
++statement ok
++SET enable_external_access=false
++
++statement error
++SET temp_directory='__TEST_DIR__/new_temp_dir'
++----
++disabled by configuration
++
++statement error
++RESET temp_directory
++----
++disabled by configuration
++
++# temp files are not encrypted
++statement ok
++CREATE TEMPORARY TABLE tbl AS FROM range(10_000_000)
++
++# note; you should be very careful using this
++# If some tmp files are encrypted and others not
++# this will lead to corrupt files
++statement ok
++PRAGMA debug_enable_temp_file_encryption;
++
++# temp files are encrypted again
++statement ok
++CREATE TEMPORARY TABLE tbl2 AS FROM range(10_000_000)
++
++statement ok
++SELECT * FROM tbl, tbl2 LIMIT 10;
+diff --git a/test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test b/test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test
+new file mode 100644
+index 0000000000..fc4d4665c7
+--- /dev/null
++++ b/test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test
+@@ -0,0 +1,34 @@
++# name: test/sql/storage/encryption/temp_files/temp_directory_enable_external_access.test
++# group: [temp_files]
++
++require block_size 262144
++
++statement ok
++SET temp_directory='__TEST_DIR__/test_temp_dir'
++
++statement ok
++ATTACH '__TEST_DIR__/encrypted_temp_files.db' AS enc (ENCRYPTION_KEY 'asdf');
++
++statement ok
++USE enc;
++
++statement ok
++SET memory_limit = '8MB';
++
++statement ok
++SET enable_external_access=false
++
++# cannot modify the temp directory when enable_external_access is set
++statement error
++SET temp_directory='__TEST_DIR__/new_temp_dir'
++----
++disabled by configuration
++
++statement error
++RESET temp_directory
++----
++disabled by configuration
++
++# 10M row table with 8B rows -> 80MB uncompressed - this requires the temp directory
++statement ok
++CREATE TEMPORARY TABLE tbl AS FROM range(10_000_000)
