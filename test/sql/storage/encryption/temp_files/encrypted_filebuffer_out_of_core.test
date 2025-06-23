@@ -87,5 +87,9 @@ DROP TABLE ans;
 statement ok
 CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
 
+# large hash join
+statement ok
+CREATE OR REPLACE TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
+
 statement ok
 DROP TABLE ans;
