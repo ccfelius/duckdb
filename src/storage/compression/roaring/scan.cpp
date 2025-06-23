@@ -203,6 +203,14 @@ void BitsetContainerScanState::Verify() const {
 RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	handle = buffer_manager.Pin(segment.block);
+	auto buf_size = handle.GetFileBufferSize();
+	auto segment_size = segment.SegmentSize();
+
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		//printf("ROARING SCAN STATE: buf size: %llu, seg size: %llu", buf_size, segment_size);
+		handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
+
 	auto base_ptr = handle.Ptr() + segment.GetBlockOffset();
 	data_ptr = base_ptr + sizeof(idx_t);
 

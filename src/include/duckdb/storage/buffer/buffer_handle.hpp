@@ -40,8 +40,19 @@ public:
 		D_ASSERT(IsValid());
 		return node->buffer;
 	}
+	// returns the size
+	inline uint64_t BufferSize() {
+		D_ASSERT(IsValid());
+		return node->size;
+	}
+
+	inline uint64_t AllocSize() {
+		D_ASSERT(IsValid());
+		return node->AllocSize();
+	}
 	//! Gets the underlying file buffer. Handle must be valid.
 	DUCKDB_API FileBuffer &GetFileBuffer();
+	uint64_t GetFileBufferSize();
 	//! Destroys the buffer handle
 	DUCKDB_API void Destroy();
 

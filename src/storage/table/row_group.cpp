@@ -890,6 +890,7 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
 		auto prev_allocation_size = col_data.GetAllocationSize();
+		// restructure file buffer of append state
 		col_data.Append(state.states[i], chunk.data[i], append_count);
 		allocation_size += col_data.GetAllocationSize() - prev_allocation_size;
 	}

@@ -34,6 +34,8 @@ struct FileHandle;
 #define DEFAULT_BLOCK_HEADER_STORAGE_SIZE 8ULL
 //! The default block header size.
 #define DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE 40ULL
+//! Default delta for filebuffers containing encrypted data
+#define DEFAULT_ENCRYPTION_DELTA 32ULL
 //! The configurable block allocation size.
 #ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
 #define DUCKDB_BLOCK_HEADER_STORAGE_SIZE DEFAULT_BLOCK_HEADER_STORAGE_SIZE

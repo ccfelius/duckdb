@@ -240,6 +240,13 @@ void DictFSSTCompressionState::CreateEmptySegment(idx_t row_start) {
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	current_handle = buffer_manager.Pin(current_segment->block);
 
+	auto buf_size = current_handle.GetFileBufferSize();
+	auto segment_size = info.GetBlockSize();
+
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		current_handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
+
 	append_state = DictionaryAppendState::REGULAR;
 	string_lengths_width = 0;
 	real_string_lengths_width = 0;

@@ -463,6 +463,20 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		state.current = segment;
 	}
 
+	auto segment_size = segment->SegmentSize();
+	auto lock = state.current->block->GetLock();
+	auto buf = &state.current->block->GetBuffer(lock);
+
+	if (*buf) {
+		auto buf_size = (*buf)->Size();
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			//printf("InitializeAppend:: Seg size %llu != buf size %llu\n", segment_size, buf_size);
+			(*buf)->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+	}
+
+	lock.unlock();
+
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
 	state.current->InitializeAppend(state);
 	D_ASSERT(state.current->GetCompressionFunction().append);
@@ -484,8 +498,19 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
 			auto l = data.Lock();
+			// here below the segment size is calculated based on the current block manager
 			AppendTransientSegment(l, state.current->start + state.current->count);
 			state.current = data.GetLastSegment(l);
+			// restructure block if necessary
+			// The block from last segment can have a different block structure
+			// auto lock = state.current->block->GetLock();
+			// auto &buf = state.current->block->GetBuffer(lock);
+			//
+			// if (buf) {
+			// 	buf->Restructure(block_manager);
+			// }
+			//
+			// lock.unlock();
 			state.current->InitializeAppend(state);
 		}
 		offset += copied_elements;

@@ -121,6 +121,11 @@ public:
 	inline idx_t GetBlockSize() const {
 		return block_alloc_size.GetIndex() - block_header_size.GetIndex();
 	}
+	//! Block Manager Type
+	inline idx_t IsInMemory() const {
+		return is_in_memory == true;
+	}
+
 	//! Sets the block allocation size. This should only happen when initializing an existing database.
 	//! When initializing an existing database, we construct the block manager before reading the file header,
 	//! which contains the file's actual block allocation size.
@@ -158,5 +163,7 @@ private:
 	//! Defaults to DEFAULT_BLOCK_HEADER_SIZE for in-memory block managers.
 	//! Default to default_block_header_size for file-backed block managers.
 	optional_idx block_header_size;
+	//! Block Manager Type (true = in memory)
+	bool is_in_memory = true;
 };
 } // namespace duckdb

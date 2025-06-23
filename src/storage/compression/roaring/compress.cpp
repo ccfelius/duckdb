@@ -288,6 +288,12 @@ void RoaringCompressState::CreateEmptySegment(idx_t row_start) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	handle = buffer_manager.Pin(current_segment->block);
+	auto buf_size = handle.GetFileBufferSize();
+	auto segment_size = info.GetBlockSize();
+
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
 	data_ptr = handle.Ptr();
 	data_ptr += sizeof(idx_t);
 	metadata_ptr = handle.Ptr() + info.GetBlockSize();

@@ -44,4 +44,9 @@ FileBuffer &BufferHandle::GetFileBuffer() {
 	return *node;
 }
 
+uint64_t BufferHandle::GetFileBufferSize() {
+	D_ASSERT(node);
+	return node->Size();
+}
+
 } // namespace duckdb

@@ -235,6 +235,12 @@ public:
 		// Reset the pointers into the current segment
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		current_handle = buffer_manager.Pin(current_segment->block);
+		auto buf_size = current_handle.GetFileBufferSize();
+		auto segment_size = info.GetBlockSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			current_handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
 		current_dictionary = FSSTStorage::GetDictionary(*current_segment, current_handle);
 		current_end_ptr = current_handle.Ptr() + current_dictionary.end;
 	}
@@ -246,6 +252,19 @@ public:
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockManager());
 		current_segment = std::move(compressed_segment);
+		auto lock = current_segment->block->GetLock();
+		auto buf = &current_segment->block->GetBuffer(lock);
+		auto segment_size = info.GetBlockSize();
+
+		if (*buf) {
+			auto buf_size = (*buf)->Size();
+			if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+				(*buf)->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+			}
+		}
+
+		lock.unlock();
+
 		Reset();
 	}
 
@@ -335,6 +354,12 @@ public:
 	idx_t Finalize() {
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		auto handle = buffer_manager.Pin(current_segment->block);
+		auto buf_size = handle.GetFileBufferSize();
+		auto segment_size = info.GetBlockSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
 		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 		// calculate sizes
@@ -563,10 +588,18 @@ struct FSSTScanState : public StringScanState {
 };
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
+	//! The blockmanager.blocksize CAN be different from the actual memory available in the filebuffer
+	//! this is the case for encrypted file buffers
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
+
+	// auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
+	if (state->handle.BufferSize() != segment.SegmentSize()) {
+		printf("FSST: segment size %llu,handle size differ\n",
+			segment.SegmentSize(), state->handle.BufferSize());
+	}
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
@@ -658,6 +691,9 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		if (scan_state.duckdb_fsst_decoder) {
 			D_ASSERT(result_offset == 0 || result.GetVectorType() == VectorType::FSST_VECTOR);
 			result.SetVectorType(VectorType::FSST_VECTOR);
+			if (segment.SegmentSize() != segment.GetBlockManager().GetBlockSize()) {
+				printf("StringScanPartial:\nseg size %llu and block size %llu not equal\n", segment.SegmentSize(), segment.GetBlockManager().GetBlockSize());
+			}
 			auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
 			FSSTVector::RegisterDecoder(result, scan_state.duckdb_fsst_decoder, string_block_limit);
 			result_data = FSSTVector::GetCompressedData<string_t>(result);

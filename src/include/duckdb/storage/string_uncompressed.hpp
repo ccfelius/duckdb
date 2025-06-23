@@ -83,6 +83,14 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		// This block was initialized in StringInitSegment
 		auto handle = buffer_manager.Pin(segment.block);
+
+		auto segment_size = segment.SegmentSize();
+		auto buf_size = handle.GetFileBufferSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+
 		return make_uniq<CompressionAppendState>(std::move(handle));
 	}
 
@@ -101,6 +109,19 @@ public:
 	static idx_t StringAppendBase(BufferHandle &handle, ColumnSegment &segment, SegmentStatistics &stats,
 	                              UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 		D_ASSERT(segment.GetBlockOffset() == 0);
+
+		// if (segment.SegmentSize() != segment.GetBlockManager().GetBlockSize()) {
+		// 	printf("StringAppendBase:\nseg size %llu and block size %llu not equal\n", segment.SegmentSize(), segment.GetBlockManager().GetBlockSize());
+		// }
+
+		auto segment_size = segment.SegmentSize();
+		auto buf_size = handle.GetFileBufferSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			//printf("\nSTRINGAPPENDBASE: SegmentSize %llu is not fb size %llu\n", segment.SegmentSize(), handle.GetFileBufferSize());
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+
 		auto handle_ptr = handle.Ptr();
 		auto source_data = UnifiedVectorFormat::GetData<string_t>(data);
 		auto result_data = reinterpret_cast<int32_t *>(handle_ptr + DICTIONARY_HEADER_SIZE);
@@ -131,7 +152,7 @@ public:
 			auto end = handle.Ptr() + *dictionary_end;
 
 #ifdef DEBUG
-			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
+			GetDictionary(segment, handle).Verify(segment.SegmentSize());
 #endif
 			// Unknown string, continue
 			// non-null value, check if we can fit it within the block
@@ -141,7 +162,7 @@ public:
 			bool use_overflow_block = false;
 			idx_t required_space = string_length;
 			if (DUCKDB_UNLIKELY(required_space >=
-			                    StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize()))) {
+			                    StringUncompressed::GetStringBlockLimit(segment.SegmentSize()))) {
 				// string exceeds block limit, store in overflow block and only write a marker here
 				required_space = BIG_STRING_MARKER_SIZE;
 				use_overflow_block = true;
@@ -189,6 +210,9 @@ public:
 				result_data[target_idx] = NumericCast<int32_t>(*dictionary_size);
 			}
 			D_ASSERT(RemainingSpace(segment, handle) <= segment.GetBlockManager().GetBlockSize());
+			// if (segment.SegmentSize() != segment.GetBlockManager().GetBlockSize()) {
+			// 	printf("StringAppendBase 2:\nseg size %llu and block size %llu not equal\n", segment.SegmentSize(), segment.GetBlockManager().GetBlockSize());
+			// }
 #ifdef DEBUG
 			GetDictionary(segment, handle).Verify(segment.GetBlockManager().GetBlockSize());
 #endif

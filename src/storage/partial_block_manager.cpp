@@ -79,6 +79,7 @@ bool PartialBlockManager::HasBlockAllocation(uint32_t segment_size) {
 
 void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segment_size) {
 	D_ASSERT(segment_size <= block_manager.GetBlockSize());
+
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 		state.block_id = block_manager.GetFreeBlockId();
 	} else {

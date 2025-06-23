@@ -76,6 +76,7 @@ shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, s
 shared_ptr<BlockHandle> BlockManager::ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) {
 	// pin the old block to ensure we have it loaded in memory
 	auto handle = buffer_manager.Pin(old_block);
+	// restructure the block?
 	return ConvertToPersistent(block_id, std::move(old_block), std::move(handle));
 }
 

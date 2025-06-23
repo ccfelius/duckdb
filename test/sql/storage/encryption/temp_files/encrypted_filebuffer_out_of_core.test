@@ -1,6 +1,6 @@
 # name: test/sql/storage/encryption/temp_files/encrypted_filebuffer_out_of_core.test
 # description: Large joins in an encrypted database producing temp files
-# group: [temp_files]
+# group: [encryption]
 
 require tpch
 
@@ -8,7 +8,10 @@ load __TEST_DIR__/temp_files.db
 
 statement ok
 ATTACH '__TEST_DIR__/enc.db' as enc (ENCRYPTION_KEY 'asdf');
-
+#
+# statement ok
+# ATTACH '__TEST_DIR__/enc_32768.db' as enc (BLOCK_SIZE 32768);
+#
 statement ok
 USE enc;
 
@@ -27,8 +30,35 @@ ALTER TABLE lineitem RENAME TO lineitem1
 statement ok
 CREATE TABLE lineitem2 AS FROM lineitem1
 
+# # large hash join
+statement ok
+CREATE OR REPLACE TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
+#
+statement ok
+DROP TABLE ans;
+
 statement ok
 CREATE OR REPLACE TEMPORARY TABLE ans AS SELECT l1.* FROM lineitem1 l1;
+
+statement ok
+DROP TABLE ans;
+
+statement ok
+CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l1.* from lineitem1 l1 ORDER BY l_orderkey, l_returnflag
+
+query I
+SELECT l_orderkey FROM ans LIMIT 10;
+----
+1
+1
+1
+1
+1
+1
+2
+3
+3
+3
 
 statement ok
 DROP TABLE ans;
@@ -53,9 +83,9 @@ CREATE OR REPLACE TABLE ans as select l1.*, row_number() OVER (PARTITION BY l_or
 statement ok
 DROP TABLE ans;
 
+# large hash join
 statement ok
 CREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
 
-# large hash join
 statement ok
-CREATE OR REPLACE TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)
+DROP TABLE ans;

@@ -69,6 +69,9 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
 
 	const auto total_space = segment.GetBlockOffset() + dictionary_indices_dest + dictionary_indices_space;
+	if (segment.SegmentSize() != segment.GetBlockManager().GetBlockSize()) {
+		printf("CompressedStringScanState:\nseg size %llu and block size %llu not equal\n", segment.SegmentSize(), segment.GetBlockManager().GetBlockSize());
+	}
 	if (total_space > segment.GetBlockManager().GetBlockSize()) {
 		throw IOException(
 		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");

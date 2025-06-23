@@ -504,6 +504,13 @@ public:
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
+		auto buf_size = handle.GetFileBufferSize();
+		auto segment_size = info.GetBlockSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+
 
 		data_ptr = handle.Ptr() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
 		metadata_ptr = handle.Ptr() + info.GetBlockSize();
@@ -629,6 +636,14 @@ public:
 	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
+		auto buf_size = handle.GetFileBufferSize();
+		auto segment_size = segment.SegmentSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			printf("Bitpacking Scan state; buf size: %llu, seg size %llu", buf_size, segment_size);
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+
 		auto data_ptr = handle.Ptr();
 
 		// load offset to bitpacking widths pointer

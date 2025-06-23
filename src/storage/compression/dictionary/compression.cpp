@@ -32,6 +32,12 @@ void DictionaryCompressionCompressState::CreateEmptySegment(idx_t row_start) {
 	// Reset the pointers into the current segment.
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	current_handle = buffer_manager.Pin(current_segment->block);
+	auto buf_size = current_handle.GetFileBufferSize();
+	auto segment_size = info.GetBlockSize();
+
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		current_handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
 	current_dictionary = DictionaryCompression::GetDictionary(*current_segment, current_handle);
 	current_end_ptr = current_handle.Ptr() + current_dictionary.end;
 }
@@ -117,6 +123,12 @@ void DictionaryCompressionCompressState::Flush(bool final) {
 idx_t DictionaryCompressionCompressState::Finalize() {
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	auto handle = buffer_manager.Pin(current_segment->block);
+	auto buf_size = handle.GetFileBufferSize();
+	auto segment_size = info.GetBlockSize();
+
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
 	D_ASSERT(current_dictionary.end == info.GetBlockSize());
 
 	// calculate sizes

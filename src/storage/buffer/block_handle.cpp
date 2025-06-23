@@ -61,6 +61,7 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
                                 block_id_t block_id) {
 	if (reusable_buffer) {
 		// re-usable buffer: re-use it
+		// reusable_buffer->Restructure(block_manager);
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
 			// we can reuse the buffer entirely
 			auto &block = reinterpret_cast<Block &>(*reusable_buffer);
@@ -88,6 +89,11 @@ unique_ptr<FileBuffer> &BlockHandle::GetBuffer(BlockLock &l) {
 	VerifyMutex(l);
 	return buffer;
 }
+
+// unique_ptr<FileBuffer> &BlockHandle::GetBuffer(BlockLock &l) {
+// 	VerifyMutex(l);
+// 	return size;
+// }
 
 void BlockHandle::VerifyMutex(BlockLock &l) const {
 	D_ASSERT(l.owns_lock());
@@ -128,6 +134,7 @@ BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_p
 	// copy over the data into the block from the file buffer
 	auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 	memcpy(block->InternalBuffer(), data, block->AllocSize());
+	// resize here?
 	buffer = std::move(block);
 	state = BlockState::BLOCK_LOADED;
 	readers = 1;
@@ -144,6 +151,10 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 	}
 
 	if (block_id < MAXIMUM_BLOCK) {
+		// if (reusable_buffer) {
+		// 	// a reusable buffer can have a different layout internally
+		// 	reusable_buffer->Restructure(block_manager);
+		// }
 		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 		block_manager.Read(*block);
 		buffer = std::move(block);
@@ -170,11 +181,22 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock) {
 	D_ASSERT(CanUnload());
 
 	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
+
+		// if (buffer) {
+		// 	buffer->RestructureDefault();
+		// }
+
+		// if (block_manager.GetBlockSize() != buffer->Size()) {
+		// 	printf("writing to temp file at unloadandtakeblock mismatch: %llu, %llu \n",
+		// 		block_manager.GetBlockSize(), buffer->Size());
+		// }
+
 		// temporary block that cannot be destroyed upon evict/unpin: write to temporary file
 		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
 	}
 	memory_charge.Resize(0);
 	state = BlockState::BLOCK_UNLOADED;
+	// buffer->Restructure(block_manager);
 	return std::move(buffer);
 }
 
@@ -217,6 +239,7 @@ void BlockHandle::ConvertToPersistent(BlockLock &l, BlockHandle &new_block, uniq
 	// move the data from the old block into data for the new block
 	new_block.state = BlockState::BLOCK_LOADED;
 	new_block.buffer = std::move(new_buffer);
+	// new_block.buffer->Restructure(block_manager);
 	new_block.memory_usage = memory_usage.load();
 	new_block.memory_charge = std::move(memory_charge);
 

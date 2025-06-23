@@ -40,6 +40,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 	if (type == FileBufferType::BLOCK) {
 		throw InternalException("ConstructManagedBuffer cannot be used to construct blocks");
 	}
+
 	if (source) {
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
@@ -47,6 +48,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 		result = make_uniq<FileBuffer>(*tmp, type);
 	} else {
 		// non re-usable buffer: allocate a new buffer
+		// maybe also a default buffer?
 		result = make_uniq<FileBuffer>(Allocator::Get(db), type, size, block_header_size);
 	}
 	result->Initialize(DBConfig::GetConfig(db).options.debug_initialize);
@@ -135,6 +137,10 @@ TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag ta
 shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx_t size, BlockManager &block_manager) {
 	D_ASSERT(size <= block_manager.GetBlockSize());
 
+	if (size == 262104 && block_manager.GetBlockSize() != size) {
+		throw InternalException("Default Block Manager does not correspond with segment size");
+	}
+
 	// This comparison is the reason behind passing block_size through transient memory creation.
 	// Otherwise, any non-default block size would register as small memory, causing problems when
 	// trying to convert that memory to consistent blocks later on.
@@ -171,8 +177,10 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 	unique_ptr<FileBuffer> reusable_buffer;
 	auto res = EvictBlocksOrThrow(tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
-
 	// Create a new buffer and a block to hold the buffer.
+	if (reusable_buffer) {
+		reusable_buffer->Restructure(block_size, block_header_size);
+	}
 	const auto file_buffer_type =
 	    tag == MemoryTag::EXTERNAL_FILE_CACHE ? FileBufferType::EXTERNAL_FILE : FileBufferType::MANAGED_BUFFER;
 	auto buffer = ConstructManagedBuffer(block_size, block_header_size, std::move(reusable_buffer), file_buffer_type);
@@ -360,6 +368,10 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	} else {
 		// evict blocks until we have space for the current block
 		unique_ptr<FileBuffer> reusable_buffer;
+		// if (reusable_buffer) {
+		// 	// a reusable buffer can have a different layout internally
+		// 	reusable_buffer->Restructure(handle->block_manager);
+		// }
 		auto reservation = EvictBlocksOrThrow(handle->GetMemoryTag(), required_memory, &reusable_buffer,
 		                                      "failed to pin block of size %s%s",
 		                                      StringUtil::BytesToHumanReadableString(required_memory));
@@ -374,10 +386,6 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		} else {
 			// now we can actually load the current block
 			D_ASSERT(handle->Readers() == 0);
-			if (reusable_buffer) {
-				// a reusable buffer can have a different layout internally
-				reusable_buffer->Restructure(handle->block_manager);
-			}
 			buf = handle->Load(std::move(reusable_buffer));
 			if (!buf.IsValid()) {
 				reservation.Resize(0);
@@ -480,9 +488,11 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager,
                                                                           FileHandle &handle, idx_t position,
-                                                                          idx_t size,
+                                                                          idx_t size, idx_t block_header_size,
                                                                           unique_ptr<FileBuffer> reusable_buffer) {
-	auto buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
+	// maybe this should be changed?
+	// should be the def bh size
+	auto buffer = buffer_manager.ConstructManagedBuffer(size, block_header_size,
 	                                                    std::move(reusable_buffer));
 	buffer->Read(handle, position);
 	return buffer;
@@ -513,6 +523,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	RequireTemporaryDirectory();
 
 	// Append to a few grouped files.
+	// if (buffer.AllocSize() == GetBlockAllocSize()) {
 	if (buffer.AllocSize() == GetBlockAllocSize()) {
 		evicted_data_per_tag[uint8_t(tag)] += GetBlockAllocSize();
 		temporary_directory.handle->GetTempFile().WriteTemporaryBuffer(block_id, buffer);
@@ -527,6 +538,7 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
 	temporary_directory.handle->GetTempFile().IncreaseSizeOnDisk(buffer.AllocSize() + sizeof(idx_t));
+	// the length of the buffer gets written
 	handle->Write(nullptr, &buffer.size, sizeof(idx_t), 0);
 	buffer.Write(nullptr, *handle, sizeof(idx_t));
 }
@@ -536,6 +548,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	D_ASSERT(!temporary_directory.path.empty());
 	D_ASSERT(temporary_directory.handle.get());
 	auto id = block.BlockId();
+
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
@@ -549,7 +562,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	handle->Read(&block_size, sizeof(idx_t), 0);
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
-	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
+	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, std::move(reusable_buffer));
 	handle.reset();
 
 	// Delete the file and return the buffer.

@@ -81,6 +81,14 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSeg
 	auto result = make_uniq<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
+	auto buf_size = result->handle.BufferSize();
+	auto segment_size =  segment.SegmentSize();
+
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		// printf("uncompressed string storage string init scan: buf size: %llu, seg size %llu\n", buf_size, segment_size);
+		result->handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
+
 	return std::move(result);
 }
 
@@ -89,9 +97,20 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSeg
 //===--------------------------------------------------------------------===//
 void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                                   Vector &result, idx_t result_offset) {
+
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
+	auto block_size = segment.SegmentSize();
+	auto buf_size = scan_state.handle.GetFileBufferSize();
 	auto start = segment.GetRelativeIndex(state.row_index);
+
+	if (buf_size - block_size == DEFAULT_ENCRYPTION_DELTA) {
+		// restructure buffer handle if segment size != buffer size
+		auto header_size = buf_size - block_size + DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+		scan_state.handle.GetFileBuffer().Restructure(block_size, header_size);
+	}
+
+	auto handle_ptr = scan_state.handle.Ptr();
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict_end = GetDictionaryEnd(segment, scan_state.handle);
@@ -122,6 +141,14 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
                                        Vector &result, const SelectionVector &sel, idx_t sel_count) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<StringScanState>();
+	auto block_size = segment.SegmentSize();
+	auto buf_size = scan_state.handle.GetFileBufferSize();
+
+	if (buf_size - block_size == DEFAULT_ENCRYPTION_DELTA) {
+		// restructure buffer handle if segment size != buffer size
+		auto header_size = buf_size - block_size + DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+		scan_state.handle.GetFileBuffer().Restructure(block_size, header_size);
+	}
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -196,9 +223,19 @@ void SerializedStringSegmentState::Serialize(Serializer &serializer) const {
 unique_ptr<CompressedSegmentState>
 UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t block_id,
                                              optional_ptr<ColumnSegmentState> segment_state) {
+
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
+		auto segment_size = segment.SegmentSize();
+		auto buf_size = handle.GetFileBufferSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			//printf("\nUNCOMPRESSED STRING STORAGE: SegmentSize %llu is not fb size %llu\n", segment.SegmentSize(), handle.GetFileBufferSize());
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+
 		StringDictionaryContainer dictionary;
 		dictionary.size = 0;
 		dictionary.end = UnsafeNumericCast<uint32_t>(segment.SegmentSize());
@@ -336,6 +373,9 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	if (!state.head || state.head->offset + total_length >= state.head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
+		if (segment.SegmentSize() != segment.GetBlockManager().GetBlockSize()) {
+			printf("Writestringmem:\n seg size %llu and block size %llu not equal\n", segment.SegmentSize(), segment.GetBlockManager().GetBlockSize());
+		}
 		auto alloc_size = MaxValue<idx_t>(total_length, segment.GetBlockManager().GetBlockSize());
 		auto new_block = make_uniq<StringBlock>();
 		new_block->offset = 0;

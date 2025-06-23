@@ -121,6 +121,12 @@ void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto state = make_uniq<CompressedStringScanState>(buffer_manager.Pin(segment.block));
+	auto buf_size = state->handle->BufferSize();
+	auto segment_size =  segment.SegmentSize();
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		//printf("Dict string init scan: buf size: %llu, seg size %llu\n", buf_size, segment_size);
+		state->handle->GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
 	state->Initialize(segment, true);
 	return std::move(state);
 }
@@ -133,6 +139,14 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
                                                      Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
+	auto block_size = segment.SegmentSize();
+	auto buf_size = scan_state.handle->GetFileBufferSize();
+
+	if (buf_size - block_size == DEFAULT_ENCRYPTION_DELTA) {
+		// restructure buffer handle if segment size != buffer size
+		auto header_size = buf_size - block_size + DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+		scan_state.handle->GetFileBuffer().Restructure(block_size, header_size);
+	}
 
 	auto start = segment.GetRelativeIndex(state.row_index);
 	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE) {

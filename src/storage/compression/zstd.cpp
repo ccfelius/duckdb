@@ -530,6 +530,12 @@ public:
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 		segment_handle = buffer_manager.Pin(segment->block);
+		auto buf_size = segment_handle.GetFileBufferSize();
+		auto segment_size = info.GetBlockSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			segment_handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
 	}
 
 	void FlushSegment() {
@@ -694,6 +700,12 @@ public:
 	      segment_block_offset(segment.GetBlockOffset()) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
 		segment_handle = buffer_manager.Pin(segment.block);
+		auto buf_size = segment_handle.GetFileBufferSize();
+		auto segment_size =  segment.SegmentSize();
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			//printf("ZSTDScanState: buf size: %llu, seg size %llu\n", buf_size, segment_size);
+			segment_handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
 
 		auto data = segment_handle.Ptr() + segment.GetBlockOffset();
 		idx_t offset = 0;

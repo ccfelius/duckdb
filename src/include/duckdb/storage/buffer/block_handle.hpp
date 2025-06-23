@@ -134,6 +134,10 @@ public:
 		return buffer_type;
 	}
 
+	// FileBufferType GetBufferSize() const {
+	// 	return size;
+	// }
+
 	BlockState GetState() const {
 		return state;
 	}
@@ -191,6 +195,8 @@ private:
 	const MemoryTag tag;
 	//! File buffer type
 	const FileBufferType buffer_type;
+	//! File buffer size
+	idx_t buffer_size;
 	//! Pointer to loaded data (if any)
 	unique_ptr<FileBuffer> buffer;
 	//! Internal eviction sequence number

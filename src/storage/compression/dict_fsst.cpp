@@ -114,6 +114,12 @@ void DictFSSTCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 unique_ptr<SegmentScanState> DictFSSTCompressionStorage::StringInitScan(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.block));
+	auto buf_size = state ->handle->GetFileBufferSize();
+	auto segment_size =  segment.SegmentSize();
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		//printf("dict fsst string init: buf size: %llu, seg size %llu\n", buf_size, segment_size)
+		state->handle->GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);;
+	}
 	state->Initialize(true);
 	if (StringStats::HasMaxStringLength(segment.stats.statistics)) {
 		state->all_values_inlined = StringStats::MaxStringLength(segment.stats.statistics) <= string_t::INLINE_LENGTH;
@@ -129,6 +135,14 @@ void DictFSSTCompressionStorage::StringScanPartial(ColumnSegment &segment, Colum
                                                    Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
+	auto block_size = segment.SegmentSize();
+	auto buf_size = scan_state.handle->GetFileBufferSize();
+
+	if (buf_size - block_size == DEFAULT_ENCRYPTION_DELTA) {
+		// restructure buffer handle if segment size != buffer size
+		auto header_size = buf_size - block_size + DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
+		scan_state.handle->GetFileBuffer().Restructure(block_size, header_size);
+	}
 
 	auto start = segment.GetRelativeIndex(state.row_index);
 	if (!ALLOW_DICT_VECTORS || !scan_state.AllowDictionaryScan(start, scan_count)) {

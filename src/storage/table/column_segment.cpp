@@ -43,6 +43,15 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	}
 
 	auto segment_size = block_manager.GetBlockSize();
+
+	auto lock = block->GetLock();
+	if (block->GetBuffer(lock)->Size() != segment_size) {
+		printf("Create persistent segment size %llu, does not correspond with buffer size %llu",
+			block->GetBuffer(lock)->Size(), segment_size);
+		// destroy the old buffer
+	}
+	lock.unlock();
+
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::PERSISTENT, start, count, *function,
 	                                std::move(statistics), block_id, offset, segment_size, std::move(segment_state));
 }
@@ -55,6 +64,11 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	D_ASSERT(&buffer_manager == &block_manager.buffer_manager);
 	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_manager);
+
+	// auto lock = block->GetLock();
+	// block->GetBuffer(lock)->Restructure(block_manager);
+	// lock.unlock();
+
 
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
@@ -73,12 +87,46 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
       segment_type(segment_type), stats(std::move(statistics)), block(std::move(block_p)), function(function_p),
       block_id(block_id_p), offset(offset), segment_size(segment_size_p) {
 
+	auto lock = block->GetLock();
+	auto buf = &block->GetBuffer(lock);
+
+	if (*buf){
+		auto buf_size = (*buf)->Size();
+		if (segment_size == 262104) {
+			// printf("buf_size = %llu, seg_size %llu\n", buf_size, segment_size);
+		}
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			printf("Creating colsegment 1: segment size %llu does not correspond with block structure size %llu\n",
+				segment_size, buf_size);
+			//! FIXME: Ideally, this needs to be done earlier
+			(*buf)->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+	}
+
+	lock.unlock();
+
 	if (function.get().init_segment) {
 		segment_state = function.get().init_segment(*this, block_id, segment_state_p.get());
 	}
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
 	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
+
+	// auto lock = block->GetLock();
+	// auto buf = &block->GetBuffer(lock);
+	//
+	// if (*buf){
+	// 	auto buf_size = (*buf)->Size();
+	// 	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+	// 		printf("Creating colsegment 1: segment size %llu does not correspond with block structure size %llu\n",
+	// 			segment_size, buf_size);
+	// 		// sometimes it is necessary to restructure a block
+	// 		//! FIXME: Ideally, this needs to be done earlier
+	// 		(*buf)->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	// 	}
+	// }
+	//
+	// lock.unlock();
 }
 
 ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
@@ -90,6 +138,22 @@ ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
 	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
+
+	// auto lock = block->GetLock();
+	//
+	// if (block->GetBuffer(lock)) {
+	// 	auto buf_size = block->GetBuffer(lock)->Size();
+	//
+	// 	if (segment_size != buf_size) {
+	// 		printf("Creating colsegment 2: segment size %llu does not correspond with block structure size %llu\n",
+	// 			segment_size, buf_size);
+	// 		// sometimes it is necessary to restructure a block
+	// 		//! FIXME: Ideally, this needs to be done earlier
+	// 		auto lock = block->GetLock();
+	// 		// block->GetBuffer(lock)->Restructure(GetBlockManager());
+	// 	}
+	// }
+	// lock.unlock();
 }
 
 ColumnSegment::~ColumnSegment() {
@@ -173,13 +237,17 @@ idx_t ColumnSegment::SegmentSize() const {
 void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(new_size > segment_size);
 	D_ASSERT(offset == 0);
+	// change to segment size?
 	D_ASSERT(block && new_size <= GetBlockManager().GetBlockSize());
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
 	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size);
 	auto new_block = new_handle.GetBlockHandle();
+
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
+
+
 
 	this->block_id = new_block->BlockId();
 	this->block = std::move(new_block);
@@ -191,7 +259,33 @@ void ColumnSegment::InitializeAppend(ColumnAppendState &state) {
 	if (!function.get().init_append) {
 		throw InternalException("Attempting to init append to a segment without init_append method");
 	}
+
+	if (state.current) {
+		if (segment_size == 262104) {
+			auto lock = block->GetLock();
+			auto &buf = block->GetBuffer(lock);
+			if (buf && buf->Size() != segment_size) {
+				buf->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+			}
+			lock.unlock();
+		}
+	}
+
 	state.append_state = function.get().init_append(*this);
+
+	if (state.current) {
+		auto buf_size = state.append_state->handle.BufferSize();
+		auto segment_size = state.current->SegmentSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			printf("\nINITIALIZEAPPEND: Sizes appendstate: %llu do not correspond, %llu seg size \n",
+				buf_size, segment_size);
+
+			state.append_state->handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+	}
+
+
 }
 
 idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &append_data, idx_t offset, idx_t count) {
@@ -199,6 +293,21 @@ idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &appen
 	if (!function.get().append) {
 		throw InternalException("Attempting to append to a segment without append method");
 	}
+
+	if (!state.current) {
+		return function.get().append(*state.append_state, *this, stats, append_data, offset, count);
+	}
+
+	auto buf_size = state.append_state->handle.BufferSize();
+	auto segment_size = state.current->SegmentSize();
+
+	// this only happens with transient segments.
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		printf("\n Sizes appendstate: %llu do not correspond, %llu seg size \n",
+			buf_size, segment_size);
+		state.append_state->handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
+
 	return function.get().append(*state.append_state, *this, stats, append_data, offset, count);
 }
 

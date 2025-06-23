@@ -156,6 +156,12 @@ struct RLECompressState : public CompressionState {
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
+		auto buf_size = handle.GetFileBufferSize();
+		auto segment_size = info.GetBlockSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
@@ -257,6 +263,14 @@ struct RLEScanState : public SegmentScanState {
 	explicit RLEScanState(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
+		auto buf_size = handle.GetFileBufferSize();
+		auto segment_size = segment.SegmentSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			//printf("RLESCANSTATE: SegmentSize %llu is not fb size %llu\n", segment.SegmentSize(), handle.GetFileBufferSize());
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);;
+		}
+
 		entry_pos = 0;
 		position_in_entry = 0;
 		rle_count_offset = UnsafeNumericCast<uint32_t>(Load<uint64_t>(handle.Ptr() + segment.GetBlockOffset()));

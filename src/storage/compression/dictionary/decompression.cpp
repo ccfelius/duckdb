@@ -40,6 +40,10 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 	base_data = data_ptr_cast(baseptr + DictionaryCompression::DICTIONARY_HEADER_SIZE);
 
+	if (segment.SegmentSize() != segment.GetBlockManager().GetBlockSize()) {
+		printf("seg size %llu and block size %llu not equal\n", segment.SegmentSize(), segment.GetBlockManager().GetBlockSize());
+	}
+
 	block_size = segment.GetBlockManager().GetBlockSize();
 
 	dict = DictionaryCompression::GetDictionary(segment, *handle);

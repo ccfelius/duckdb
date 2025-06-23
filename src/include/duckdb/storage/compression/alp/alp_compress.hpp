@@ -100,6 +100,13 @@ public:
 		auto &buffer_manager = BufferManager::GetBufferManager(current_segment->db);
 		handle = buffer_manager.Pin(current_segment->block);
 
+		auto buf_size = handle.GetFileBufferSize();
+		auto segment_size = info.GetBlockSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+
 		// The pointer to the start of the compressed data.
 		data_ptr = handle.Ptr() + current_segment->GetBlockOffset() + AlpConstants::HEADER_SIZE;
 		// The pointer to the start of the metadata.

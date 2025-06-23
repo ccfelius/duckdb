@@ -41,7 +41,7 @@ public:
 public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
-	                                                          idx_t position, idx_t size,
+	                                                          idx_t position, idx_t size, idx_t block_header_size,
 	                                                          unique_ptr<FileBuffer> reusable_buffer);
 
 	//! Registers a transient memory buffer.

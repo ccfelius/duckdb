@@ -211,6 +211,12 @@ unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
 	auto result = make_uniq<ValidityScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
+	auto buf_size = result->handle.BufferSize();
+	auto segment_size =  segment.SegmentSize();
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		// printf("VALIDITY INIT SCAN: buf size: %llu, seg size %llu\n", buf_size, segment_size);
+		result->handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
 	result->block_id = segment.block->BlockId();
 	return std::move(result);
 }
@@ -459,6 +465,12 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
+	auto segment_size = segment.SegmentSize();
+	auto buf_size = handle.GetFileBufferSize();
+
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
 	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 
@@ -467,6 +479,14 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
+		auto segment_size = segment.SegmentSize();
+		auto buf_size = handle.GetFileBufferSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			//printf("\nVALIDITY INIT SEGMENT: SegmentSize %llu is not fb size %llu\n", segment.SegmentSize(), handle.GetFileBufferSize());
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
+
 		memset(handle.Ptr(), 0xFF, segment.SegmentSize());
 	}
 	return nullptr;

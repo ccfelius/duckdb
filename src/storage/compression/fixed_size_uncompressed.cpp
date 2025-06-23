@@ -70,12 +70,24 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 
 	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start, info.GetBlockSize(),
 	                                                                info.GetBlockManager());
+
+	if (append_state.append_state) {
+		auto lock = append_state.current->block->GetLock();
+		auto buf = &append_state.current->block->GetBuffer(lock);
+		auto buf_size = (*buf)->Size();
+
+		if (buf && (info.GetBlockSize() == 262104) && info.GetBlockSize() != buf_size) {
+			(*buf)->Restructure(info.GetBlockManager());
+		}
+	}
+
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		auto &partial_block_manager = checkpoint_data.GetCheckpointState().GetPartialBlockManager();
 		state.block_manager = partial_block_manager.GetBlockManager();
 		state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(partial_block_manager);
 	}
+
 	current_segment = std::move(compressed_segment);
 	current_segment->InitializeAppend(append_state);
 }
@@ -142,6 +154,12 @@ unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
 	auto result = make_uniq<FixedSizeScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
+	auto buf_size = result->handle.BufferSize();
+	auto segment_size =  segment.SegmentSize();
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		//printf("FIXED SIZE INIT SCAN: buf size: %llu, seg size %llu\n", buf_size, segment_size);
+		result->handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
 	return std::move(result);
 }
 
@@ -195,6 +213,12 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 static unique_ptr<CompressionAppendState> FixedSizeInitAppend(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
+	auto segment_size = segment.SegmentSize();
+	auto buf_size = handle.GetFileBufferSize();
+
+	if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+		handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	}
 	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 

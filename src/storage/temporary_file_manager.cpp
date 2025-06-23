@@ -197,10 +197,25 @@ TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex() {
 
 unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_index,
                                                                 unique_ptr<FileBuffer> reusable_buffer) const {
+	// if (reusable_buffer) {
+	// 	if (reusable_buffer->Size() == 262104) {
+	// 		printf("reusable buffer for readtemp buffer is not ok \n");
+	// 	}
+	// }
+
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto block_size = buffer_manager.GetBlockSize();
+	auto block_header_size = buffer_manager.GetTemporaryBlockHeaderSize();
+
+	if (reusable_buffer) {
+			// manually correct the header size?
+			block_size = reusable_buffer->Size();
+			block_header_size = reusable_buffer->AllocSize() - block_size;
+	}
+
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
 		return StandardBufferManager::ReadTemporaryBufferInternal(
-		    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
+		    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(), buffer_manager.GetTemporaryBlockHeaderSize(),
 		    std::move(reusable_buffer));
 	}
 
@@ -210,7 +225,7 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 
 	// Decompress into buffer
 	auto buffer = buffer_manager.ConstructManagedBuffer(
-	    buffer_manager.GetBlockSize(), buffer_manager.GetTemporaryBlockHeaderSize(), std::move(reusable_buffer));
+	    buffer_manager.GetBlockSize(),  buffer_manager.GetTemporaryBlockHeaderSize(), std::move(reusable_buffer));
 
 	const auto compressed_size = Load<idx_t>(compressed_buffer.get());
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(compressed_size));
@@ -583,11 +598,13 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,
 	}
 
 	auto buffer = handle->ReadTemporaryBuffer(index.block_index.GetIndex(), std::move(reusable_buffer));
+
 	{
 		// remove the block (and potentially erase the temp file)
 		TemporaryFileManagerLock lock(manager_lock);
 		EraseUsedBlock(lock, id, *handle, index);
 	}
+
 	return buffer;
 }
 

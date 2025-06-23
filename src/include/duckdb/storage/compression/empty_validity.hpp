@@ -61,6 +61,9 @@ public:
 		auto row_start = checkpoint_data.GetRowGroup().start;
 
 		auto &info = state.info;
+		if (info.GetBlockSize() > 262104) {
+			printf("Block size is too big: %llu\n", info.GetBlockSize());
+		}
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, *state.function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockManager());
 		compressed_segment->count = state.count;
@@ -73,6 +76,12 @@ public:
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 		auto handle = buffer_manager.Pin(compressed_segment->block);
+		auto buf_size = handle.GetFileBufferSize();
+		auto segment_size = info.GetBlockSize();
+
+		if (buf_size - segment_size == DEFAULT_ENCRYPTION_DELTA) {
+			handle.GetFileBuffer().Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+		}
 
 		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		checkpoint_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);

@@ -73,6 +73,9 @@ BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 
 BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
+	if (size == GetBufferManager().GetBlockSize() - DEFAULT_ENCRYPTION_DELTA) {
+		printf("size mismatch!!! columndataallocator");
+	}
 	auto max_size = MaxValue<idx_t>(size, GetBufferManager().GetBlockSize());
 	BlockMetaData data;
 	data.size = 0;
