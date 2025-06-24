@@ -38,6 +38,10 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	if (block_id == INVALID_BLOCK) {
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
 	} else {
+		if (block_manager.GetBlockSize() == 262136) {
+			printf("Block Manager size: %llu, segment_size \n", block_manager.GetBlockSize());
+		}
+		// if it is a valid block, then the block_manager returns a handle?
 		function = config.GetCompressionFunction(compression_type, type.InternalType());
 		block = block_manager.RegisterBlock(block_id);
 	}
@@ -77,6 +81,17 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 		segment_state = function.get().init_segment(*this, block_id, segment_state_p.get());
 	}
 
+	if (block) {
+		auto lock = block->GetLock();
+		if (block->GetBuffer(lock)) {
+			auto buf_size = block->GetBuffer(lock)->Size();
+			if (segment_size !=  buf_size) {
+				printf("COLSEGMENT 1: Seg size %llu is niet buf ze %llu. bm size: %llu \n", segment_size, buf_size, GetBlockManager().GetBlockSize());
+			}
+			lock.unlock();
+		}
+	}
+
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
 	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
 }
@@ -87,6 +102,17 @@ ColumnSegment::ColumnSegment(ColumnSegment &other, const idx_t start)
       type_size(other.type_size), segment_type(other.segment_type), stats(std::move(other.stats)),
       block(std::move(other.block)), function(other.function), block_id(other.block_id), offset(other.offset),
       segment_size(other.segment_size), segment_state(std::move(other.segment_state)) {
+
+	if (block) {
+		auto lock = block->GetLock();
+		if (block->GetBuffer(lock)) {
+			auto buf_size = block->GetBuffer(lock)->Size();
+			if (segment_size !=  buf_size) {
+				printf("COLSEGMENT 2: Seg size %llu is niet buf ze %llu. bm size: %llu \n", segment_size, buf_size, GetBlockManager().GetBlockSize());
+			}
+		}
+		lock.unlock();
+	}
 
 	// For constant segments (CompressionType::COMPRESSION_CONSTANT) the block is a nullptr.
 	D_ASSERT(!block || segment_size <= GetBlockManager().GetBlockSize());
@@ -111,7 +137,35 @@ void ColumnSegment::InitializePrefetch(PrefetchState &prefetch_state, ColumnScan
 }
 
 void ColumnSegment::InitializeScan(ColumnScanState &state) {
+
+	if (state.current->block) {
+		auto lock = state.current->block->GetLock();
+		auto &buf = state.current->block->GetBuffer(lock);
+		if (buf) {
+			auto buf_size = buf->Size();
+			if (segment_size != buf_size) {
+				printf("Initscan 1: Seg size 1: %llu is niet block size %llu\n", segment_size, buf_size);
+				buf->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+			}
+		}
+		lock.unlock();
+	}
+
 	state.scan_state = function.get().init_scan(*this);
+
+	if (state.current->block) {
+		auto lock = state.current->block->GetLock();
+		auto &buf = state.current->block->GetBuffer(lock);
+		if (buf) {
+			auto buf_size = buf->Size();
+			if (segment_size != buf_size) {
+				printf("Initscan 2: Seg size 1: %llu is niet block size %llu\n", segment_size, buf_size);
+				buf->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+			}
+		}
+		lock.unlock();
+	}
+
 }
 
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
@@ -175,6 +229,9 @@ void ColumnSegment::Resize(idx_t new_size) {
 	D_ASSERT(offset == 0);
 	D_ASSERT(block && new_size <= GetBlockManager().GetBlockSize());
 
+	if (new_size == 262104) {
+		printf("Columnsegment Resize\n");
+	}
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
 	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size);

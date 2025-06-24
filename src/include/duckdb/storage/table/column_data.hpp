@@ -192,6 +192,7 @@ public:
 protected:
 	//! Append a transient segment
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
+	void AppendTransientSegment(SegmentLock &l, idx_t start_row, idx_t segment_size, idx_t header_size = 8);
 	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
 	void BeginScanVectorInternal(ColumnScanState &state);

@@ -60,6 +60,10 @@ public:
 	void Resize(uint64_t user_size, BlockManager &block_manager);
 	void Resize(BlockManager &block_manager);
 
+	void Restructure(uint64_t buffer_size, uint64_t block_header_size);
+	void Restructure(uint64_t block_header_size);
+	void Restructure(BlockManager &block_manager);
+
 	uint64_t AllocSize() const {
 		return internal_size;
 	}
@@ -68,6 +72,10 @@ public:
 	}
 	data_ptr_t InternalBuffer() {
 		return internal_buffer;
+	}
+
+	uint64_t HeaderSize() const {
+		return internal_size - size;
 	}
 
 	struct MemoryRequirement {

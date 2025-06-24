@@ -41,6 +41,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 		throw InternalException("ConstructManagedBuffer cannot be used to construct blocks");
 	}
 	if (source) {
+		source->Restructure(size, block_header_size);
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
 		result = make_uniq<FileBuffer>(*tmp, type);
@@ -336,7 +337,7 @@ void StandardBufferManager::Prefetch(vector<shared_ptr<BlockHandle>> &handles) {
 	BatchRead(handles, to_be_loaded, first_block, previous_block_id);
 }
 
-BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
+BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle, idx_t block_header_size) {
 	// we need to be careful not to return the BufferHandle to this block while holding the BlockHandle's lock
 	// as exiting this function's scope may cause the destructor of the BufferHandle to be called while holding the lock
 	// the destructor calls Unpin, which grabs the BlockHandle's lock again, causing a deadlock
@@ -355,6 +356,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	}
 
 	if (buf.IsValid()) {
+		buf.GetFileBuffer().Restructure(block_header_size);
 		return buf; // the block was already loaded, return it without holding the BlockHandle's lock
 	} else {
 		// evict blocks until we have space for the current block
@@ -393,6 +395,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	// we should have a valid BufferHandle by now, either because the block was already loaded, or because we loaded it
 	// return it without holding the BlockHandle's lock
 	D_ASSERT(buf.IsValid());
+	buf.GetFileBuffer().Restructure(block_header_size);
 	return buf;
 }
 
@@ -475,9 +478,10 @@ vector<MemoryInformation> StandardBufferManager::GetMemoryUsageInfo() const {
 
 unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBufferInternal(BufferManager &buffer_manager,
                                                                           FileHandle &handle, idx_t position,
-                                                                          idx_t size,
+                                                                          idx_t size, idx_t block_header_size,
                                                                           unique_ptr<FileBuffer> reusable_buffer) {
-	auto buffer = buffer_manager.ConstructManagedBuffer(size, buffer_manager.GetTemporaryBlockHeaderSize(),
+	// maybe the block header size needs to be 40?
+	auto buffer = buffer_manager.ConstructManagedBuffer(size, block_header_size,
 	                                                    std::move(reusable_buffer));
 	buffer->Read(handle, position);
 	return buffer;
@@ -544,7 +548,7 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	handle->Read(&block_size, sizeof(idx_t), 0);
 
 	// Allocate a buffer of the file's size and read the data into that buffer.
-	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, std::move(reusable_buffer));
+	auto buffer = ReadTemporaryBufferInternal(*this, *handle, sizeof(idx_t), block_size, block.block_manager.GetBlockHeaderSize(), std::move(reusable_buffer));
 	handle.reset();
 
 	// Delete the file and return the buffer.

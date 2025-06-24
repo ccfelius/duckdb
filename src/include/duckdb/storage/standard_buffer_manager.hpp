@@ -41,7 +41,7 @@ public:
 public:
 	static unique_ptr<StandardBufferManager> CreateBufferManager(DatabaseInstance &db, string temp_directory);
 	static unique_ptr<FileBuffer> ReadTemporaryBufferInternal(BufferManager &buffer_manager, FileHandle &handle,
-	                                                          idx_t position, idx_t size,
+	                                                          idx_t position, idx_t size,  idx_t block_header_size,
 	                                                          unique_ptr<FileBuffer> reusable_buffer);
 
 	//! Registers a transient memory buffer.
@@ -74,7 +74,7 @@ public:
 	//! Reallocate an in-memory buffer that is pinned.
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
 
-	BufferHandle Pin(shared_ptr<BlockHandle> &handle) final;
+	BufferHandle Pin(shared_ptr<BlockHandle> &handle, idx_t block_header_size = 8) final;
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
 	void Unpin(shared_ptr<BlockHandle> &handle) final;
 

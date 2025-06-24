@@ -38,6 +38,10 @@ PartialBlockManager::PartialBlockManager(BlockManager &block_manager, PartialBlo
                                          optional_idx max_partial_block_size_p, uint32_t max_use_count)
     : block_manager(block_manager), partial_block_type(partial_block_type), max_use_count(max_use_count) {
 
+	if (block_manager.InMemory()) {
+		printf("PM block manager is in memory. that cannot be?\n");
+	}
+
 	if (max_partial_block_size_p.IsValid()) {
 		max_partial_block_size = NumericCast<uint32_t>(max_partial_block_size_p.GetIndex());
 		return;
@@ -79,6 +83,9 @@ bool PartialBlockManager::HasBlockAllocation(uint32_t segment_size) {
 
 void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segment_size) {
 	D_ASSERT(segment_size <= block_manager.GetBlockSize());
+	if (segment_size == block_manager.GetBlockSize() - 32) {
+		printf("Warning! seg size and block siz enot good \n");
+	}
 	if (partial_block_type == PartialBlockType::FULL_CHECKPOINT) {
 		state.block_id = block_manager.GetFreeBlockId();
 	} else {

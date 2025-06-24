@@ -156,7 +156,8 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 			pstate.AddSegmentToTail(column_data, *segment, offset_in_block);
 		} else {
 			// Create a new block for future reuse.
-			if (segment->SegmentSize() != block_size) {
+			if (segment->SegmentSize() != block_size && segment->SegmentSize() == block_size - 32) {
+				// For encrypted blocks, this now could change
 				// the segment is smaller than the block size
 				// allocate a new block and copy the data over
 				D_ASSERT(segment->SegmentSize() < block_size);

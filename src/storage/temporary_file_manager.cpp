@@ -199,8 +199,9 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
                                                                 unique_ptr<FileBuffer> reusable_buffer) const {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
+
 		return StandardBufferManager::ReadTemporaryBufferInternal(
-		    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(),
+		    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(), buffer_manager.GetTemporaryBlockHeaderSize(),
 		    std::move(reusable_buffer));
 	}
 

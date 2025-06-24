@@ -371,6 +371,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 
 	D_ASSERT(block != INVALID_BLOCK);
 	D_ASSERT(offset < NumericCast<int32_t>(block_manager.GetBlockSize()));
+	D_ASSERT(segment.SegmentSize() == segment.GetBlockManager().GetBlockSize());
 
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk

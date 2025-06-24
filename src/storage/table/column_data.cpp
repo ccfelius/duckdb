@@ -484,6 +484,17 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 		// we couldn't fit everything we wanted in the current column segment, create a new one
 		{
 			auto l = data.Lock();
+			// AppendTransientSegment(l, state.current->start + state.current->count);
+			if (state.current->block) {
+				auto lock = state.current->block->GetLock();
+				auto buf_size = state.current->block->GetBuffer(lock)->Size();
+				auto seg_size = state.current->SegmentSize();
+				if (buf_size != seg_size) {
+					printf("buffer size %llu is not seg size %llu\n", buf_size, seg_size);
+					state.current->block->GetBuffer(lock)->Restructure(seg_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+				}
+				lock.unlock();
+			}
 			AppendTransientSegment(l, state.current->start + state.current->count);
 			state.current = data.GetLastSegment(l);
 			state.current->InitializeAppend(state);
@@ -553,6 +564,32 @@ void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
 	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+}
+
+void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row, idx_t seg_size, idx_t header_size) {
+	const auto block_size = block_manager.GetBlockAllocSize() - header_size;
+	const auto type_size = GetTypeIdSize(type.InternalType());
+	auto vector_segment_size = block_size;
+
+	if (start_row == NumericCast<idx_t>(MAX_ROW_ID)) {
+#if STANDARD_VECTOR_SIZE < 1024
+		vector_segment_size = 1024 * type_size;
+#else
+		vector_segment_size = STANDARD_VECTOR_SIZE * type_size;
+#endif
+	}
+
+	// The segment size is bound by the block size, but can be smaller.
+	idx_t segment_size = block_size < vector_segment_size ? block_size : vector_segment_size;
+	allocation_size += segment_size;
+
+	auto &db = GetDatabase();
+	auto &config = DBConfig::GetConfig(db);
+	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
+
+	auto new_segment =
+	    ColumnSegment::CreateTransientSegment(db, *function, type, start_row, segment_size, block_manager);
+	AppendSegment(l, std::move(new_segment));
 }
 
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {

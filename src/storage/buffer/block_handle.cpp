@@ -61,6 +61,7 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
                                 block_id_t block_id) {
 	if (reusable_buffer) {
 		// re-usable buffer: re-use it
+		reusable_buffer->Restructure(block_manager);
 		if (reusable_buffer->GetBufferType() == FileBufferType::BLOCK) {
 			// we can reuse the buffer entirely
 			auto &block = reinterpret_cast<Block &>(*reusable_buffer);

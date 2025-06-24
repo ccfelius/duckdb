@@ -55,7 +55,7 @@ public:
 	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) override {
 		return buffer_manager.ReAllocate(handle, block_size);
 	}
-	BufferHandle Pin(shared_ptr<BlockHandle> &handle) override {
+	BufferHandle Pin(shared_ptr<BlockHandle> &handle, idx_t block_header_size) override {
 		return buffer_manager.Pin(handle);
 	}
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) override {
