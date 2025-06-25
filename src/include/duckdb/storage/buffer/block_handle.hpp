@@ -165,8 +165,8 @@ public:
 	BufferHandle Load(unique_ptr<FileBuffer> buffer = nullptr);
 	BufferHandle LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
 	                            BufferPoolReservation reservation);
-	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &);
-	void Unload(BlockLock &);
+	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &, idx_t block_header_size);
+	void Unload(BlockLock &, idx_t block_header_size);
 
 	//! Returns whether or not the block can be unloaded
 	//! Note that while this method does not require a lock, whether or not a block can be unloaded can change if the

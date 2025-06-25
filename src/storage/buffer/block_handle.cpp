@@ -123,7 +123,7 @@ void BlockHandle::ResizeBuffer(BlockLock &l, idx_t block_size, int64_t memory_de
 BufferHandle BlockHandle::LoadFromBuffer(BlockLock &l, data_ptr_t data, unique_ptr<FileBuffer> reusable_buffer,
                                          BufferPoolReservation reservation) {
 	VerifyMutex(l);
-
+	reusable_buffer->Restructure(block_manager);
 	D_ASSERT(state != BlockState::BLOCK_LOADED);
 	D_ASSERT(readers == 0);
 	// copy over the data into the block from the file buffer
@@ -151,6 +151,7 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 	} else {
 		if (MustWriteToTemporaryFile()) {
 			buffer = block_manager.buffer_manager.ReadTemporaryBuffer(tag, *this, std::move(reusable_buffer));
+			//buffer->Restructure(block_manager);
 		} else {
 			return BufferHandle(); // Destroyed upon unpin/evict, so there is no temp buffer to read
 		}
@@ -160,7 +161,7 @@ BufferHandle BlockHandle::Load(unique_ptr<FileBuffer> reusable_buffer) {
 	return BufferHandle(shared_from_this(), buffer.get());
 }
 
-unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock) {
+unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock, idx_t block_header_size) {
 	VerifyMutex(lock);
 
 	if (state == BlockState::BLOCK_UNLOADED) {
@@ -171,16 +172,18 @@ unique_ptr<FileBuffer> BlockHandle::UnloadAndTakeBlock(BlockLock &lock) {
 	D_ASSERT(CanUnload());
 
 	if (block_id >= MAXIMUM_BLOCK && MustWriteToTemporaryFile()) {
+		buffer->RestructureDefault();
 		// temporary block that cannot be destroyed upon evict/unpin: write to temporary file
 		block_manager.buffer_manager.WriteTemporaryBuffer(tag, block_id, *buffer);
 	}
 	memory_charge.Resize(0);
 	state = BlockState::BLOCK_UNLOADED;
+	buffer->Restructure(block_header_size);
 	return std::move(buffer);
 }
 
-void BlockHandle::Unload(BlockLock &lock) {
-	auto block = UnloadAndTakeBlock(lock);
+void BlockHandle::Unload(BlockLock &lock, idx_t block_header_size) {
+	auto block = UnloadAndTakeBlock(lock, block_header_size);
 	block.reset();
 }
 

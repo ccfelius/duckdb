@@ -133,7 +133,7 @@ public:
 	void EraseBlockIndex(block_id_t block_index);
 
 	//! Read/Write temporary buffers at given positions in this file (potentially compressed)
-	unique_ptr<FileBuffer> ReadTemporaryBuffer(idx_t block_index, unique_ptr<FileBuffer> reusable_buffer) const;
+	unique_ptr<FileBuffer> ReadTemporaryBuffer(idx_t block_index, unique_ptr<FileBuffer> reusable_buffer, idx_t block_size, idx_t block_header_size) const;
 	void WriteTemporaryBuffer(FileBuffer &buffer, idx_t block_index, AllocatedData &compressed_buffer) const;
 
 	//! Deletes the file if there are no more blocks

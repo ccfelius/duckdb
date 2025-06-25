@@ -52,7 +52,7 @@ public:
 	BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) override {
 		return buffer_manager.Allocate(tag, block_manager, can_destroy);
 	}
-	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) override {
+	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size, idx_t block_header_size) override {
 		return buffer_manager.ReAllocate(handle, block_size);
 	}
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle, idx_t block_header_size) override {
@@ -61,7 +61,7 @@ public:
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) override {
 		return buffer_manager.Prefetch(handles);
 	}
-	void Unpin(shared_ptr<BlockHandle> &handle) override {
+	void Unpin(shared_ptr<BlockHandle> &handle, idx_t block_header_size) override {
 		return buffer_manager.Unpin(handle);
 	}
 
@@ -93,17 +93,17 @@ public:
 	shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager) override {
 		return buffer_manager.RegisterTransientMemory(size, block_manager);
 	}
-	shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size) override {
-		return buffer_manager.RegisterSmallMemory(size);
+	shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size, idx_t block_header_size) override {
+		return buffer_manager.RegisterSmallMemory(size, block_header_size);
 	}
-	shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size) override {
+	shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size, idx_t block_header_size) override {
 		return buffer_manager.RegisterSmallMemory(tag, size);
 	}
 
 	Allocator &GetBufferAllocator() override {
 		return buffer_manager.GetBufferAllocator();
 	}
-	void ReserveMemory(idx_t size) override {
+	void ReserveMemory(idx_t size, idx_t block_header_size) override {
 		return buffer_manager.ReserveMemory(size);
 	}
 	void FreeReservedMemory(idx_t size) override {

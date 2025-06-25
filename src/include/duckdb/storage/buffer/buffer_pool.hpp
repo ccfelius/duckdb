@@ -73,10 +73,10 @@ protected:
 		bool success;
 		TempBufferPoolReservation reservation;
 	};
-	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
+	virtual EvictionResult EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit, idx_t block_header_size,
 	                                   unique_ptr<FileBuffer> *buffer = nullptr);
 	virtual EvictionResult EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
-	                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer = nullptr);
+	                                           idx_t memory_limit, idx_t block_header_size, unique_ptr<FileBuffer> *buffer = nullptr);
 
 	//! Purge all blocks that haven't been pinned within the last N seconds
 	idx_t PurgeAgedBlocks(uint32_t max_age_sec);

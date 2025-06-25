@@ -110,6 +110,9 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 
 	idx_t offset = 0;
 	while (count > 0) {
+		if (state.current_segment->block->BlockId() == INVALID_BLOCK) {
+			printf("invalid block are regular sized\n");
+		}
 		idx_t appended = state.current_segment->Append(state.append_state, vdata, offset, count);
 		if (appended == count) {
 			// appended everything: finished

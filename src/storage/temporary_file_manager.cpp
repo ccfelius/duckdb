@@ -196,12 +196,15 @@ TemporaryFileIndex TemporaryFileHandle::TryGetBlockIndex() {
 }
 
 unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_index,
-                                                                unique_ptr<FileBuffer> reusable_buffer) const {
+                                                                unique_ptr<FileBuffer> reusable_buffer, idx_t block_size, idx_t block_header_size) const {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	if (reusable_buffer) {
+		reusable_buffer->RestructureDefault();
+	}
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
 
 		return StandardBufferManager::ReadTemporaryBufferInternal(
-		    buffer_manager, *handle, GetPositionInFile(block_index), buffer_manager.GetBlockSize(), buffer_manager.GetTemporaryBlockHeaderSize(),
+		    buffer_manager, *handle, GetPositionInFile(block_index), block_size, block_header_size,
 		    std::move(reusable_buffer));
 	}
 
@@ -221,11 +224,23 @@ unique_ptr<FileBuffer> TemporaryFileHandle::ReadTemporaryBuffer(idx_t block_inde
 	D_ASSERT(!duckdb_zstd::ZSTD_isError(decompressed_size));
 
 	D_ASSERT(decompressed_size == buffer->AllocSize());
+	buffer->Restructure(block_header_size);
 	return buffer;
 }
 
 void TemporaryFileHandle::WriteTemporaryBuffer(FileBuffer &buffer, const idx_t block_index,
                                                AllocatedData &compressed_buffer) const {
+
+
+	if (buffer.Size() == DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE) {
+		printf("TMPFILEHANDLE WRITETEMPBUF TEMP BUFFER: buf size: %llu\n", buffer.Size());
+		buffer.RestructureDefault();
+	}
+
+	if (buffer.Size() != DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
+		throw InternalException("Buffer size does not match expected size");
+	}
+
 	// We group DEFAULT_BLOCK_ALLOC_SIZE blocks into the same file.
 	D_ASSERT(buffer.AllocSize() == BufferManager::GetBufferManager(db).GetBlockAllocSize());
 	if (identifier.size == TemporaryBufferSize::DEFAULT) {
@@ -470,8 +485,17 @@ void TemporaryFileManager::WriteTemporaryBuffer(block_id_t block_id, FileBuffer 
 	D_ASSERT(handle);
 	D_ASSERT(index.IsValid());
 
-	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
+	// if (buffer.Size() == DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE) {
+	// 	printf("MANAGER TEMP BUFFER: buf size: %llu\n", buffer.Size());
+	// 	buffer.RestructureDefault();
+	// }
 
+	if (buffer.Size() != DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
+		printf("MANAGER TEMP BUFFER: buf size: %llu\n", buffer.Size());
+		buffer.RestructureDefault();
+	}
+
+	handle->WriteTemporaryBuffer(buffer, index.block_index.GetIndex(), compressed_buffer);
 	compression_adaptivity.Update(compression_result.level, time_before_ns);
 }
 
@@ -583,7 +607,7 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(block_id_t id,
 		handle = GetFileHandle(lock, index.identifier);
 	}
 
-	auto buffer = handle->ReadTemporaryBuffer(index.block_index.GetIndex(), std::move(reusable_buffer));
+	auto buffer = handle->ReadTemporaryBuffer(index.block_index.GetIndex(), std::move(reusable_buffer), DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_STORAGE_SIZE, DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 	{
 		// remove the block (and potentially erase the temp file)
 		TemporaryFileManagerLock lock(manager_lock);

@@ -314,9 +314,9 @@ TemporaryMemoryManager &BufferPool::GetTemporaryMemoryManager() {
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_memory, idx_t memory_limit,
-                                                   unique_ptr<FileBuffer> *buffer) {
+                                                   idx_t block_header_size, unique_ptr<FileBuffer> *buffer) {
 	for (auto &queue : queues) {
-		auto block_result = EvictBlocksInternal(*queue, tag, extra_memory, memory_limit, buffer);
+		auto block_result = EvictBlocksInternal(*queue, tag, extra_memory, memory_limit, block_header_size, buffer);
 		if (block_result.success || RefersToSameObject(*queue, *queues.back())) {
 			return block_result; // Return upon success or upon last queue
 		}
@@ -326,7 +326,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocks(MemoryTag tag, idx_t extra_me
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue, MemoryTag tag, idx_t extra_memory,
-                                                           idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
+                                                           idx_t memory_limit, idx_t block_header_size, unique_ptr<FileBuffer> *buffer) {
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 	bool found = false;
 
@@ -339,15 +339,16 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(EvictionQueue &queue,
 
 	queue.IterateUnloadableBlocks([&](BufferEvictionNode &, const shared_ptr<BlockHandle> &handle, BlockLock &lock) {
 		// hooray, we can unload the block
-		if (buffer && handle->GetBuffer(lock)->AllocSize() == extra_memory) {
+		if (buffer && handle->GetBuffer(lock)->AllocSize() == extra_memory && handle->GetBuffer(lock)->HeaderSize() == block_header_size) {
 			// we can re-use the memory directly
-			*buffer = handle->UnloadAndTakeBlock(lock);
+			*buffer = handle->UnloadAndTakeBlock(lock, block_header_size);
+			// (*buffer)->Restructure(block_manager);
 			found = true;
 			return false;
 		}
 
 		// release the memory and mark the block as unloaded
-		handle->Unload(lock);
+		handle->Unload(lock, block_header_size);
 
 		if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 			found = true;
@@ -388,7 +389,7 @@ idx_t BufferPool::PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age
 		    auto lru_timestamp_msec = handle->GetLRUTimestamp();
 		    bool is_fresh = lru_timestamp_msec >= limit && lru_timestamp_msec <= now;
 		    purged_bytes += handle->GetMemoryUsage();
-		    handle->Unload(lock);
+		    handle->Unload(lock, 8);
 		    // Return false to stop iterating if the current block is_fresh
 		    return !is_fresh;
 	    });
@@ -436,7 +437,7 @@ void BufferPool::PurgeQueue(const BlockHandle &block) {
 void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	lock_guard<mutex> l_lock(limit_lock);
 	// try to evict until the limit is reached
-	if (!EvictBlocks(MemoryTag::EXTENSION, 0, limit).success) {
+	if (!EvictBlocks(MemoryTag::EXTENSION, 0, limit, DEFAULT_BLOCK_HEADER_STORAGE_SIZE).success) {
 		throw OutOfMemoryException(
 		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
 		    exception_postscript);
@@ -445,7 +446,7 @@ void BufferPool::SetLimit(idx_t limit, const char *exception_postscript) {
 	// set the global maximum memory to the new limit if successful
 	maximum_memory = limit;
 	// evict again
-	if (!EvictBlocks(MemoryTag::EXTENSION, 0, limit).success) {
+	if (!EvictBlocks(MemoryTag::EXTENSION, 0, limit, DEFAULT_BLOCK_HEADER_STORAGE_SIZE).success) {
 		// failed: go back to old limit
 		maximum_memory = old_limit;
 		throw OutOfMemoryException(

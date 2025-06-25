@@ -49,7 +49,7 @@ public:
 	//! Registers an in-memory buffer that cannot be unloaded until it is destroyed.
 	//! This buffer can be small (smaller than the block size of the temporary block manager).
 	//! Unpin and Pin are NOPs on this block of memory.
-	shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size) final;
+	shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size, idx_t block_header_size = 8) final;
 
 	idx_t GetUsedMemory() const final;
 	idx_t GetMaxMemory() const final;
@@ -72,11 +72,11 @@ public:
 	DUCKDB_API BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) final;
 
 	//! Reallocate an in-memory buffer that is pinned.
-	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) final;
+	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size, idx_t block_header_size) final;
 
 	BufferHandle Pin(shared_ptr<BlockHandle> &handle, idx_t block_header_size = 8) final;
 	void Prefetch(vector<shared_ptr<BlockHandle>> &handles) final;
-	void Unpin(shared_ptr<BlockHandle> &handle) final;
+	void Unpin(shared_ptr<BlockHandle> &handle, idx_t block_header_size) final;
 
 	//! Set a new memory limit to the buffer manager, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
@@ -105,14 +105,14 @@ public:
 	unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, idx_t block_header_size, unique_ptr<FileBuffer> &&source,
 	                                              FileBufferType type = FileBufferType::MANAGED_BUFFER) override;
 
-	DUCKDB_API void ReserveMemory(idx_t size) final;
+	DUCKDB_API void ReserveMemory(idx_t size, idx_t block_header_size) final;
 	DUCKDB_API void FreeReservedMemory(idx_t size) final;
 	bool HasTemporaryDirectory() const final;
 
 protected:
 	//! Helper
 	template <typename... ARGS>
-	TempBufferPoolReservation EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
+	TempBufferPoolReservation EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta, idx_t block_header_size, unique_ptr<FileBuffer> *buffer,
 	                                             ARGS...);
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or

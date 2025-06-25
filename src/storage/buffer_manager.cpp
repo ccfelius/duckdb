@@ -45,11 +45,11 @@ shared_ptr<BlockHandle> BufferManager::RegisterTransientMemory(const idx_t size,
 	throw NotImplementedException("This type of BufferManager can not create 'transient-memory' blocks");
 }
 
-shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(const idx_t size) {
+shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(const idx_t size, idx_t block_header_size) {
 	return RegisterSmallMemory(MemoryTag::BASE_TABLE, size);
 }
 
-shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(MemoryTag tag, const idx_t size) {
+shared_ptr<BlockHandle> BufferManager::RegisterSmallMemory(MemoryTag tag, const idx_t size, idx_t block_header_size) {
 	throw NotImplementedException("This type of BufferManager can not create 'small-memory' blocks");
 }
 
@@ -57,7 +57,7 @@ Allocator &BufferManager::GetBufferAllocator() {
 	throw NotImplementedException("This type of BufferManager does not have an Allocator");
 }
 
-void BufferManager::ReserveMemory(idx_t size) {
+void BufferManager::ReserveMemory(idx_t size, idx_t block_header_size) {
 	throw NotImplementedException("This type of BufferManager can not reserve memory");
 }
 

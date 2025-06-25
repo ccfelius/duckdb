@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/column_segment.hpp"
 
+#include "../../../tools/shell/linenoise/include/terminal.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -84,8 +85,10 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block
 	if (block) {
 		auto lock = block->GetLock();
 		if (block->GetBuffer(lock)) {
-			auto buf_size = block->GetBuffer(lock)->Size();
+			auto buf = &block->GetBuffer(lock);
+			auto buf_size = (*buf)->Size();
 			if (segment_size !=  buf_size) {
+				(*buf)->Restructure(DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 				printf("COLSEGMENT 1: Seg size %llu is niet buf ze %llu. bm size: %llu \n", segment_size, buf_size, GetBlockManager().GetBlockSize());
 			}
 			lock.unlock();
@@ -138,18 +141,18 @@ void ColumnSegment::InitializePrefetch(PrefetchState &prefetch_state, ColumnScan
 
 void ColumnSegment::InitializeScan(ColumnScanState &state) {
 
-	if (state.current->block) {
-		auto lock = state.current->block->GetLock();
-		auto &buf = state.current->block->GetBuffer(lock);
-		if (buf) {
-			auto buf_size = buf->Size();
-			if (segment_size != buf_size) {
-				printf("Initscan 1: Seg size 1: %llu is niet block size %llu\n", segment_size, buf_size);
-				buf->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
-			}
-		}
-		lock.unlock();
-	}
+	// if (state.current->block) {
+	// 	auto lock = state.current->block->GetLock();
+	// 	auto &buf = state.current->block->GetBuffer(lock);
+	// 	if (buf) {
+	// 		auto buf_size = buf->Size();
+	// 		if (segment_size != buf_size) {
+	// 			printf("Initscan 1: Seg size 1: %llu is niet block size %llu\n", segment_size, buf_size);
+	// 			buf->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+	// 		}
+	// 	}
+	// 	lock.unlock();
+	// }
 
 	state.scan_state = function.get().init_scan(*this);
 
@@ -159,8 +162,11 @@ void ColumnSegment::InitializeScan(ColumnScanState &state) {
 		if (buf) {
 			auto buf_size = buf->Size();
 			if (segment_size != buf_size) {
-				printf("Initscan 2: Seg size 1: %llu is niet block size %llu\n", segment_size, buf_size);
-				buf->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+				auto block_id = state.current->block->BlockId();
+				if (block_id > INVALID_BLOCK) {
+					// printf("Initscan 2: Seg size 1: %llu is niet block size %llu. BlockId: %llu\n", segment_size, buf_size, block_id);
+					buf->Restructure(segment_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+				}
 			}
 		}
 		lock.unlock();
@@ -255,6 +261,11 @@ idx_t ColumnSegment::Append(ColumnAppendState &state, UnifiedVectorFormat &appen
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function.get().append) {
 		throw InternalException("Attempting to append to a segment without append method");
+	}
+	auto encrypted_buf_size = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
+	if (segment_size == encrypted_buf_size && state.append_state->handle.GetFileBuffer().Size() != encrypted_buf_size) {
+		printf("Columnsegment Append, seg and buf out of sync\n");
+		state.append_state->handle.GetFileBuffer().Restructure(DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 	}
 	return function.get().append(*state.append_state, *this, stats, append_data, offset, count);
 }

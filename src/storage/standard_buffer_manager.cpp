@@ -41,10 +41,9 @@ unique_ptr<FileBuffer> StandardBufferManager::ConstructManagedBuffer(idx_t size,
 		throw InternalException("ConstructManagedBuffer cannot be used to construct blocks");
 	}
 	if (source) {
-		source->Restructure(size, block_header_size);
 		auto tmp = std::move(source);
 		D_ASSERT(tmp->AllocSize() == BufferManager::GetAllocSize(size + block_header_size));
-		result = make_uniq<FileBuffer>(*tmp, type);
+		result = make_uniq<FileBuffer>(*tmp, type, block_header_size);
 	} else {
 		// non re-usable buffer: allocate a new buffer
 		result = make_uniq<FileBuffer>(Allocator::Get(db), type, size, block_header_size);
@@ -120,9 +119,9 @@ idx_t StandardBufferManager::GetQueryMaxMemory() const {
 }
 
 template <typename... ARGS>
-TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta,
+TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(MemoryTag tag, idx_t memory_delta, idx_t block_header_size,
                                                                     unique_ptr<FileBuffer> *buffer, ARGS... args) {
-	auto r = buffer_pool.EvictBlocks(tag, memory_delta, buffer_pool.maximum_memory, buffer);
+	auto r = buffer_pool.EvictBlocks(tag, memory_delta, buffer_pool.maximum_memory, block_header_size, buffer);
 	if (!r.success) {
 		string extra_text = StringUtil::Format(" (%s/%s used)", StringUtil::BytesToHumanReadableString(GetUsedMemory()),
 		                                       StringUtil::BytesToHumanReadableString(GetMaxMemory()));
@@ -146,9 +145,9 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterTransientMemory(const idx
 	return buffer_handle.GetBlockHandle();
 }
 
-shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag, const idx_t size) {
+shared_ptr<BlockHandle> StandardBufferManager::RegisterSmallMemory(MemoryTag tag, const idx_t size, idx_t block_header_size) {
 	D_ASSERT(size < GetBlockSize());
-	auto reservation = EvictBlocksOrThrow(tag, size, nullptr, "could not allocate block of size %s%s",
+	auto reservation = EvictBlocksOrThrow(tag, size, block_header_size , nullptr, "could not allocate block of size %s%s",
 	                                      StringUtil::BytesToHumanReadableString(size));
 
 	auto buffer = ConstructManagedBuffer(size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, nullptr, FileBufferType::TINY_BUFFER);
@@ -169,7 +168,12 @@ shared_ptr<BlockHandle> StandardBufferManager::RegisterMemory(MemoryTag tag, idx
 
 	// Evict blocks until there is enough memory to store the buffer.
 	unique_ptr<FileBuffer> reusable_buffer;
-	auto res = EvictBlocksOrThrow(tag, alloc_size, &reusable_buffer, "could not allocate block of size %s%s",
+
+	// if (block_header_size == DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE) {
+	// 	reusable_buffer->RestructureDefault();
+	// }
+
+	auto res = EvictBlocksOrThrow(tag, alloc_size,  block_header_size, &reusable_buffer, "could not allocate block of size %s%s",
 	                              StringUtil::BytesToHumanReadableString(alloc_size));
 
 	// Create a new buffer and a block to hold the buffer.
@@ -188,6 +192,7 @@ shared_ptr<BlockHandle> StandardBufferManager::AllocateTemporaryMemory(MemoryTag
 
 shared_ptr<BlockHandle> StandardBufferManager::AllocateMemory(MemoryTag tag, BlockManager *block_manager,
                                                               bool can_destroy) {
+
 	return RegisterMemory(tag, block_manager->GetBlockSize(), block_manager->GetBlockHeaderSize(), can_destroy);
 }
 
@@ -211,7 +216,7 @@ BufferHandle StandardBufferManager::Allocate(MemoryTag tag, idx_t block_size, bo
 	return Pin(block);
 }
 
-void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
+void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size, idx_t block_header_size) {
 	//! is this function ever used?
 	D_ASSERT(block_size >= GetBlockSize());
 	auto lock = handle->GetLock();
@@ -221,7 +226,7 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 	D_ASSERT(handle_memory_usage == handle->GetBuffer(lock)->AllocSize());
 	D_ASSERT(handle_memory_usage == handle->GetMemoryCharge(lock).size);
 
-	auto req = handle->GetBuffer(lock)->CalculateMemory(block_size, handle->block_manager.GetBlockHeaderSize());
+	auto req = handle->GetBuffer(lock)->CalculateMemory(block_size, block_header_size);
 	int64_t memory_delta = NumericCast<int64_t>(req.alloc_size) - NumericCast<int64_t>(handle_memory_usage);
 
 	if (memory_delta == 0) {
@@ -230,7 +235,7 @@ void StandardBufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t bl
 		// evict blocks until we have space to resize this block
 		// unlock the handle lock during the call to EvictBlocksOrThrow
 		lock.unlock();
-		auto reservation = EvictBlocksOrThrow(handle->GetMemoryTag(), NumericCast<idx_t>(memory_delta), nullptr,
+		auto reservation = EvictBlocksOrThrow(handle->GetMemoryTag(), NumericCast<idx_t>(memory_delta), block_header_size, nullptr,
 		                                      "failed to resize block from %s to %s%s",
 		                                      StringUtil::BytesToHumanReadableString(handle_memory_usage),
 		                                      StringUtil::BytesToHumanReadableString(req.alloc_size));
@@ -276,8 +281,9 @@ void StandardBufferManager::BatchRead(vector<shared_ptr<BlockHandle>> &handles, 
 
 		// reserve memory for the block
 		idx_t required_memory = handle->GetMemoryUsage();
+		idx_t block_header_size = block_manager.GetBlockHeaderSize();
 		unique_ptr<FileBuffer> reusable_buffer;
-		auto reservation = EvictBlocksOrThrow(handle->GetMemoryTag(), required_memory, &reusable_buffer,
+		auto reservation = EvictBlocksOrThrow(handle->GetMemoryTag(), required_memory, block_header_size, &reusable_buffer,
 		                                      "failed to pin block of size %s%s",
 		                                      StringUtil::BytesToHumanReadableString(required_memory));
 		// now load the block from the buffer
@@ -356,12 +362,15 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle, idx_t b
 	}
 
 	if (buf.IsValid()) {
-		buf.GetFileBuffer().Restructure(block_header_size);
+		// buf.GetFileBuffer().Restructure(block_header_size);
 		return buf; // the block was already loaded, return it without holding the BlockHandle's lock
 	} else {
 		// evict blocks until we have space for the current block
 		unique_ptr<FileBuffer> reusable_buffer;
-		auto reservation = EvictBlocksOrThrow(handle->GetMemoryTag(), required_memory, &reusable_buffer,
+		if (reusable_buffer) {
+			reusable_buffer->Restructure(block_header_size);
+		}
+		auto reservation = EvictBlocksOrThrow(handle->GetMemoryTag(), required_memory, block_header_size, &reusable_buffer,
 		                                      "failed to pin block of size %s%s",
 		                                      StringUtil::BytesToHumanReadableString(required_memory));
 
@@ -395,7 +404,7 @@ BufferHandle StandardBufferManager::Pin(shared_ptr<BlockHandle> &handle, idx_t b
 	// we should have a valid BufferHandle by now, either because the block was already loaded, or because we loaded it
 	// return it without holding the BlockHandle's lock
 	D_ASSERT(buf.IsValid());
-	buf.GetFileBuffer().Restructure(block_header_size);
+	// buf.GetFileBuffer().Restructure(block_header_size);
 	return buf;
 }
 
@@ -426,7 +435,7 @@ void StandardBufferManager::VerifyZeroReaders(BlockLock &lock, shared_ptr<BlockH
 #endif
 }
 
-void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
+void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle, idx_t block_header_size) {
 	bool purge = false;
 	{
 		auto lock = handle->GetLock();
@@ -440,7 +449,7 @@ void StandardBufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 			if (handle->MustAddToEvictionQueue()) {
 				purge = buffer_pool.AddToEvictionQueue(handle);
 			} else {
-				handle->Unload(lock);
+				handle->Unload(lock, block_header_size);
 			}
 		}
 	}
@@ -511,6 +520,11 @@ void StandardBufferManager::WriteTemporaryBuffer(MemoryTag tag, block_id_t block
 	// WriteTemporaryBuffer assumes that we never write a buffer below DEFAULT_BLOCK_ALLOC_SIZE.
 	RequireTemporaryDirectory();
 
+	if (buffer.Size() != DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_STORAGE_SIZE) {
+		//printf("STDBUFFMAN TEMP BUFFER: buf size: %llu\n", buffer.Size());
+		// buffer.RestructureDefault();
+	}
+
 	// Append to a few grouped files.
 	if (buffer.AllocSize() == GetBlockAllocSize()) {
 		evicted_data_per_tag[uint8_t(tag)] += GetBlockAllocSize();
@@ -535,6 +549,11 @@ unique_ptr<FileBuffer> StandardBufferManager::ReadTemporaryBuffer(MemoryTag tag,
 	D_ASSERT(!temporary_directory.path.empty());
 	D_ASSERT(temporary_directory.handle.get());
 	auto id = block.BlockId();
+
+	if (block.block_manager.GetBlockAllocSize() == 32768) {
+		printf("Read temp buffer: Block size is encryption block size! \n");
+	}
+
 	if (temporary_directory.handle->GetTempFile().HasTemporaryBuffer(id)) {
 		// This is a block that was offloaded to a regular .tmp file, the file contains blocks of a fixed size
 		return temporary_directory.handle->GetTempFile().ReadTemporaryBuffer(id, std::move(reusable_buffer));
@@ -638,12 +657,12 @@ const char *StandardBufferManager::InMemoryWarning() {
 	       "\nOr set SET temp_directory='/path/to/tmp.tmp'";
 }
 
-void StandardBufferManager::ReserveMemory(idx_t size) {
+void StandardBufferManager::ReserveMemory(idx_t size, idx_t block_header_size) {
 	if (size == 0) {
 		return;
 	}
 	auto reservation =
-	    EvictBlocksOrThrow(MemoryTag::EXTENSION, size, nullptr, "failed to reserve memory data of size %s%s",
+	    EvictBlocksOrThrow(MemoryTag::EXTENSION, size, block_header_size, nullptr, "failed to reserve memory data of size %s%s",
 	                       StringUtil::BytesToHumanReadableString(size));
 	reservation.size = 0;
 }
@@ -661,7 +680,7 @@ void StandardBufferManager::FreeReservedMemory(idx_t size) {
 data_ptr_t StandardBufferManager::BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
 	auto &data = private_data->Cast<BufferAllocatorData>();
 	auto reservation =
-	    data.manager.EvictBlocksOrThrow(MemoryTag::ALLOCATOR, size, nullptr, "failed to allocate data of size %s%s",
+	    data.manager.EvictBlocksOrThrow(MemoryTag::ALLOCATOR, size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE, nullptr, "failed to allocate data of size %s%s",
 	                                    StringUtil::BytesToHumanReadableString(size));
 	// We rely on manual tracking of this one. :(
 	reservation.size = 0;

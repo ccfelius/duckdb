@@ -382,6 +382,13 @@ void ColumnData::Append(ColumnAppendState &state, Vector &vector, idx_t append_c
 		throw InternalException("ColumnData::Append called on a column with a parent or without stats");
 	}
 	lock_guard<mutex> l(stats_lock);
+
+	if (state.append_state->handle.GetFileBuffer().Size() != state.current->SegmentSize()) {
+		// For encrypted databases, restructure the buffers accordingly
+		printf("Filebuf size %llu != seg size %llu\n", state.append_state->handle.GetFileBuffer().Size(), state.current->SegmentSize());
+		state.append_state->handle.GetFileBuffer().Restructure(block_manager);
+	}
+
 	Append(stats->statistics, state, vector, append_count);
 }
 
@@ -490,8 +497,8 @@ void ColumnData::AppendData(BaseStatistics &append_stats, ColumnAppendState &sta
 				auto buf_size = state.current->block->GetBuffer(lock)->Size();
 				auto seg_size = state.current->SegmentSize();
 				if (buf_size != seg_size) {
-					printf("buffer size %llu is not seg size %llu\n", buf_size, seg_size);
-					state.current->block->GetBuffer(lock)->Restructure(seg_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
+					printf("APPENDDATA buffer size %llu is not seg size %llu\n", buf_size, seg_size);
+					//state.current->block->GetBuffer(lock)->Restructure(seg_size, DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE);
 				}
 				lock.unlock();
 			}

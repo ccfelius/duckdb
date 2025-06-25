@@ -55,14 +55,14 @@ public:
 	//! Allocate block-based memory and pin it.
 	virtual BufferHandle Allocate(MemoryTag tag, BlockManager *block_manager, bool can_destroy = true) = 0;
 	//! Reallocate a pinned in-memory buffer.
-	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
+	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size, idx_t block_header_size = 8) = 0;
 	//! Pin a block handle.
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle, idx_t block_header_size = 8) = 0;
 	//! Pre-fetch a series of blocks.
 	//! Using this function is a performance suggestion.
 	virtual void Prefetch(vector<shared_ptr<BlockHandle>> &handles) = 0;
 	//! Unpin a block handle.
-	virtual void Unpin(shared_ptr<BlockHandle> &handle) = 0;
+	virtual void Unpin(shared_ptr<BlockHandle> &handle, idx_t block_header_size = 8) = 0;
 
 	//! Returns the currently allocated memory.
 	virtual idx_t GetUsedMemory() const = 0;
@@ -84,14 +84,14 @@ public:
 	//! Returns a newly registered block of transient memory.
 	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, BlockManager &block_manager);
 	//! Returns a newly registered block of memory that is smaller than the block size setting.
-	virtual shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size);
+	virtual shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size, idx_t block_header_size = 8);
 	//! Returns a newly registered block of memory that is smaller than the block size setting and has a memory tag.
-	virtual shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size);
+	virtual shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size, idx_t block_header_size = 8);
 
 	//! Get the buffer allocator.
 	virtual DUCKDB_API Allocator &GetBufferAllocator();
 	//! Reserve memory.
-	virtual DUCKDB_API void ReserveMemory(idx_t size);
+	virtual DUCKDB_API void ReserveMemory(idx_t size, idx_t block_header_size = 8);
 	//! Free reserved memory.
 	virtual DUCKDB_API void FreeReservedMemory(idx_t size);
 	//! GetMemoryUsageInfo returns MemoryInformation for each memory tag.
