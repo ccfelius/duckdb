@@ -1,0 +1,21 @@
+# name: test/sql/storage/encryption/out_of_core/mixed_encrypted_plaintext.test
+# description: Tests queries with encrypted and plaintext database
+# group: [out_of_core]
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.db' (ENCRYPTION_KEY 'asdf');
+
+statement ok
+CREATE TABLE encrypted.tbl AS SELECT range AS i FROM range(10000);
+
+statement ok
+ATTACH '__TEST_DIR__/plaintext.db';
+
+statement ok
+CREATE TABLE plaintext.tbl AS SELECT range AS i FROM range(10000);
+
+query I
+SELECT list_sum(LIST(t1.i) || LIST(t2.i))
+FROM plaintext.tbl AS t1 JOIN encrypted.tbl AS t2 ON t1.i = t2.i;
+----
+99990000
