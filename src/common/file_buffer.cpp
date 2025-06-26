@@ -100,11 +100,6 @@ void FileBuffer::Resize(BlockManager &block_manager) {
 	ResizeInternal(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
 }
 
-void FileBuffer::RestructureDefault() {
-	buffer = internal_buffer + DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
-	size = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_STORAGE_SIZE;
-}
-
 void FileBuffer::Restructure(BlockManager &block_manager) {
 	buffer = internal_buffer + block_manager.GetBlockHeaderSize();
 	size = block_manager.GetBlockSize();

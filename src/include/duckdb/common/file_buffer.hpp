@@ -65,7 +65,6 @@ public:
 	// This can happen e.g. with encryption
 	void Restructure(BlockManager &block_manager);
 	void Restructure(uint64_t block_size, uint64_t block_header_size);
-	void RestructureDefault();
 
 	uint64_t AllocSize() const {
 		return internal_size;
