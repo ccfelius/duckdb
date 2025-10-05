@@ -271,7 +271,10 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 	}
 }
 
-MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len) : EncryptionState(cipher_p, key_len), context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
+MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(duckdb::EncryptionTypes::CipherType cipher_p, duckdb::idx_t key_len, duckdb::string aad) : EncryptionState(cipher_p, key_len), context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
+	// set AAD
+	additional_authenticated_data = aad;
+
 	mbedtls_cipher_init(context.get());
 
 	auto cipher_info = GetCipher(key_len);

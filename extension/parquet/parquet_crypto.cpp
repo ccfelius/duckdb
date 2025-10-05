@@ -171,11 +171,11 @@ private:
 //! Decryption wrapper for a transport protocol
 class DecryptionTransport : public TTransport {
 public:
-	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p)
+	DecryptionTransport(TProtocol &prot_p, const string &key, const EncryptionUtil &encryption_util_p, string aad = "")
 	    : prot(prot_p), trans(*prot.getTransport()),
 	      aes(encryption_util_p.CreateEncryptionState(EncryptionTypes::GCM, key.size())), read_buffer_size(0),
 	      read_buffer_offset(0) {
-		Initialize(key);
+		Initialize(key, aad);
 	}
 	uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 		const uint32_t result = len;
@@ -183,6 +183,7 @@ public:
 		if (len > transport_remaining - ParquetCrypto::TAG_BYTES + read_buffer_size - read_buffer_offset) {
 			throw InvalidInputException("Too many bytes requested from crypto buffer");
 		}
+
 
 		while (len != 0) {
 			if (read_buffer_offset == read_buffer_size) {
@@ -224,8 +225,16 @@ public:
 		return result;
 	}
 
+	idx_t GetTotalBytes() {
+		return total_bytes;
+	}
+
+	idx_t GetRemainingTransport() {
+		return transport_remaining;
+	}
+
 private:
-	void Initialize(const string &key) {
+	void Initialize(const string &key, string aad) {
 		// Read encoded length (don't add to read_bytes)
 		data_t length_buf[ParquetCrypto::LENGTH_BYTES];
 		trans.read(length_buf, ParquetCrypto::LENGTH_BYTES);
@@ -235,7 +244,7 @@ private:
 		transport_remaining -= trans.read(nonce, ParquetCrypto::NONCE_BYTES);
 		// check whether context is initialized
 		aes->InitializeDecryption(nonce, ParquetCrypto::NONCE_BYTES, reinterpret_cast<const_data_ptr_t>(key.data()),
-		                          key.size());
+		                          key.size(), reinterpret_cast<const_data_ptr_t>(aad.data()), aad.size());
 	}
 
 	void ReadBlock(uint8_t *buf) {
@@ -297,11 +306,54 @@ private:
 	uint32_t read_buffer_offset;
 };
 
+//! partly copied from arrow
+uint8_t *ParquetCrypto::CreateModuleAad(const std::string &file_aad, int8_t module_type, int16_t row_group_ordinal,
+                                        int16_t column_ordinal, int16_t page_ordinal) {
+
+	// CheckPageOrdinal(page_ordinal);
+	const int16_t page_ordinal_short = static_cast<int16_t>(page_ordinal);
+	int8_t type_ordinal_bytes[1];
+	type_ordinal_bytes[0] = module_type;
+
+	std::string type_ordinal_bytes_str(reinterpret_cast<char const *>(type_ordinal_bytes), 1);
+
+	if (ParquetCrypto::Footer == module_type) {
+		uint8_t aad_suffix_footer_out[1];
+		aad_suffix_footer_out[0] = module_type;
+		return aad_suffix_footer_out;
+	}
+
+	uint16_t row_group_ordinal_bytes = static_cast<uint16_t>(row_group_ordinal);
+	uint16_t column_ordinal_bytes = static_cast<uint16_t>(column_ordinal);
+
+	if (ParquetCrypto::DataPage != module_type && ParquetCrypto::DataPageHeader != module_type) {
+		uint8_t aad_suffix_out[5];
+		aad_suffix_out[0] = module_type;
+		aad_suffix_out[1] = row_group_ordinal_bytes;
+		aad_suffix_out[3] = column_ordinal_bytes;
+		return aad_suffix_out;
+	}
+
+	uint16_t page_ordinal_bytes = static_cast<uint16_t>(page_ordinal_short);
+
+	uint8_t aad_suffix_out_page[7];
+	memcpy(aad_suffix_out_page, aad_suffix_out_page, 5);
+	aad_suffix_out_page[5] = page_ordinal_bytes;
+
+	return aad_suffix_out_page;
+}
+
+uint8_t *ParquetCrypto::CreateFooterAad(const std::string &aad_prefix_bytes) {
+	return CreateModuleAad(aad_prefix_bytes, ParquetCrypto::Footer, static_cast<int16_t>(-1), static_cast<int16_t>(-1),
+						   static_cast<int16_t>(-1));
+}
+
 uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
-                             const EncryptionUtil &encryption_util_p) {
+                             const EncryptionUtil &encryption_util_p, string aad) {
+
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
 	auto dprot =
-	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
+	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, aad));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// We have to read the whole thing otherwise thrift throws an error before we realize we're decryption is wrong
@@ -332,15 +384,17 @@ uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const strin
 }
 
 uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size,
-                                 const string &key, const EncryptionUtil &encryption_util_p) {
+                                 const string &key, const EncryptionUtil &encryption_util_p, string aad) {
 	// Create decryption protocol
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
 	auto dprot =
-	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p));
+	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, aad));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// Read buffer
-	dtrans.read(buffer, buffer_size);
+	auto buf_size = dtrans.GetRemainingTransport() - ParquetCrypto::TAG_BYTES;
+	// dtrans.read(buffer, buffer_size);
+	dtrans.read(buffer, buf_size);
 
 	// Verify AES tag and read length
 	return dtrans.Finalize();

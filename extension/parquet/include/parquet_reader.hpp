@@ -174,15 +174,16 @@ public:
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
 	void Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
+	string GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm);
 
 	idx_t NumRows() const;
 	idx_t NumRowGroups() const;
 
 	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
 
-	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
+	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t col_idx = 0, int8_t module = 0, uint16_t page_ordinal = -1);
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
-	                  const uint32_t buffer_size);
+	                  const uint32_t buffer_size, uint16_t col_idx = 0, int8_t module = 0, uint16_t page_ordinal = -1);
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 

@@ -28,6 +28,8 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/bit.hpp"
 
+#include <parquet_crypto.hpp>
+
 namespace duckdb {
 
 using duckdb_parquet::CompressionCodec;
@@ -232,13 +234,14 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 	return true;
 }
 
-void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
+void ColumnReader::PrepareRead(int8_t page_ordinal, optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	page_is_filtered_out = false;
 	block.reset();
 	PageHeader page_hdr;
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+
 	if (trans.HasPrefetch()) {
 		// Already has some data prefetched, let's not mess with it
 		reader.Read(page_hdr, *protocol);
@@ -248,7 +251,17 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 		static constexpr idx_t ASSUMED_HEADER_SIZE = 256;
 		const auto prefetch_size = MinValue(trans.GetSize() - trans.GetLocation(), ASSUMED_HEADER_SIZE);
 		trans.Prefetch(trans.GetLocation(), prefetch_size);
-		reader.Read(page_hdr, *protocol);
+		// rg ordinal??
+		auto col_idx = ColumnIndex();
+		auto page_type = page_hdr.type;
+
+		int8_t module = 0;
+		if (chunk->meta_data.__isset.dictionary_page_offset) {
+			module = ParquetCrypto::DictionaryPageHeader;
+		} else {
+			module = ParquetCrypto::DataPageHeader;
+		}
+		reader.Read(page_hdr, *protocol, col_idx, module);
 		trans.ClearPrefetch();
 	}
 	// some basic sanity check
@@ -351,10 +364,33 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	ResizeableBuffer compressed_buffer;
 	compressed_buffer.resize(GetAllocator(), page_hdr.compressed_page_size + 1);
-	reader.ReadData(*protocol, compressed_buffer.ptr, page_hdr.compressed_page_size);
 
-	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, page_hdr.compressed_page_size, block->ptr,
-	                   page_hdr.uncompressed_page_size);
+	int8_t module;
+
+	if (page_hdr.type == PageType::DATA_PAGE_V2) {
+		module = ParquetCrypto::DataPage;
+	} else if (page_hdr.type == PageType::DICTIONARY_PAGE) {
+		module = ParquetCrypto::DictionaryPage;
+	} else if (page_hdr.type == PageType::DATA_PAGE) {
+		module = ParquetCrypto::DataPage;
+	} else if (page_hdr.type == PageType::INDEX_PAGE) {
+		// not sure if this is correct
+		module = ParquetCrypto::ColumnIndex;
+	}
+
+	auto col_index = ColumnIndex();
+	auto read_bytes = reader.ReadData(*protocol, compressed_buffer.ptr, page_hdr.compressed_page_size, col_index, module);
+	D_ASSERT(read_bytes == page_hdr.compressed_page_size);
+
+	// if encrypted and arrow
+	// the compressed_page_size is compressed_page_size - length - 14 - 14
+	auto comp_page_size = page_hdr.compressed_page_size - 4 - 12 - 16;
+
+	// DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, page_hdr.compressed_page_size, block->ptr,
+	//                    page_hdr.uncompressed_page_size);
+
+	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, comp_page_size, block->ptr,
+				   page_hdr.uncompressed_page_size);
 }
 
 void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size,
@@ -523,8 +559,11 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 
 idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
                                     optional_ptr<TableFilterState> filter_state) {
+
+	int8_t page_ordinal = 0;
 	while (page_rows_available == 0) {
-		PrepareRead(filter, filter_state);
+		PrepareRead(page_ordinal, filter, filter_state);
+		page_ordinal++;
 	}
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
 }
@@ -612,6 +651,8 @@ idx_t ColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, dat
 	idx_t result_offset = 0;
 	auto to_read = num_values;
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
+
+	auto col_idx = ColumnIndex();
 
 	while (to_read > 0) {
 		auto read_now = ReadPageHeaders(to_read);

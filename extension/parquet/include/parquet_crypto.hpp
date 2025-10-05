@@ -68,22 +68,44 @@ public:
 	static constexpr idx_t CRYPTO_BLOCK_SIZE = 4096;
 	static constexpr idx_t BLOCK_SIZE = 16;
 
+	// Module types for encryption
+	static constexpr int8_t Footer = 0;
+	static constexpr int8_t ColumnMetaData = 1;
+	static constexpr int8_t DataPage = 2;
+	static constexpr int8_t DictionaryPage = 3;
+	static constexpr int8_t DataPageHeader = 4;
+	static constexpr int8_t DictionaryPageHeader = 5;
+	static constexpr int8_t ColumnIndex = 6;
+	static constexpr int8_t OffsetIndex = 7;
+	static constexpr int8_t BloomFilterHeader = 8;
+	static constexpr int8_t BloomFilterBitset = 9;
+
+	// Standard AAD length for file
+	static constexpr int32_t AADFileIDLength = 8;
+
 public:
 	//! Decrypt and read a Thrift object from the transport protocol
-	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p);
+	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p, string aad = "");
 	//! Encrypt and write a Thrift object to the transport protocol
 	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
 	                      const EncryptionUtil &encryption_util_p);
 	//! Decrypt and read a buffer
 	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key,
-	                         const EncryptionUtil &encryption_util_p);
+	                         const EncryptionUtil &encryption_util_p, string aad = "");
 	//! Encrypt and write a buffer to a file
 	static uint32_t WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
 	                          const string &key, const EncryptionUtil &encryption_util_p);
 
+	uint8_t *CreateModuleAad(const std::string &file_aad, int8_t module_type, int16_t row_group_ordinal = -1,
+						 int16_t column_ordinal = -1, int16_t page_ordinal = -1);
+
+	uint8_t *CreateFooterAad(const std::string &aad_prefix_bytes);
+
+
 public:
 	static void AddKey(ClientContext &context, const FunctionParameters &parameters);
 	static bool ValidKey(const std::string &key);
+
 };
 
 } // namespace duckdb
