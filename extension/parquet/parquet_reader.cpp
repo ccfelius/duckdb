@@ -181,8 +181,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		int8_t type_ordinal_bytes[1];
 		type_ordinal_bytes[0] = ParquetCrypto::Footer;
 
-		std::string type_ordinal_bytes_str(reinterpret_cast<char const*>(type_ordinal_bytes),
-										   1);
+		std::string type_ordinal_bytes_str(reinterpret_cast<char const *>(type_ordinal_bytes), 1);
 
 		// this is the AAD string for the footer
 		const string result_aad = file_aad + type_ordinal_bytes_str;
@@ -195,7 +194,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	// Try to read the GeoParquet metadata (if present)
 	auto geo_metadata = GeoParquetFileMetadata::TryRead(*metadata, context);
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), file_handle, std::move(geo_metadata),
-	std::move(crypto_metadata), footer_len);
+	                                                 std::move(crypto_metadata), footer_len);
 }
 
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const {
@@ -1022,22 +1021,17 @@ string ParquetReader::GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encr
 
 // Helper: store 16-bit value as little-endian into dest[0..1]
 inline void store_le16(uint8_t *dest, uint16_t v) {
-	dest[0] = static_cast<uint8_t>( v        & 0xFF );
-	dest[1] = static_cast<uint8_t>((v >> 8)  & 0xFF );
+	dest[0] = static_cast<uint8_t>(v & 0xFF);
+	dest[1] = static_cast<uint8_t>((v >> 8) & 0xFF);
 }
 
-string make_aad(const std::string &file_aad,
-					 uint8_t module_type,
-					 uint16_t row_group_ordinal,
-					 uint16_t column_ordinal,
-					 uint16_t page_ordinal)
-{
+string make_aad(const std::string &file_aad, uint8_t module_type, uint16_t row_group_ordinal, uint16_t column_ordinal,
+                uint16_t page_ordinal) {
 	static_assert(sizeof(uint16_t) == 2, "Requires 16-bit uint16_t");
-
 
 	uint32_t total_size = 1;
 
-	std::array<uint8_t, 7> ordinal_bytes{};
+	std::array<uint8_t, 7> ordinal_bytes {};
 	ordinal_bytes.fill(0);
 	ordinal_bytes[0] = module_type;
 
@@ -1053,11 +1047,11 @@ string make_aad(const std::string &file_aad,
 	}
 
 	// append raw bytes (std::string can hold embedded NULs)
-	return file_aad + std::string(reinterpret_cast<const char*>(ordinal_bytes.data()),
-								  total_size);
+	return file_aad + std::string(reinterpret_cast<const char *>(ordinal_bytes.data()), total_size);
 }
 
-uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t col_idx, int8_t module, uint16_t page_ordinal) {
+uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot, uint16_t col_idx, int8_t module,
+                             uint16_t page_ordinal) {
 	if (parquet_options.encryption_config) {
 		// rg ordinal = state.group_idx_list[state.current_group]
 		// column ordinal:
@@ -1065,18 +1059,13 @@ uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &ip
 		auto file_aad = GetFileAAD(metadata->crypto_metadata->encryption_algorithm);
 
 		// type_id (1b) + row group ordinal (2b) + col ordinal (2b) + page ordinal (2b)
+		// how to get the rowgroupordinal?
+		// uint16_t row_group_ordinal = state.group_idx_list[state.current_group];
 		uint16_t row_group_ordinal = 0;
-		uint16_t column_ordinal = col_idx;
-		uint16_t page_ordinal = -1;
 
-		if (module == ParquetCrypto::DataPageHeader) {
-			page_ordinal = 0;
-		}
-
-		auto fin = column_ordinal;
-		auto result_aad = make_aad(file_aad, module, row_group_ordinal, column_ordinal, page_ordinal);
-
-		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util, result_aad);
+		auto result_aad = make_aad(file_aad, module, row_group_ordinal, col_idx, page_ordinal);
+		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
+		                           result_aad);
 	} else {
 		return object.read(&iprot);
 	}
@@ -1098,12 +1087,6 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 
 		uint16_t row_group_ordinal = 0;
 		uint16_t column_ordinal = col_idx;
-		uint16_t page_ordinal = -1;
-
-		if (module == ParquetCrypto::DataPage) {
-			// fix for now
-			page_ordinal = 0;
-		}
 
 		int8_t ordinal_bytes[7];
 		ordinal_bytes[0] = module;
@@ -1121,10 +1104,7 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 		}
 
 		// ✅ Construct string from all bytes
-		std::string type_ordinal_bytes_str(
-			reinterpret_cast<const char*>(ordinal_bytes),
-			total_size
-		);
+		std::string type_ordinal_bytes_str(reinterpret_cast<const char *>(ordinal_bytes), total_size);
 
 		// this is the AAD string for the footer
 		std::string result_aad = file_aad + type_ordinal_bytes_str;

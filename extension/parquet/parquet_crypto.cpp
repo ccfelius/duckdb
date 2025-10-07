@@ -184,7 +184,6 @@ public:
 			throw InvalidInputException("Too many bytes requested from crypto buffer");
 		}
 
-
 		while (len != 0) {
 			if (read_buffer_offset == read_buffer_size) {
 				ReadBlock(buf);
@@ -345,15 +344,15 @@ uint8_t *ParquetCrypto::CreateModuleAad(const std::string &file_aad, int8_t modu
 
 uint8_t *ParquetCrypto::CreateFooterAad(const std::string &aad_prefix_bytes) {
 	return CreateModuleAad(aad_prefix_bytes, ParquetCrypto::Footer, static_cast<int16_t>(-1), static_cast<int16_t>(-1),
-						   static_cast<int16_t>(-1));
+	                       static_cast<int16_t>(-1));
 }
 
 uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
                              const EncryptionUtil &encryption_util_p, string aad) {
 
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot =
-	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, aad));
+	auto dprot = tproto_factory.getProtocol(
+	    duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, aad));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// We have to read the whole thing otherwise thrift throws an error before we realize we're decryption is wrong
@@ -364,7 +363,6 @@ uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
 
 	// Read the object
 	object.read(simple_prot.get());
-
 	return ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + all.GetSize() + ParquetCrypto::TAG_BYTES;
 }
 
@@ -387,14 +385,15 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
                                  const string &key, const EncryptionUtil &encryption_util_p, string aad) {
 	// Create decryption protocol
 	TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
-	auto dprot =
-	    tproto_factory.getProtocol(duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, aad));
+	auto dprot = tproto_factory.getProtocol(
+	    duckdb_base_std::make_shared<DecryptionTransport>(iprot, key, encryption_util_p, aad));
 	auto &dtrans = reinterpret_cast<DecryptionTransport &>(*dprot->getTransport());
 
 	// Read buffer
-	auto buf_size = dtrans.GetRemainingTransport() - ParquetCrypto::TAG_BYTES;
+	// auto buf_size = dtrans.GetRemainingTransport() - ParquetCrypto::TAG_BYTES;
 	// dtrans.read(buffer, buffer_size);
-	dtrans.read(buffer, buf_size);
+	// maybe here is the problemio
+	dtrans.read(buffer, buffer_size);
 
 	// Verify AES tag and read length
 	return dtrans.Finalize();

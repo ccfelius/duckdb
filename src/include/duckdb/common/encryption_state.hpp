@@ -55,8 +55,8 @@ public:
 	DUCKDB_API explicit EncryptionUtil() {};
 
 public:
-	virtual shared_ptr<EncryptionState> CreateEncryptionState(EncryptionTypes::CipherType cipher_p,
-	                                                          idx_t key_len = 0, string aad = "") const {
+	virtual shared_ptr<EncryptionState> CreateEncryptionState(EncryptionTypes::CipherType cipher_p, idx_t key_len = 0,
+	                                                          string aad = "") const {
 		return make_shared_ptr<EncryptionState>(cipher_p, key_len);
 	}
 

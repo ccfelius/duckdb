@@ -85,7 +85,8 @@ public:
 
 public:
 	//! Decrypt and read a Thrift object from the transport protocol
-	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p, string aad = "");
+	static uint32_t Read(TBase &object, TProtocol &iprot, const string &key, const EncryptionUtil &encryption_util_p,
+	                     string aad = "");
 	//! Encrypt and write a Thrift object to the transport protocol
 	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
 	                      const EncryptionUtil &encryption_util_p);
@@ -97,15 +98,13 @@ public:
 	                          const string &key, const EncryptionUtil &encryption_util_p);
 
 	uint8_t *CreateModuleAad(const std::string &file_aad, int8_t module_type, int16_t row_group_ordinal = -1,
-						 int16_t column_ordinal = -1, int16_t page_ordinal = -1);
+	                         int16_t column_ordinal = -1, int16_t page_ordinal = -1);
 
 	uint8_t *CreateFooterAad(const std::string &aad_prefix_bytes);
-
 
 public:
 	static void AddKey(ClientContext &context, const FunctionParameters &parameters);
 	static bool ValidKey(const std::string &key);
-
 };
 
 } // namespace duckdb

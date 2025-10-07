@@ -12,7 +12,6 @@
 #include "geo_parquet.hpp"
 #include "parquet_types.h"
 
-
 namespace duckdb {
 
 using duckdb_parquet::FileCryptoMetaData;
@@ -24,8 +23,8 @@ enum class ParquetCacheValidity { VALID, INVALID, UNKNOWN };
 class ParquetFileMetadataCache : public ObjectCacheEntry {
 public:
 	ParquetFileMetadataCache(unique_ptr<duckdb_parquet::FileMetaData> file_metadata, CachingFileHandle &handle,
-	                         unique_ptr<GeoParquetFileMetadata> geo_metadata, unique_ptr<FileCryptoMetaData> crypto_metadata,
-	                         idx_t footer_size);
+	                         unique_ptr<GeoParquetFileMetadata> geo_metadata,
+	                         unique_ptr<FileCryptoMetaData> crypto_metadata, idx_t footer_size);
 
 	~ParquetFileMetadataCache() override = default;
 
