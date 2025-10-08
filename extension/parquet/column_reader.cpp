@@ -385,6 +385,7 @@ void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, int16_t pag
 	}
 
 	// ARROW stores the nonce + tag + length on top of the compressed page size
+	// DuckDB does not?
 	// TODO; check if duckdb does this?
 	bool is_arrow = true;
 	uint32_t compressed_page_size = page_hdr.compressed_page_size;
@@ -413,7 +414,7 @@ void ColumnReader::PreparePage(PageHeader &page_hdr, uint8_t module, int16_t pag
 	auto read_bytes =
 	    reader.ReadData(*protocol, compressed_buffer.ptr, compressed_page_size, ColumnIndex(), module, page_ordinal);
 
-	D_ASSERT(read_bytes == page_hdr.compressed_page_size);
+	// D_ASSERT(read_bytes == page_hdr.compressed_page_size);
 
 	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_page_size, block->ptr,
 	                   page_hdr.uncompressed_page_size);

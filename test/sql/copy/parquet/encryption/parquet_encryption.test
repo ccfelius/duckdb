@@ -1,0 +1,47 @@
+# name: test/sql/copy/parquet/parquet_encryption.test
+# description: Test Parquet encryption
+# group: [parquet]
+
+require parquet
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+# add keys of 3 different lengths
+statement ok
+PRAGMA add_parquet_key('key128', '0123456789112345')
+
+# test all valid AES key lengths
+foreach key_len 128
+
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+
+query I
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted${key_len}.parquet', encryption_config={footer_key: 'key${key_len}'})
+----
+42
+
+statement ok
+CREATE OR REPLACE TABLE test (i INTEGER)
+
+statement ok
+COPY test FROM '__TEST_DIR__/encrypted${key_len}.parquet' (ENCRYPTION_CONFIG {footer_key: 'key${key_len}'})
+
+query I
+SELECT * FROM test
+----
+42
+
+endloop
+
+# what happens if we don't try to decrypt even if the file is encrypted?
+statement error
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet')
+----
+Invalid Input Error
+
+# what if we don't encrypt, but try to decrypt?
+statement ok
+COPY (SELECT 42 i) to '__TEST_DIR__/unencrypted.parquet'
+

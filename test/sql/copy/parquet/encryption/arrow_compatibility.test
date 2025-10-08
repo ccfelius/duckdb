@@ -2,6 +2,11 @@
 # description: Test Parquet encryption
 # group: [encryption]
 
+## TODO: simple parquet format fallback FIX!
+## if there is no AAD 8-byte prefix, it's DuckDB's own implementation
+## And we will automagically default to that. If there is an 8-byte suffix.
+## it is the Arrow-compatible implementation. We then default to that one (with the AAD shizzle)
+
 require parquet
 
 # parquet keys are not persisted across restarts

@@ -184,7 +184,13 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		std::string type_ordinal_bytes_str(reinterpret_cast<char const *>(type_ordinal_bytes), 1);
 
 		// this is the AAD string for the footer
-		const string result_aad = file_aad + type_ordinal_bytes_str;
+		string result_aad = file_aad + type_ordinal_bytes_str;
+		bool is_arrow = false;
+
+		if (file_aad.size() == 0) {
+			// do not use aad (duckdb parquet encryption)
+			result_aad = "";
+		}
 
 		ParquetCrypto::Read(*metadata, *file_proto, encryption_config->GetFooterKey(), encryption_util, result_aad);
 	} else {
@@ -1064,6 +1070,10 @@ uint32_t ParquetReader::Read(duckdb_apache::thrift::TBase &object, TProtocol &ip
 		uint16_t row_group_ordinal = 0;
 
 		auto result_aad = make_aad(file_aad, module, row_group_ordinal, col_idx, page_ordinal);
+		if (file_aad.size() == 0) {
+			// do not use aad (duckdb parquet encryption)
+			result_aad = "";
+		}
 		return ParquetCrypto::Read(object, iprot, parquet_options.encryption_config->GetFooterKey(), *encryption_util,
 		                           result_aad);
 	} else {
@@ -1108,6 +1118,11 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 
 		// this is the AAD string for the footer
 		std::string result_aad = file_aad + type_ordinal_bytes_str;
+
+		if (file_aad.size() == 0) {
+			// do not use aad (duckdb parquet encryption)
+			result_aad = "";
+		}
 
 		return ParquetCrypto::ReadData(iprot, buffer, buffer_size, parquet_options.encryption_config->GetFooterKey(),
 		                               *encryption_util, result_aad);
