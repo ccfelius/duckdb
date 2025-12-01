@@ -92,10 +92,10 @@ void GetFileAAD(const duckdb_parquet::EncryptionAlgorithm &encryption_algorithm)
 	if (encryption_algorithm.__isset.AES_GCM_V1) {
 		if (!encryption_algorithm.AES_GCM_V1.aad_file_unique.empty()) {
 			throw InvalidInputException("File is encrypted but not compatible with DuckDB Parquet Encryption");
+			// return encryption_algorithm.AES_GCM_V1.aad_file_unique
 		};
 	} else if (encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 		throw InvalidInputException("File is encrypted but AES_GCM_CTR_V1 is not supported");
-		// return encryption_algorithm.AES_GCM_CTR_V1.aad_file_unique;
 	} else {
 		throw InternalException("File is encrypted but no encryption algorithm is set");
 	}
