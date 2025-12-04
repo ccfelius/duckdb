@@ -90,7 +90,7 @@ static void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t
 	}
 }
 
-unique_ptr<AdditionalAuthenticatedData> ParquetReader::GetFooterAdditionalAuthenticatedData(string aad_prefix) {
+unique_ptr<AdditionalAuthenticatedData> ParquetReader::GetFooterAdditionalAuthenticatedData(const string& aad_prefix) {
 	auto prefix_size = aad_prefix.size();
 	if (prefix_size == 0) {
 		// DuckDB Encrypted Parquet File written before V1.5

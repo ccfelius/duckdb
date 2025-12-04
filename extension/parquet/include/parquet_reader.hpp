@@ -210,7 +210,7 @@ public:
 	static void GetPartitionStats(const duckdb_parquet::FileMetaData &metadata, vector<PartitionStatistics> &result);
 	static bool MetadataCacheEnabled(ClientContext &context);
 	static shared_ptr<ParquetFileMetadataCache> GetMetadataCacheEntry(ClientContext &context, const OpenFileInfo &file);
-	static unique_ptr<AdditionalAuthenticatedData> GetFooterAdditionalAuthenticatedData(string aad_prefix);
+	static unique_ptr<AdditionalAuthenticatedData> GetFooterAdditionalAuthenticatedData(const string& aad_prefix);
 
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
