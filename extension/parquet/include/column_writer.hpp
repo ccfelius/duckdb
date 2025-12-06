@@ -13,6 +13,8 @@
 #include "parquet_column_schema.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
+#include <parquet_crypto.hpp>
+
 namespace duckdb {
 class MemoryStream;
 class ParquetWriter;
@@ -192,6 +194,7 @@ public:
 	ParquetColumnSchema column_schema;
 	vector<string> schema_path;
 	bool can_have_nulls;
+	CryptoMetaData metadata;
 
 protected:
 	vector<unique_ptr<ColumnWriter>> child_writers;

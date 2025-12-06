@@ -29,6 +29,10 @@ void EncryptionState::GenerateRandomData(data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
+void EncryptionState::GenerateRandomDataInsecure(data_ptr_t, idx_t) {
+	// generate random data here
+}
+
 string EncryptionTypes::CipherToString(CipherType cipher_p) {
 	switch (cipher_p) {
 	case GCM:

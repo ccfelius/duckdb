@@ -280,6 +280,10 @@ uint32_t ParquetWriter::Write(const duckdb_apache::thrift::TBase &object) {
 	}
 }
 
+uint32_t ParquetWriter::WriteEncrypted(const duckdb_apache::thrift::TBase &object) {
+	return ParquetCrypto::Write(object, *protocol, encryption_config->GetFooterKey(), *encryption_util);
+}
+
 uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size) {
 	if (encryption_config) {
 		return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey(),
@@ -288,6 +292,11 @@ uint32_t ParquetWriter::WriteData(const const_data_ptr_t buffer, const uint32_t 
 		protocol->getTransport()->write(buffer, buffer_size);
 		return buffer_size;
 	}
+}
+
+uint32_t ParquetWriter::WriteDataEncrypted(const const_data_ptr_t buffer, const uint32_t buffer_size) {
+	return ParquetCrypto::WriteData(*protocol, buffer, buffer_size, encryption_config->GetFooterKey(),
+	                                *encryption_util);
 }
 
 static void VerifyUniqueNames(const vector<string> &names) {
@@ -470,6 +479,8 @@ void ParquetWriter::AnalyzeSchema(ColumnDataCollection &buffer, vector<unique_pt
 
 	for (idx_t i = 0; i < column_writers.size(); i++) {
 		auto &writer = column_writers[i];
+		// column ordinal? put it in the column writer?
+		auto column_index = writer->SchemaIndex();
 		auto &state = states[i];
 		if (!state) {
 			continue;

@@ -128,14 +128,16 @@ public:
 	                     unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
 	//! Encrypt and write a Thrift object to the transport protocol
 	static uint32_t Write(const TBase &object, TProtocol &oprot, const string &key,
-	                      const EncryptionUtil &encryption_util_p);
+	                      const EncryptionUtil &encryption_util_p,
+	                      unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
 	//! Decrypt and read a buffer
 	static uint32_t ReadData(TProtocol &iprot, const data_ptr_t buffer, const uint32_t buffer_size, const string &key,
 	                         const EncryptionUtil &encryption_util_p,
 	                         unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
 	//! Encrypt and write a buffer to a file
 	static uint32_t WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
-	                          const string &key, const EncryptionUtil &encryption_util_p);
+	                          const string &key, const EncryptionUtil &encryption_util_p,
+	                          unique_ptr<AdditionalAuthenticatedData> aad = nullptr);
 
 public:
 	static void AddKey(ClientContext &context, const FunctionParameters &parameters);

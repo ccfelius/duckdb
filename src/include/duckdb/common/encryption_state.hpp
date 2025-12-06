@@ -38,6 +38,7 @@ public:
 	DUCKDB_API virtual size_t Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out, idx_t out_len);
 	DUCKDB_API virtual size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
 	DUCKDB_API virtual void GenerateRandomData(data_ptr_t data, idx_t len);
+	DUCKDB_API void GenerateRandomDataInsecure(data_ptr_t data, idx_t len);
 
 protected:
 	EncryptionTypes::CipherType cipher;

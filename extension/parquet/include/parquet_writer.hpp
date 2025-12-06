@@ -177,6 +177,8 @@ public:
 
 	uint32_t Write(const duckdb_apache::thrift::TBase &object);
 	uint32_t WriteData(const const_data_ptr_t buffer, const uint32_t buffer_size);
+	uint32_t WriteEncrypted(const duckdb_apache::thrift::TBase &object);
+	uint32_t WriteDataEncrypted(const const_data_ptr_t buffer, const uint32_t buffer_size);
 
 	GeoParquetFileMetadata &GetGeoParquetData();
 
@@ -211,6 +213,7 @@ private:
 	shared_ptr<EncryptionUtil> encryption_util;
 	ParquetVersion parquet_version;
 	GeoParquetVersion geoparquet_version;
+	CryptoMetaData aad_crypto_metadata;
 
 	unique_ptr<BufferedFileWriter> writer;
 	//! Atomics to reduce contention when rotating writes to multiple Parquet files

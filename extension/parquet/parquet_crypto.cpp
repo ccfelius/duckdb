@@ -405,7 +405,7 @@ uint32_t ParquetCrypto::Read(TBase &object, TProtocol &iprot, const string &key,
 }
 
 uint32_t ParquetCrypto::Write(const TBase &object, TProtocol &oprot, const string &key,
-                              const EncryptionUtil &encryption_util_p) {
+                              const EncryptionUtil &encryption_util_p, unique_ptr<AdditionalAuthenticatedData> aad) {
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
 	auto eprot =
@@ -436,7 +436,8 @@ uint32_t ParquetCrypto::ReadData(TProtocol &iprot, const data_ptr_t buffer, cons
 }
 
 uint32_t ParquetCrypto::WriteData(TProtocol &oprot, const const_data_ptr_t buffer, const uint32_t buffer_size,
-                                  const string &key, const EncryptionUtil &encryption_util_p) {
+                                  const string &key, const EncryptionUtil &encryption_util_p,
+                                  unique_ptr<AdditionalAuthenticatedData> aad) {
 	// FIXME: we know the size upfront so we could do a streaming write instead of this
 	// Create encryption protocol
 	TCompactProtocolFactoryT<EncryptionTransport> tproto_factory;
