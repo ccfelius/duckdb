@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-class ARTKey {
+class ARTKey : public IndexKey {
 public:
 	ARTKey();
 	ARTKey(data_ptr_t data, idx_t len);

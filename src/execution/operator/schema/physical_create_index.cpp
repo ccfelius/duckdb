@@ -57,10 +57,22 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 }
 
 class CreateIndexLocalSinkState : public LocalSinkState {
+	// public:
+	// 	DataChunk key_chunk;
+	// 	DataChunk row_chunk;
 public:
+	explicit CreateIndexLocalSinkState(ClientContext &context) : arena_allocator(Allocator::Get(context)) {};
+
+	unique_ptr<BoundIndex> local_index;
+	ArenaAllocator arena_allocator;
 	unique_ptr<IndexBuildLocalState> lstate;
+
 	DataChunk key_chunk;
-	DataChunk row_chunk;
+	unsafe_vector<IndexKey> keys;
+	vector<column_t> key_column_ids;
+
+	DataChunk row_id_chunk;
+	unsafe_vector<IndexKey> row_ids;
 };
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {

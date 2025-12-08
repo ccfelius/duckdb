@@ -3,16 +3,48 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/execution/index/index_key.hpp"
 #include "duckdb/execution/index/art/art_operator.hpp"
 
 namespace duckdb {
+
+template <>
+ARTKey ARTKey::CreateIndexKey(ArenaAllocator &allocator, string_t value) {
+	auto string_data = const_data_ptr_cast(value.GetData());
+	auto string_len = value.GetSize();
+
+	// We escape \00 and \01.
+	idx_t escape_count = 0;
+	for (idx_t i = 0; i < string_len; i++) {
+		if (string_data[i] <= 1) {
+			escape_count++;
+		}
+	}
+
+	idx_t key_len = string_len + escape_count + 1;
+	auto key_data = allocator.Allocate(key_len);
+
+	// Copy over the data and add escapes.
+	idx_t pos = 0;
+	for (idx_t i = 0; i < string_len; i++) {
+		if (string_data[i] <= 1) {
+			// Add escape.
+			key_data[pos++] = '\01';
+		}
+		key_data[pos++] = string_data[i];
+	}
+
+	// End with a null-terminator.
+	key_data[pos] = '\0';
+	return IndexKey(key_data, key_len);
+}
+
 namespace {
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -21,6 +53,58 @@ namespace {
 class ARTBuildBindData : public IndexBuildBindData {
 public:
 	bool sorted = false;
+};
+
+template <>
+ARTKey ARTKey::CreateIndexKey(ArenaAllocator &allocator, const char *value) {
+	return IndexKey::CreateIndexKey(allocator, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
+}
+
+template <>
+void ARTKey::CreateIndexKey(ArenaAllocator &allocator, IndexKey &key, string_t value) {
+	key = IndexKey::CreateIndexKey<string_t>(allocator, value);
+}
+
+template <>
+void IndexKey::CreateIndexKey(ArenaAllocator &allocator, IndexKey &key, const char *value) {
+	IndexKey::CreateIndexKey(allocator, key, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
+}
+
+IndexKey IndexKey::CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value) {
+	D_ASSERT(type == value.type().InternalType());
+	switch (type) {
+	case PhysicalType::BOOL:
+		return IndexKey::CreateIndexKey<bool>(allocator, value);
+	case PhysicalType::INT8:
+		return IndexKey::CreateIndexKey<int8_t>(allocator, value);
+	case PhysicalType::INT16:
+		return IndexKey::CreateIndexKey<int16_t>(allocator, value);
+	case PhysicalType::INT32:
+		return IndexKey::CreateIndexKey<int32_t>(allocator, value);
+	case PhysicalType::INT64:
+		return IndexKey::CreateIndexKey<int64_t>(allocator, value);
+	case PhysicalType::UINT8:
+		return IndexKey::CreateIndexKey<uint8_t>(allocator, value);
+	case PhysicalType::UINT16:
+		return IndexKey::CreateIndexKey<uint16_t>(allocator, value);
+	case PhysicalType::UINT32:
+		return IndexKey::CreateIndexKey<uint32_t>(allocator, value);
+	case PhysicalType::UINT64:
+		return IndexKey::CreateIndexKey<uint64_t>(allocator, value);
+	case PhysicalType::INT128:
+		return IndexKey::CreateIndexKey<hugeint_t>(allocator, value);
+	case PhysicalType::UINT128:
+		return IndexKey::CreateIndexKey<uhugeint_t>(allocator, value);
+	case PhysicalType::FLOAT:
+		return IndexKey::CreateIndexKey<float>(allocator, value);
+	case PhysicalType::DOUBLE:
+		return IndexKey::CreateIndexKey<double>(allocator, value);
+	case PhysicalType::VARCHAR:
+		return IndexKey::CreateIndexKey<string_t>(allocator, value);
+	default:
+		throw InternalException("Invalid type for the ART key.");
+	}
+}
 };
 
 unique_ptr<IndexBuildBindData> ARTBuildBind(IndexBuildBindInput &input) {
@@ -181,5 +265,4 @@ IndexType ART::GetARTIndexType() {
 	art_index_type.build_finalize = ARTBuildFinalize;
 	return art_index_type;
 }
-
 } // namespace duckdb

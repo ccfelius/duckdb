@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/index/bound_index.hpp"
+#include "duckdb/execution/index/index_key.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/array.hpp"
 
@@ -156,6 +157,20 @@ private:
 	string ToStringInternal(bool display_ascii);
 	void VerifyInternal();
 	void VerifyAllocationsInternal();
+};
+
+class ARTKey : public IndexKey {
+public:
+	ARTKey() : IndexKey() {
+	}
+
+	ARTKey(data_ptr_t data, idx_t len) : IndexKey(data, len) {
+	}
+
+	ARTKey(ArenaAllocator &allocator, idx_t len) : IndexKey(allocator, len) {
+	}
+
+	ARTKey CreateIndexKey(ArenaAllocator &allocator, string_t value);
 };
 
 template <>
