@@ -47,11 +47,11 @@ public:
 	ArenaAllocator arena_allocator;
 
 	DataChunk key_chunk;
-	unsafe_vector<ARTKey> keys;
+	unsafe_vector<unique_ptr<IndexKey>> keys;
 	vector<column_t> key_column_ids;
 
 	DataChunk row_id_chunk;
-	unsafe_vector<ARTKey> row_ids;
+	unsafe_vector<unique_ptr<IndexKey>> row_ids;
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateARTIndex::GetGlobalSinkState(ClientContext &context) const {
