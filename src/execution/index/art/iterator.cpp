@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+const uint8_t Iterator::ROW_ID_SIZE;
+
 //===--------------------------------------------------------------------===//
 // IteratorKey
 //===--------------------------------------------------------------------===//
@@ -76,8 +78,6 @@ bool Iterator::Scan(const unique_ptr<IndexKey> &upper_bound, const idx_t max_cou
 					return false;
 				}
 				row_id[ROW_ID_SIZE - 1] = byte;
-				auto test = &row_id[0];
-				// FIXME: should we change this to type IndexKey?
 				unique_ptr<IndexKey> key = make_uniq<ARTKey>(&row_id[0], ROW_ID_SIZE);
 				row_ids.insert(key->GetRowId());
 				if (byte == NumericLimits<uint8_t>::Maximum()) {
@@ -158,7 +158,7 @@ bool Iterator::LowerBound(const Node &node, const unique_ptr<IndexKey> &key, con
 		// We found any leaf node, or a gate.
 		if (ref.get().IsAnyLeaf() || ref.get().GetGateStatus() == GateStatus::GATE_SET) {
 			D_ASSERT(status == GateStatus::GATE_NOT_SET);
-			D_ASSERT(current_key.Size() == key.len);
+			D_ASSERT(current_key.Size() == key->len);
 			if (!equal && current_key.Contains(key)) {
 				return Next();
 			}

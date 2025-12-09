@@ -38,12 +38,18 @@ public:
 
 	template <class T>
 	static inline void CreateARTKey(ArenaAllocator &allocator, unique_ptr<IndexKey> &key, T value) {
+		if (!key) {
+			key = make_uniq<ARTKey>();
+		}
 		key->data = ARTKey::CreateData<T>(allocator, value);
 		key->len = sizeof(value);
 	}
 
 	template <class T>
 	static inline void CreateARTKey(ArenaAllocator &allocator, unique_ptr<IndexKey> &key, Value value) {
+		if (!key) {
+			key = make_uniq<ARTKey>();
+		}
 		key->data = ARTKey::CreateData<T>(allocator, value.GetValueUnsafe<T>());
 		key->len = sizeof(value);
 	}

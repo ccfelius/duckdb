@@ -445,7 +445,7 @@ ARTConflictType ART::Build(unsafe_vector<unique_ptr<IndexKey>> &keys, unsafe_vec
 	set<row_t> row_ids_debug;
 	Iterator it(*this);
 	it.FindMinimum(tree);
-	ARTKey empty_key = ARTKey();
+	unique_ptr<IndexKey> empty_key = make_uniq<ARTKey>();
 	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids_debug, false);
 	D_ASSERT(row_count == row_ids_debug.size());
 #endif

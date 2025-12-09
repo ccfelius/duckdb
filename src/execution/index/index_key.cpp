@@ -67,7 +67,7 @@ void IndexKey::Concat(ArenaAllocator &allocator, const unique_ptr<IndexKey> &oth
 }
 
 idx_t IndexKey::GetMismatchPos(const unique_ptr<IndexKey> &other, const idx_t start) const {
-	D_ASSERT(len <= other.len);
+	D_ASSERT(len <= other->len);
 	D_ASSERT(start <= len);
 	for (idx_t i = start; i < other->len; i++) {
 		if (data[i] != other->data[i]) {
