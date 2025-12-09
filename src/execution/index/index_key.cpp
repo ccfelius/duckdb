@@ -18,63 +18,35 @@ unique_ptr<IndexKey> IndexKey::CreateKey(ArenaAllocator &allocator, PhysicalType
 }
 
 void IndexKey::VerifyKeyLength(const idx_t max_len) const {
-	if (len > max_len) {
-		throw InvalidInputException("key size of %d bytes exceeds the maximum size of %d bytes for this key", len,
-		                            max_len);
-	}
+	throw NotImplementedException("IndexKey Abstract Class is called");
+}
+
+data_t &IndexKey::operator[](idx_t i) {
+	throw NotImplementedException("IndexKey Abstract Class is called");
+}
+
+const data_t &IndexKey::operator[](idx_t i) const {
+	throw NotImplementedException("IndexKey Abstract Class is called");
 }
 
 bool IndexKey::operator>(const IndexKey &key) const {
-	for (idx_t i = 0; i < MinValue(len, key.len); i++) {
-		if (data[i] > key.data[i]) {
-			return true;
-		} else if (data[i] < key.data[i]) {
-			return false;
-		}
-	}
-	return len > key.len;
+	throw NotImplementedException("IndexKey Abstract Class is called");
 }
 
 bool IndexKey::operator>=(const IndexKey &key) const {
-	for (idx_t i = 0; i < MinValue(len, key.len); i++) {
-		if (data[i] > key.data[i]) {
-			return true;
-		} else if (data[i] < key.data[i]) {
-			return false;
-		}
-	}
-	return len >= key.len;
+	throw NotImplementedException("IndexKey Abstract Class is called");
 }
 
 bool IndexKey::operator==(const IndexKey &key) const {
-	if (len != key.len) {
-		return false;
-	}
-	for (idx_t i = 0; i < len; i++) {
-		if (data[i] != key.data[i]) {
-			return false;
-		}
-	}
-	return true;
+	throw NotImplementedException("IndexKey Abstract Class is called");
 }
 
 void IndexKey::Concat(ArenaAllocator &allocator, const unique_ptr<IndexKey> &other) {
-	auto compound_data = allocator.Allocate(len + other->len);
-	memcpy(compound_data, data, len);
-	memcpy(compound_data + len, other->data, other->len);
-	len += other->len;
-	data = compound_data;
+	throw NotImplementedException("IndexKey Abstract Class is called");
 }
 
 idx_t IndexKey::GetMismatchPos(const unique_ptr<IndexKey> &other, const idx_t start) const {
-	D_ASSERT(len <= other->len);
-	D_ASSERT(start <= len);
-	for (idx_t i = start; i < other->len; i++) {
-		if (data[i] != other->data[i]) {
-			return i;
-		}
-	}
-	return DConstants::INVALID_INDEX;
+	throw NotImplementedException("IndexKey Abstract Class is called");
 }
 
 row_t IndexKey::GetRowId() const {

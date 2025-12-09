@@ -108,7 +108,7 @@ unique_ptr<IndexKey> ARTKey::CreateKeyStatic(ArenaAllocator &allocator, Physical
 	}
 }
 
-bool ARTKey::operator>(const ARTKey &key) const {
+bool ARTKey::operator>(const IndexKey &key) const {
 	for (idx_t i = 0; i < MinValue(len, key.len); i++) {
 		if (data[i] > key.data[i]) {
 			return true;
@@ -119,7 +119,7 @@ bool ARTKey::operator>(const ARTKey &key) const {
 	return len > key.len;
 }
 
-bool ARTKey::operator>=(const ARTKey &key) const {
+bool ARTKey::operator>=(const IndexKey &key) const {
 	for (idx_t i = 0; i < MinValue(len, key.len); i++) {
 		if (data[i] > key.data[i]) {
 			return true;
@@ -130,7 +130,7 @@ bool ARTKey::operator>=(const ARTKey &key) const {
 	return len >= key.len;
 }
 
-bool ARTKey::operator==(const ARTKey &key) const {
+bool ARTKey::operator==(const IndexKey &key) const {
 	if (len != key.len) {
 		return false;
 	}

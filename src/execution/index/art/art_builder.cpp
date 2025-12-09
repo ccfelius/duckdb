@@ -23,7 +23,7 @@ ARTConflictType ARTBuilder::Build() {
 
 		// Increment the depth until we reach a leaf or find a mismatching byte.
 		auto prefix_depth = entry.depth;
-		while (start->len != entry.depth && start->ByteMatches(end, entry.depth)) {
+		while (start->len != entry.depth && start->ByteMatches(*end, entry.depth)) {
 			entry.depth++;
 		}
 

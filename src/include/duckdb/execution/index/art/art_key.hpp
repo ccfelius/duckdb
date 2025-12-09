@@ -58,20 +58,20 @@ public:
 	static unique_ptr<IndexKey> CreateKeyStatic(ArenaAllocator &allocator, PhysicalType type, Value &value);
 
 public:
-	data_t &operator[](idx_t i) {
+	data_t &operator[](idx_t i) override {
 		return data[i];
 	}
-	const data_t &operator[](idx_t i) const {
+	const data_t &operator[](idx_t i) const override {
 		return data[i];
 	}
-	bool operator>(const ARTKey &key) const;
-	bool operator>=(const ARTKey &key) const;
-	bool operator==(const ARTKey &key) const;
+	bool operator>(const IndexKey &key) const override;
+	bool operator>=(const IndexKey &key) const override;
+	bool operator==(const IndexKey &key) const override;
 
-	inline bool ByteMatches(const ARTKey &other, idx_t depth) const {
+	inline bool ByteMatches(const IndexKey &other, idx_t depth) const override {
 		return data[depth] == other[depth];
 	}
-	inline bool Empty() const {
+	inline bool Empty() const override {
 		return len == 0;
 	}
 

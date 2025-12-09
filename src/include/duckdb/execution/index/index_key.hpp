@@ -33,21 +33,18 @@ public:
 	virtual unique_ptr<IndexKey> CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value);
 
 public:
-	data_t &operator[](idx_t i) {
-		return data[i];
-	}
-	const data_t &operator[](idx_t i) const {
-		return data[i];
-	}
-	bool operator>(const IndexKey &key) const;
-	bool operator>=(const IndexKey &key) const;
-	bool operator==(const IndexKey &key) const;
+	virtual data_t &operator[](idx_t i);
+	virtual const data_t &operator[](idx_t i) const;
+	virtual bool operator>(const IndexKey &key) const;
+	virtual bool operator>=(const IndexKey &key) const;
+	virtual bool operator==(const IndexKey &key) const;
 
-	inline bool ByteMatches(const unique_ptr<IndexKey> &other, idx_t depth) const {
-		return data[depth] == (*other)[depth];
+	virtual inline bool ByteMatches(const IndexKey &other, idx_t depth) const {
+		throw NotImplementedException("IndexKey Abstract Class is called");
 	}
-	inline bool Empty() const {
-		return len == 0;
+
+	virtual inline bool Empty() const {
+		throw NotImplementedException("IndexKey Abstract Class is called");
 	}
 
 	virtual void Concat(ArenaAllocator &allocator, const unique_ptr<IndexKey> &other);
