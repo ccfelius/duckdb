@@ -20,7 +20,7 @@ enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACT
 enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
 
 class ConflictManager;
-class ARTKey;
+class IndexKey;
 class ARTKeySection;
 class FixedSizeAllocator;
 
@@ -93,7 +93,8 @@ public:
 	void CommitDrop(IndexLock &index_lock) override;
 
 	//! Build an ART from a vector of sorted keys and their row IDs.
-	ARTConflictType Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
+	ARTConflictType Build(unsafe_vector<unique_ptr<IndexKey>> &keys, unsafe_vector<unique_ptr<IndexKey>> &row_ids,
+	                      const idx_t row_count);
 
 	//! Merge another ART into this ART. Both must be locked.
 	//! FIXME: Return ARTConflictType instead of a boolean.
@@ -112,9 +113,10 @@ public:
 
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
-	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
-	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
-	                        unsafe_vector<ARTKey> &row_id_keys);
+	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<unique_ptr<IndexKey>> &keys);
+	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids,
+	                        unsafe_vector<unique_ptr<IndexKey>> &keys,
+	                        unsafe_vector<unique_ptr<IndexKey>> &row_id_keys);
 
 	//! Verifies the nodes.
 	void Verify(IndexLock &l) override;
@@ -127,16 +129,16 @@ public:
 	string ToString(IndexLock &l, bool display_ascii = false) override;
 
 private:
-	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
-	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids);
-	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
-	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
-	                      set<row_t> &row_ids);
+	bool SearchEqual(unique_ptr<IndexKey> &key, idx_t max_count, set<row_t> &row_ids);
+	bool SearchGreater(unique_ptr<IndexKey> &key, bool equal, idx_t max_count, set<row_t> &row_ids);
+	bool SearchLess(unique_ptr<IndexKey> &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
+	bool SearchCloseRange(unique_ptr<IndexKey> &lower_bound, unique_ptr<IndexKey> &upper_bound, bool left_equal,
+	                      bool right_equal, idx_t max_count, set<row_t> &row_ids);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> delete_art, ConflictManager &manager,
-	                optional_idx &conflict_idx, idx_t i);
+	void VerifyLeaf(const Node &leaf, const unique_ptr<IndexKey> &key, optional_ptr<ART> delete_art,
+	                ConflictManager &manager, optional_idx &conflict_idx, idx_t i);
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
@@ -158,25 +160,5 @@ private:
 	void VerifyInternal();
 	void VerifyAllocationsInternal();
 };
-
-class ARTKey : public IndexKey {
-public:
-	ARTKey() : IndexKey() {
-	}
-
-	ARTKey(data_ptr_t data, idx_t len) : IndexKey(data, len) {
-	}
-
-	ARTKey(ArenaAllocator &allocator, idx_t len) : IndexKey(allocator, len) {
-	}
-
-	ARTKey CreateIndexKey(ArenaAllocator &allocator, string_t value);
-};
-
-template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
-
-template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 
 } // namespace duckdb

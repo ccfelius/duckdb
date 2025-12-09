@@ -14,6 +14,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
+#include "duckdb/execution/index/index_key.hpp"
 
 namespace duckdb {
 
@@ -23,34 +24,32 @@ public:
 	ARTKey(data_ptr_t data, idx_t len);
 	ARTKey(ArenaAllocator &allocator, idx_t len);
 
-	idx_t len;
-	data_ptr_t data;
-
 public:
 	template <class T>
-	static inline ARTKey CreateARTKey(ArenaAllocator &allocator, T value) {
+	static inline unique_ptr<IndexKey> CreateARTKey(ArenaAllocator &allocator, T value) {
 		auto data = ARTKey::CreateData<T>(allocator, value);
-		return ARTKey(data, sizeof(value));
+		return make_uniq<ARTKey>(data, sizeof(value));
 	}
 
 	template <class T>
-	static inline ARTKey CreateARTKey(ArenaAllocator &allocator, Value &value) {
+	static inline unique_ptr<IndexKey> CreateARTKey(ArenaAllocator &allocator, Value &value) {
 		return CreateARTKey(allocator, value.GetValueUnsafe<T>());
 	}
 
 	template <class T>
-	static inline void CreateARTKey(ArenaAllocator &allocator, ARTKey &key, T value) {
-		key.data = ARTKey::CreateData<T>(allocator, value);
-		key.len = sizeof(value);
+	static inline void CreateARTKey(ArenaAllocator &allocator, unique_ptr<IndexKey> &key, T value) {
+		key->data = ARTKey::CreateData<T>(allocator, value);
+		key->len = sizeof(value);
 	}
 
 	template <class T>
-	static inline void CreateARTKey(ArenaAllocator &allocator, ARTKey &key, Value value) {
-		key.data = ARTKey::CreateData<T>(allocator, value.GetValueUnsafe<T>());
-		key.len = sizeof(value);
+	static inline void CreateARTKey(ArenaAllocator &allocator, unique_ptr<IndexKey> &key, Value value) {
+		key->data = ARTKey::CreateData<T>(allocator, value.GetValueUnsafe<T>());
+		key->len = sizeof(value);
 	}
 
-	static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value);
+	unique_ptr<IndexKey> CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value) override;
+	static unique_ptr<IndexKey> CreateKeyStatic(ArenaAllocator &allocator, PhysicalType type, Value &value);
 
 public:
 	data_t &operator[](idx_t i) {
@@ -70,10 +69,10 @@ public:
 		return len == 0;
 	}
 
-	void Concat(ArenaAllocator &allocator, const ARTKey &other);
-	row_t GetRowId() const;
-	idx_t GetMismatchPos(const ARTKey &other, const idx_t start) const;
-	void VerifyKeyLength(const idx_t max_len) const;
+	void Concat(ArenaAllocator &allocator, const unique_ptr<IndexKey> &other) override;
+	idx_t GetMismatchPos(const unique_ptr<IndexKey> &other, const idx_t start) const override;
+	row_t GetRowId() const override;
+	void VerifyKeyLength(const idx_t max_len) const override;
 
 private:
 	template <class T>
@@ -85,10 +84,10 @@ private:
 };
 
 template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value);
+unique_ptr<IndexKey> ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value);
 template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const char *value);
+unique_ptr<IndexKey> ARTKey::CreateARTKey(ArenaAllocator &allocator, const char *value);
 template <>
-void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, string_t value);
+void ARTKey::CreateARTKey(ArenaAllocator &allocator, unique_ptr<IndexKey> &key, string_t value);
 
 } // namespace duckdb

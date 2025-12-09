@@ -45,9 +45,9 @@ public:
 	}
 
 	//! Returns true, if key_bytes contains all bytes of key.
-	bool Contains(const ARTKey &key) const;
+	bool Contains(const unique_ptr<IndexKey> &key) const;
 	//! Returns true, if key_bytes is greater than [or equal to] the key.
-	bool GreaterThan(const ARTKey &key, const bool equal, const uint8_t nested_depth) const;
+	bool GreaterThan(const unique_ptr<IndexKey> &key, const bool equal, const uint8_t nested_depth) const;
 
 private:
 	unsafe_vector<uint8_t> key_bytes;
@@ -64,13 +64,13 @@ public:
 
 public:
 	//! Scans the tree, starting at the current top node on the stack, and ending at upper_bound.
-	//! If upper_bound is the empty ARTKey, than there is no upper bound.
-	bool Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t> &row_ids, const bool equal);
+	//! If upper_bound is the empty unique_ptr<IndexKey>, than there is no upper bound.
+	bool Scan(const unique_ptr<IndexKey> &upper_bound, const idx_t max_count, set<row_t> &row_ids, const bool equal);
 	//! Finds the minimum (leaf) of the current subtree.
 	void FindMinimum(const Node &node);
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower
 	//! bound exceeds the maximum value of the ART.
-	bool LowerBound(const Node &node, const ARTKey &key, const bool equal);
+	bool LowerBound(const Node &node, const unique_ptr<IndexKey> &key, const bool equal);
 
 	//! Returns the nested depth.
 	uint8_t GetNestedDepth() const {

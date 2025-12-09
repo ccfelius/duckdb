@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-class ARTKey;
+class IndexKey;
 
 //! Prefix is a wrapper class to access a prefix.
 //! The prefix contains up to the ART's prefix size bytes and an additional byte for the count.
@@ -44,7 +44,7 @@ public:
 
 public:
 	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
-	static void New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count);
+	static void New(ART &art, reference<Node> &ref, const unique_ptr<IndexKey> &key, const idx_t depth, idx_t count);
 
 	//! Concatenates parent -> prev_node4 -> child.
 	static void Concat(ART &art, Node &parent, Node &node4, const Node child, uint8_t byte,

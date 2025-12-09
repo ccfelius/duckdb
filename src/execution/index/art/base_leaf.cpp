@@ -70,7 +70,7 @@ void Node7Leaf::InsertByte(ART &art, Node &node, const uint8_t byte) {
 	Node15Leaf::InsertByte(art, node, byte);
 }
 
-void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte, const ARTKey &row_id) {
+void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte, const unique_ptr<IndexKey> &row_id) {
 	idx_t remainder;
 	{
 		auto n7_handle = DeleteByteInternal(art, node, byte);
@@ -84,7 +84,7 @@ void Node7Leaf::DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byt
 		D_ASSERT(node.GetGateStatus() == GateStatus::GATE_NOT_SET);
 
 		// Get the remaining row ID.
-		remainder = UnsafeNumericCast<idx_t>(row_id.GetRowId()) & AND_LAST_BYTE;
+		remainder = UnsafeNumericCast<idx_t>(row_id->GetRowId()) & AND_LAST_BYTE;
 		remainder |= UnsafeNumericCast<idx_t>(n7.key[0]);
 
 		// Free the prefix (nodes) and inline the remainder.

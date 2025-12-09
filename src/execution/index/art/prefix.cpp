@@ -51,13 +51,13 @@ Prefix Prefix::NewInternal(ART &art, Node &node, const data_ptr_t data, const ui
 	return prefix;
 }
 
-void Prefix::New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count) {
+void Prefix::New(ART &art, reference<Node> &ref, const unique_ptr<IndexKey> &key, const idx_t depth, idx_t count) {
 	idx_t offset = 0;
 
 	while (count) {
 		auto min = MinValue(UnsafeNumericCast<idx_t>(Count(art)), count);
 		auto this_count = UnsafeNumericCast<uint8_t>(min);
-		auto prefix = NewInternal(art, ref, key.data, this_count, offset + depth);
+		auto prefix = NewInternal(art, ref, key->data, this_count, offset + depth);
 
 		ref = *prefix.ptr;
 		offset += this_count;

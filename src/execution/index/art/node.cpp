@@ -169,7 +169,7 @@ void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chil
 //===--------------------------------------------------------------------===//
 
 void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status,
-                       const ARTKey &row_id) {
+                       const unique_ptr<IndexKey> &row_id) {
 	D_ASSERT(node.HasMetadata());
 
 	auto type = node.GetType();

@@ -88,7 +88,7 @@ public:
 	//! Insert a byte.
 	static void InsertByte(ART &art, Node &node, const uint8_t byte);
 	//! Delete a byte.
-	static void DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte, const ARTKey &row_id);
+	static void DeleteByte(ART &art, Node &node, Node &prefix, const uint8_t byte, const unique_ptr<IndexKey> &row_id);
 
 private:
 	static void ShrinkNode15Leaf(ART &art, Node &node7_leaf, Node &node15_leaf);

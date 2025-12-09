@@ -39,7 +39,7 @@ void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, Node &left, Node &right
 	auto left_key = ARTKey::CreateARTKey<row_t>(arena, left_row_id);
 	auto right_key = ARTKey::CreateARTKey<row_t>(arena, right_row_id);
 
-	auto pos = left_key.GetMismatchPos(right_key, depth);
+	auto pos = left_key->GetMismatchPos(right_key, depth);
 
 	left.Clear();
 	reference<Node> node(left);
@@ -48,8 +48,8 @@ void Leaf::MergeInlined(ArenaAllocator &arena, ART &art, Node &left, Node &right
 		Prefix::New(art, node, left_key, depth, pos - depth);
 	}
 
-	auto left_byte = left_key.data[pos];
-	auto right_byte = right_key.data[pos];
+	auto left_byte = left_key->data[pos];
+	auto right_byte = right_key->data[pos];
 
 	if (pos == Prefix::ROW_ID_COUNT) {
 		// The row IDs differ on the last byte.
@@ -114,7 +114,7 @@ void Leaf::TransformToDeprecated(ART &art, Node &node) {
 	set<row_t> row_ids;
 	Iterator it(art);
 	it.FindMinimum(node);
-	ARTKey empty_key = ARTKey();
+	unique_ptr<IndexKey> empty_key = make_uniq<ARTKey>();
 	it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids, false);
 	Node::FreeTree(art, node);
 	D_ASSERT(row_ids.size() > 1);

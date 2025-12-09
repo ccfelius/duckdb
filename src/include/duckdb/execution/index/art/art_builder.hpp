@@ -16,7 +16,8 @@ namespace duckdb {
 class ARTBuilder {
 public:
 	ARTBuilder() = delete;
-	ARTBuilder(ArenaAllocator &arena, ART &art, const unsafe_vector<ARTKey> &keys, const unsafe_vector<ARTKey> &row_ids)
+	ARTBuilder(ArenaAllocator &arena, ART &art, const unsafe_vector<unique_ptr<IndexKey>> &keys,
+	           const unsafe_vector<unique_ptr<IndexKey>> &row_ids)
 	    : arena(arena), art(art), keys(keys), row_ids(row_ids) {
 	}
 
@@ -45,9 +46,9 @@ private:
 	//! The ART holding the node memory.
 	ART &art;
 	//! The keys to build the ART from.
-	const unsafe_vector<ARTKey> &keys;
+	const unsafe_vector<unique_ptr<IndexKey>> &keys;
 	//! The row IDs matching the keys.
-	const unsafe_vector<ARTKey> &row_ids;
+	const unsafe_vector<unique_ptr<IndexKey>> &row_ids;
 	//! The stack. While merging, NodeEntry elements are pushed onto of the stack.
 	stack<NodeEntry> s;
 };

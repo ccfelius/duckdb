@@ -37,7 +37,7 @@ enum class GateStatus : uint8_t {
 
 class ART;
 class Prefix;
-class ARTKey;
+class IndexKey;
 
 //! The Node is the pointer class of the ART index.
 //! It inherits from the IndexPointer, and adds ART-specific functionality.
@@ -81,7 +81,7 @@ public:
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child = Node());
 	//! Delete the child at byte.
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status,
-	                        const ARTKey &row_id);
+	                        const unique_ptr<IndexKey> &row_id);
 
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;

@@ -6,14 +6,13 @@ namespace duckdb {
 // ARTKey
 //===--------------------------------------------------------------------===//
 
-ARTKey::ARTKey() : len(0) {
+ARTKey::ARTKey() : IndexKey() {
 }
 
-ARTKey::ARTKey(const data_ptr_t data, idx_t len) : len(len), data(data) {
+ARTKey::ARTKey(const data_ptr_t data, idx_t len) : IndexKey(data, len) {
 }
 
-ARTKey::ARTKey(ArenaAllocator &allocator, idx_t len) : len(len) {
-	data = allocator.Allocate(len);
+ARTKey::ARTKey(ArenaAllocator &allocator, idx_t len) : IndexKey(allocator, len) {
 }
 
 void ARTKey::VerifyKeyLength(const idx_t max_len) const {
@@ -24,7 +23,7 @@ void ARTKey::VerifyKeyLength(const idx_t max_len) const {
 }
 
 template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value) {
+unique_ptr<IndexKey> ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value) {
 	auto string_data = const_data_ptr_cast(value.GetData());
 	auto string_len = value.GetSize();
 
@@ -51,25 +50,29 @@ ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value) {
 
 	// End with a null-terminator.
 	key_data[pos] = '\0';
-	return ARTKey(key_data, key_len);
+	return make_uniq<ARTKey>(key_data, key_len);
 }
 
 template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const char *value) {
+unique_ptr<IndexKey> ARTKey::CreateARTKey(ArenaAllocator &allocator, const char *value) {
 	return ARTKey::CreateARTKey(allocator, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
 }
 
 template <>
-void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, string_t value) {
+void ARTKey::CreateARTKey(ArenaAllocator &allocator, unique_ptr<IndexKey> &key, string_t value) {
 	key = ARTKey::CreateARTKey<string_t>(allocator, value);
 }
 
 template <>
-void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, const char *value) {
+void ARTKey::CreateARTKey(ArenaAllocator &allocator, unique_ptr<IndexKey> &key, const char *value) {
 	ARTKey::CreateARTKey(allocator, key, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
 }
 
-ARTKey ARTKey::CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value) {
+unique_ptr<IndexKey> ARTKey::CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value) {
+	return CreateKeyStatic(allocator, type, value);
+}
+
+unique_ptr<IndexKey> ARTKey::CreateKeyStatic(ArenaAllocator &allocator, PhysicalType type, Value &value) {
 	D_ASSERT(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
@@ -139,11 +142,11 @@ bool ARTKey::operator==(const ARTKey &key) const {
 	return true;
 }
 
-void ARTKey::Concat(ArenaAllocator &allocator, const ARTKey &other) {
-	auto compound_data = allocator.Allocate(len + other.len);
+void ARTKey::Concat(ArenaAllocator &allocator, const unique_ptr<IndexKey> &other) {
+	auto compound_data = allocator.Allocate(len + other->len);
 	memcpy(compound_data, data, len);
-	memcpy(compound_data + len, other.data, other.len);
-	len += other.len;
+	memcpy(compound_data + len, other->data, other->len);
+	len += other->len;
 	data = compound_data;
 }
 
@@ -152,11 +155,11 @@ row_t ARTKey::GetRowId() const {
 	return Radix::DecodeData<row_t>(data);
 }
 
-idx_t ARTKey::GetMismatchPos(const ARTKey &other, const idx_t start) const {
-	D_ASSERT(len <= other.len);
+idx_t ARTKey::GetMismatchPos(const unique_ptr<IndexKey> &other, const idx_t start) const {
+	D_ASSERT(len <= other->len);
 	D_ASSERT(start <= len);
-	for (idx_t i = start; i < other.len; i++) {
-		if (data[i] != other.data[i]) {
+	for (idx_t i = start; i < other->len; i++) {
+		if (data[i] != other->data[i]) {
 			return i;
 		}
 	}

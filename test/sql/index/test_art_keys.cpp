@@ -9,7 +9,7 @@
 using namespace duckdb;
 using namespace std;
 
-static void TestKeyEqual(ARTKey &left, ARTKey &right) {
+static void TestKeyEqual(duckdb::unique_ptr<IndexKey> &left, duckdb::unique_ptr<IndexKey> &right) {
 	REQUIRE(left == right);
 	REQUIRE(left >= right);
 	REQUIRE(!(left > right));
@@ -19,7 +19,7 @@ static void TestKeyEqual(ARTKey &left, ARTKey &right) {
 	REQUIRE(!(right > left));
 }
 
-static void TestKeyBigger(ARTKey &big_key, ARTKey &small_key) {
+static void TestKeyBigger(duckdb::unique_ptr<IndexKey> &big_key, duckdb::unique_ptr<IndexKey> &small_key) {
 	REQUIRE(!(big_key == small_key));
 	if (!(big_key >= small_key)) {
 		REQUIRE(0);
@@ -31,7 +31,7 @@ static void TestKeyBigger(ARTKey &big_key, ARTKey &small_key) {
 	REQUIRE(!(small_key > big_key));
 }
 
-static void TestKeys(duckdb::vector<ARTKey> &keys) {
+static void TestKeys(duckdb::vector<duckdb::unique_ptr<IndexKey>> &keys) {
 	for (idx_t outer = 0; outer < keys.size(); outer++) {
 		for (idx_t inner = 0; inner < keys.size(); inner++) {
 			if (inner == outer) {
@@ -45,21 +45,22 @@ static void TestKeys(duckdb::vector<ARTKey> &keys) {
 	}
 }
 
-static ARTKey CreateCompoundKey(ArenaAllocator &arena_allocator, const string &str_val, int32_t int_val) {
+static duckdb::unique_ptr<IndexKey> CreateCompoundKey(ArenaAllocator &arena_allocator, const string &str_val,
+                                                      int32_t int_val) {
 	auto key_left = ARTKey::CreateARTKey<string_t>(arena_allocator, string_t(str_val.c_str(), str_val.size()));
 	auto key_right = ARTKey::CreateARTKey<int32_t>(arena_allocator, int_val);
 
-	auto data = arena_allocator.Allocate(key_left.len + key_right.len);
-	memcpy(data, key_left.data, key_left.len);
-	memcpy(data + key_left.len, key_right.data, key_right.len);
-	return ARTKey(data, key_left.len + key_right.len);
+	auto data = arena_allocator.Allocate(key_left->len + key_right->len);
+	memcpy(data, key_left->data, key_left->len);
+	memcpy(data + key_left->len, key_right->data, key_right->len);
+	return make_uniq<ARTKey>(data, key_left->len + key_right->len);
 }
 
 TEST_CASE("Test correct functioning of art keys", "[art]") {
 	ArenaAllocator arena_allocator(Allocator::DefaultAllocator());
 
 	// Test tiny int
-	duckdb::vector<ARTKey> keys;
+	duckdb::vector<duckdb::unique_ptr<IndexKey>> keys;
 	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, -127));
 	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, -55));
 	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, -1));

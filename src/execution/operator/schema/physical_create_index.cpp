@@ -9,6 +9,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/execution/index/index_key.hpp"
 
 namespace duckdb {
 
@@ -76,14 +77,14 @@ public:
 };
 
 unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
-	auto lstate = make_uniq<CreateIndexLocalSinkState>();
+	auto lstate = make_uniq<CreateIndexLocalSinkState>(context.client);
 
 	IndexBuildInitLocalStateInput local_state_input {bind_data.get(), context.client,      table,
 	                                                 *info,           unbound_expressions, storage_ids};
 	lstate->lstate = index_type.build_local_init(local_state_input);
 
 	lstate->key_chunk.InitializeEmpty(indexed_column_types);
-	lstate->row_chunk.InitializeEmpty({LogicalType::ROW_TYPE});
+	lstate->row_id_chunk.InitializeEmpty({LogicalType::ROW_TYPE});
 
 	return std::move(lstate);
 }
@@ -97,7 +98,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 
 	// Reference the key columns and rowid column
 	lstate.key_chunk.ReferenceColumns(chunk, indexed_columns);
-	lstate.row_chunk.ReferenceColumns(chunk, rowid_column);
+	lstate.row_id_chunk.ReferenceColumns(chunk, rowid_column);
 
 	// Check for NULLs, if we are creating a PRIMARY KEY.
 	// FIXME: Later, we want to ensure that we skip the NULL check for any non-PK alter.
@@ -112,7 +113,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 
 	// Sink into the index
 	IndexBuildSinkInput sink_input {bind_data.get(), *gstate.gstate, *lstate.lstate, table, *info};
-	index_type.build_sink(sink_input, lstate.key_chunk, lstate.row_chunk);
+	index_type.build_sink(sink_input, lstate.key_chunk, lstate.row_id_chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }

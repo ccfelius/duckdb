@@ -19,16 +19,16 @@ ARTConflictType ARTBuilder::Build() {
 
 		auto &start = keys[entry.start];
 		auto &end = keys[entry.end];
-		D_ASSERT(start.len != 0);
+		D_ASSERT(start->len != 0);
 
 		// Increment the depth until we reach a leaf or find a mismatching byte.
 		auto prefix_depth = entry.depth;
-		while (start.len != entry.depth && start.ByteMatches(end, entry.depth)) {
+		while (start->len != entry.depth && start->ByteMatches(end, entry.depth)) {
 			entry.depth++;
 		}
 
 		// True, if we reached a leaf: all bytes of start_key and end_key match.
-		if (start.len == entry.depth) {
+		if (start->len == entry.depth) {
 			// Get the number of row IDs in the leaf.
 			auto row_id_count = entry.end - entry.start + 1;
 			if (art.IsUnique() && row_id_count != 1) {
@@ -36,12 +36,12 @@ ARTConflictType ARTBuilder::Build() {
 			}
 
 			reference<Node> ref(entry.node);
-			auto count = UnsafeNumericCast<uint8_t>(start.len - prefix_depth);
+			auto count = UnsafeNumericCast<uint8_t>(start->len - prefix_depth);
 			Prefix::New(art, ref, start, prefix_depth, count);
 
 			// Inline the row ID.
 			if (row_id_count == 1) {
-				Leaf::New(ref, row_ids[entry.start].GetRowId());
+				Leaf::New(ref, row_ids[entry.start]->GetRowId());
 				continue;
 			}
 
@@ -64,7 +64,7 @@ ARTConflictType ARTBuilder::Build() {
 		vector<idx_t> child_offsets;
 		child_offsets.emplace_back(entry.start);
 		for (idx_t i = entry.start + 1; i <= entry.end; i++) {
-			if (keys[i - 1].data[entry.depth] != keys[i].data[entry.depth]) {
+			if (keys[i - 1]->data[entry.depth] != keys[i]->data[entry.depth]) {
 				child_offsets.emplace_back(i);
 			}
 		}
@@ -73,7 +73,7 @@ ARTConflictType ARTBuilder::Build() {
 		Node::New(art, ref, Node::GetNodeType(child_offsets.size()));
 		auto start_offset = child_offsets[0];
 		for (idx_t i = 1; i <= child_offsets.size(); i++) {
-			auto child_byte = keys[start_offset].data[entry.depth];
+			auto child_byte = keys[start_offset]->data[entry.depth];
 			// FIXME: Improve performance by either returning a reference to the child directly,
 			// FIXME: or by calling InsertChild after processing the child (at the end of the stack loop).
 			Node::InsertChild(art, ref, child_byte);

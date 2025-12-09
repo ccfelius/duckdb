@@ -11,23 +11,23 @@ namespace duckdb {
 // IteratorKey
 //===--------------------------------------------------------------------===//
 
-bool IteratorKey::Contains(const ARTKey &key) const {
-	if (Size() < key.len) {
+bool IteratorKey::Contains(const unique_ptr<IndexKey> &key) const {
+	if (Size() < key->len) {
 		return false;
 	}
-	for (idx_t i = 0; i < key.len; i++) {
-		if (key_bytes[i] != key.data[i]) {
+	for (idx_t i = 0; i < key->len; i++) {
+		if (key_bytes[i] != key->data[i]) {
 			return false;
 		}
 	}
 	return true;
 }
 
-bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal, const uint8_t nested_depth) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(Size(), key.len); i++) {
-		if (key_bytes[i] > key.data[i]) {
+bool IteratorKey::GreaterThan(const unique_ptr<IndexKey> &key, const bool equal, const uint8_t nested_depth) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(Size(), key->len); i++) {
+		if (key_bytes[i] > key->data[i]) {
 			return true;
-		} else if (key_bytes[i] < key.data[i]) {
+		} else if (key_bytes[i] < key->data[i]) {
 			return false;
 		}
 	}
@@ -35,18 +35,19 @@ bool IteratorKey::GreaterThan(const ARTKey &key, const bool equal, const uint8_t
 	// Returns true, if current_key is greater than (or equal to) key.
 	D_ASSERT(Size() >= nested_depth);
 	auto this_len = Size() - nested_depth;
-	return equal ? this_len > key.len : this_len >= key.len;
+	return equal ? this_len > key->len : this_len >= key->len;
 }
 
 //===--------------------------------------------------------------------===//
 // Iterator
 //===--------------------------------------------------------------------===//
 
-bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t> &row_ids, const bool equal) {
+bool Iterator::Scan(const unique_ptr<IndexKey> &upper_bound, const idx_t max_count, set<row_t> &row_ids,
+                    const bool equal) {
 	bool has_next;
 	do {
 		// An empty upper bound indicates that no upper bound exists.
-		if (!upper_bound.Empty()) {
+		if (!upper_bound->Empty()) {
 			if (status == GateStatus::GATE_NOT_SET || entered_nested_leaf) {
 				if (current_key.GreaterThan(upper_bound, equal, nested_depth)) {
 					return true;
@@ -75,8 +76,10 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, set<row_t>
 					return false;
 				}
 				row_id[ROW_ID_SIZE - 1] = byte;
-				ARTKey key(&row_id[0], ROW_ID_SIZE);
-				row_ids.insert(key.GetRowId());
+				auto test = &row_id[0];
+				// FIXME: should we change this to type IndexKey?
+				unique_ptr<IndexKey> key = make_uniq<ARTKey>(&row_id[0], ROW_ID_SIZE);
+				row_ids.insert(key->GetRowId());
 				if (byte == NumericLimits<uint8_t>::Maximum()) {
 					break;
 				}
@@ -147,7 +150,7 @@ void Iterator::FindMinimum(const Node &node) {
 	throw InternalException("ART Iterator::FindMinimum: Reached node without metadata");
 }
 
-bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal) {
+bool Iterator::LowerBound(const Node &node, const unique_ptr<IndexKey> &key, const bool equal) {
 	reference<const Node> ref(node);
 	idx_t depth = 0;
 
@@ -170,7 +173,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 
 		D_ASSERT(ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET);
 		if (ref.get().GetType() != NType::PREFIX) {
-			auto next_byte = key[depth];
+			auto next_byte = (*key)[depth];
 			auto child = ref.get().GetNextChild(art, next_byte);
 
 			// The key is greater than any key in this subtree.
@@ -182,7 +185,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 			nodes.emplace(ref.get(), next_byte);
 
 			// We return the minimum because all keys are greater than the lower bound.
-			if (next_byte > key[depth]) {
+			if (next_byte > (*key)[depth]) {
 				FindMinimum(*child);
 				return true;
 			}
@@ -205,14 +208,14 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal)
 			// We found a prefix byte that is less than its corresponding key byte.
 			// I.e., the subsequent node is lesser than the key. Thus, the next node
 			// is the lower bound.
-			if (prefix.data[i] < key[depth + i]) {
+			if (prefix.data[i] < (*key)[depth + i]) {
 				return Next();
 			}
 
 			// We found a prefix byte that is greater than its corresponding key byte.
 			// I.e., the subsequent node is greater than the key. Thus, the minimum is
 			// the lower bound.
-			if (prefix.data[i] > key[depth + i]) {
+			if (prefix.data[i] > (*key)[depth + i]) {
 				FindMinimum(*prefix.ptr);
 				return true;
 			}
