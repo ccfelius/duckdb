@@ -100,10 +100,7 @@ link_threads(duckdb_static PUBLIC)
 # ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
 #
 
-add_library(
-  duckdb SHARED
-  ${ALL_OBJECT_FILES} ${LINK_OBJECTS} execution/index/index_key.cpp
-  include/duckdb/execution/index/index_key.hpp)
+add_library(duckdb SHARED ${ALL_OBJECT_FILES} ${LINK_OBJECTS})
 target_link_libraries(duckdb PUBLIC ${DUCKDB_SYSTEM_LIBS})
 link_extension_libraries(duckdb PRIVATE)
 
