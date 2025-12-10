@@ -182,7 +182,7 @@ struct PlanIndexInput {
 typedef unique_ptr<BoundIndex> (*index_create_function_t)(CreateIndexInput &input);
 typedef PhysicalOperator &(*index_build_plan_t)(PlanIndexInput &input);
 
-//! A index "type"
+//! An index "type"
 class IndexType {
 public:
 	// The name of the index type
