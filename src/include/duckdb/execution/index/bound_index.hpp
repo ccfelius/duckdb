@@ -137,7 +137,7 @@ public:
 
 	//! Returns the string representation of an index, or only traverses and verifies the index.
 	virtual void Verify(IndexLock &l) = 0;
-	//! Obtains a lock and calls VerifyAndToString.
+	//! Obtains a lock and calls Verify.
 	void Verify();
 
 	//! Returns the string representation of an index.
