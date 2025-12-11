@@ -391,9 +391,10 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);
 		// we only support this one for now, not "AES_GCM_CTR_V1"
 		file_meta_data.encryption_algorithm.__isset.AES_GCM_V1 = true;
-		uint8_t unique_file_identifier[8];
-		// Generate Random Data for this
 
+		uint8_t unique_file_identifier[8];
+		//Encryptionutil::GenerateRandomDataUnsafe();
+		
 		file_meta_data.encryption_algorithm.AES_GCM_V1.aad_file_unique = true;
 	} else {
 		// parquet files start with the string "PAR1"

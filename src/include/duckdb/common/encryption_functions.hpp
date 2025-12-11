@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
@@ -26,17 +27,29 @@ private:
 	unique_ptr<data_t[]> nonce;
 };
 
-struct AdditionalAuthenticatedData {
-	AdditionalAuthenticatedData(idx_t prefix_size, idx_t size);
+class AdditionalAuthenticatedData {
+public:
+	explicit AdditionalAuthenticatedData(Allocator &allocator)
+	    : additional_authenticated_data(make_uniq<MemoryStream>(allocator, INITIAL_AAD_CAPACITY)) {
+	}
+	virtual ~AdditionalAuthenticatedData();
+
+public:
+	template <typename T>
+	void WriteData(const T &val) {
+		additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(&val), sizeof(val));
+	}
+
+public:
+	void WriteStringData(const std::string &val) const;
 	data_ptr_t data() const;
 	idx_t size() const;
-	idx_t GetPrefixSize() const;
-	void SetTotalSize(idx_t size);
 
 private:
-	unique_ptr<data_t[]> additional_authenticated_data;
-	idx_t additional_authenticated_data_prefix_size = 0;
-	idx_t additional_authenticated_data_total_size = 0;
+	static constexpr uint32_t INITIAL_AAD_CAPACITY = 32;
+
+protected:
+	unique_ptr<MemoryStream> additional_authenticated_data;
 };
 
 class EncryptionEngine {

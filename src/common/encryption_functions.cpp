@@ -1,6 +1,7 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/encryption_functions.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -30,26 +31,20 @@ idx_t EncryptionNonce::size() const {
 	return MainHeader::AES_NONCE_LEN;
 }
 
-AdditionalAuthenticatedData::AdditionalAuthenticatedData(idx_t prefix_size, idx_t suffix_size)
-    : additional_authenticated_data(new data_t[prefix_size + suffix_size]),
-      additional_authenticated_data_prefix_size(prefix_size),
-      additional_authenticated_data_total_size(prefix_size + suffix_size) {
-}
+constexpr uint32_t AdditionalAuthenticatedData::INITIAL_AAD_CAPACITY;
+
+AdditionalAuthenticatedData::~AdditionalAuthenticatedData() = default;
 
 data_ptr_t AdditionalAuthenticatedData::data() const {
-	return additional_authenticated_data.get();
+	return additional_authenticated_data->GetData();
 }
 
 idx_t AdditionalAuthenticatedData::size() const {
-	return additional_authenticated_data_total_size;
+	return additional_authenticated_data->GetPosition();
 }
 
-idx_t AdditionalAuthenticatedData::GetPrefixSize() const {
-	return additional_authenticated_data_prefix_size;
-}
-
-void AdditionalAuthenticatedData::SetTotalSize(idx_t size) {
-	additional_authenticated_data_total_size = size;
+void AdditionalAuthenticatedData::WriteStringData(const std::string &val) const {
+	additional_authenticated_data->WriteData(reinterpret_cast<const_data_ptr_t>(val.data()), val.size());
 }
 
 EncryptionEngine::EncryptionEngine() {
