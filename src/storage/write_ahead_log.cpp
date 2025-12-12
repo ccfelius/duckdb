@@ -167,7 +167,7 @@ public:
 		encryption_state->Process(temp_buf.get(), ciphertext_size, temp_buf.get(), ciphertext_size);
 
 		//! calculate the tag (for GCM)
-		encryption_state->Finalize(temp_buf.get(), ciphertext_size, tag.data(), tag.size());
+		encryption_state->FinalizeInternal(temp_buf.get(), ciphertext_size, tag.data(), tag.size());
 
 		// write data to the underlying stream
 		stream->WriteData(temp_buf.get(), ciphertext_size);

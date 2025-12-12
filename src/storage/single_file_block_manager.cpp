@@ -73,12 +73,28 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
-	uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
+	auto canary_stream = make_uniq<MemoryStream>(MainHeader::MAX_CANARY_STREAM_SIZE);
 
-	// we zero-out the iv and the (not yet) encrypted canary
-	uint8_t iv[MainHeader::AES_IV_LEN];
-	memset(iv, 0, MainHeader::AES_IV_LEN);
-	memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
+	if (main_header.GetEncryptionVersion() > 0) {
+		// generate random data for the Nonce/IV
+		encryption_state->GenerateRandomData(*canary_stream, MainHeader::AES_NONCE_LEN);
+
+		// set the nonce and key
+		// with a stream, the nonce is appended at the start of the stream
+		encryption_state->InitializeEncryption(canary_stream, MainHeader::AES_NONCE_LEN, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+
+		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
+		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
+	} else {
+		uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
+		// we zero-out the iv and the (not yet) encrypted canary buffer
+		uint8_t iv[MainHeader::AES_NONCE_LEN_OLD];
+		memset(iv, 0, MainHeader::AES_NONCE_LEN_OLD);
+		memset(canary_buffer, 0, MainHeader::CANARY_BYTE_SIZE);
+		encryption_state->InitializeEncryption(iv, MainHeader::AES_NONCE_LEN_OLD, derived_key,
+		                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
+	}
 
 	encryption_state->InitializeEncryption(iv, MainHeader::AES_IV_LEN, derived_key,
 	                                       MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH);
@@ -86,6 +102,10 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 	                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
 
 	main_header.SetEncryptedCanary(canary_buffer);
+
+	if (main_header.GetEncryptionVersion() > 0) {
+		main_header.SetTagAndIV();
+	}
 }
 
 bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
@@ -307,26 +327,25 @@ void SingleFileBlockManager::StoreDBIdentifier(MainHeader &main_header, data_ptr
 	main_header.SetDBIdentifier(db_identifier);
 }
 
+template <typename T>
+void SingleFileBlockManager::WriteEncryptionData(MemoryStream &stream, const T &val) {
+	stream.WriteData(reinterpret_cast<const_data_ptr_t>(&val), sizeof(val));
+}
+
 void SingleFileBlockManager::StoreEncryptionMetadata(MainHeader &main_header) const {
-	// The first byte is the key derivation function (kdf).
-	// The second byte is for the usage of AAD.
-	// The third byte is for the cipher.
-	// The subsequent byte is empty.
-	// The last 4 bytes are the key length.
+	auto metadata_stream = make_uniq<MemoryStream>(MainHeader::ENCRYPTION_METADATA_LEN);
 
-	uint8_t metadata[MainHeader::ENCRYPTION_METADATA_LEN];
-	memset(metadata, 0, MainHeader::ENCRYPTION_METADATA_LEN);
-	data_ptr_t offset = metadata;
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.kdf);
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.additional_authenticated_data);
+	WriteEncryptionData<uint8_t>(*metadata_stream, db.GetStorageManager().GetCipher());
+	WriteEncryptionData<uint8_t>(*metadata_stream, options.encryption_options.version);
+	WriteEncryptionData<uint32_t>(*metadata_stream, options.encryption_options.key_length);
 
-	Store<uint8_t>(options.encryption_options.kdf, offset);
-	offset++;
-	Store<uint8_t>(options.encryption_options.additional_authenticated_data, offset);
-	offset++;
-	Store<uint8_t>(db.GetStorageManager().GetCipher(), offset);
-	offset += 2;
-	Store<uint32_t>(options.encryption_options.key_length, offset);
+	main_header.SetEncryptionMetadata(metadata_stream->GetData());
+}
 
-	main_header.SetEncryptionMetadata(metadata);
+void SingleFileBlockManager::CheckAndAddEncryptionKeyOld() {
+	// checks the canary with a non-secure nonce and tag
 }
 
 void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, string &user_key) {
@@ -334,6 +353,14 @@ void SingleFileBlockManager::CheckAndAddEncryptionKey(MainHeader &main_header, s
 	uint8_t db_identifier[MainHeader::DB_IDENTIFIER_LEN];
 	memset(db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
 	memcpy(db_identifier, main_header.GetDBIdentifier(), MainHeader::DB_IDENTIFIER_LEN);
+
+	switch (options.encryption_options.version) {
+	case 0:
+		// do something
+		return true;
+	case 1:
+		// also check the Nonce / IV and check the tag!
+	}
 
 	//! Check if the correct key is used to decrypt the database
 	// Derive the encryption key and add it to cache

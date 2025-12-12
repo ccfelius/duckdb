@@ -13,6 +13,10 @@ void EncryptionState::InitializeEncryption(const_data_ptr_t, idx_t, const_data_p
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
+void EncryptionState::InitializeEncryption(MemoryStream &stream, const_data_ptr_t, idx_t, const_data_ptr_t, idx_t) {
+	throw NotImplementedException("EncryptionState Abstract Class is called");
+}
+
 void EncryptionState::InitializeDecryption(const_data_ptr_t, idx_t, const_data_ptr_t, idx_t, const_data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
@@ -21,11 +25,23 @@ size_t EncryptionState::Process(const_data_ptr_t, idx_t, data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
+size_t EncryptionState::Process(data_ptr_t, idx_t, MemoryStream &stream) {
+	throw NotImplementedException("EncryptionState Abstract Class is called");
+}
+
+size_t EncryptionState::Finalize(MemoryStream &stream) {
+	throw NotImplementedException("EncryptionState Abstract Class is called");
+}
+
 size_t EncryptionState::Finalize(data_ptr_t, idx_t, data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
 void EncryptionState::GenerateRandomData(data_ptr_t, idx_t) {
+	throw NotImplementedException("EncryptionState Abstract Class is called");
+}
+
+void EncryptionState::GenerateRandomData(MemoryStream &stream, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 

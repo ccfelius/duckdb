@@ -104,9 +104,13 @@ public:
 	//! The canary is a known plaintext for detecting wrong keys early.
 	static constexpr idx_t CANARY_BYTE_SIZE = 8;
 	//! Nonce, IV (nonce + counter) and tag length
-	static constexpr uint64_t AES_NONCE_LEN = 16;
+	static constexpr uint64_t AES_NONCE_LEN_OLD = 16;
+	static constexpr uint64_t AES_NONCE_LEN = 12;
 	static constexpr uint64_t AES_IV_LEN = 16;
 	static constexpr uint64_t AES_TAG_LEN = 16;
+	//! The canary is a known plaintext for detecting wrong keys early.
+	//! should we make this the encrypted block header size, to be 8-byte aligned
+	static constexpr idx_t MAX_CANARY_STREAM_SIZE = CANARY_BYTE_SIZE + AES_NONCE_LEN + AES_TAG_LEN;
 
 	static void CheckMagicBytes(QueryContext context, FileHandle &handle);
 
@@ -160,6 +164,10 @@ public:
 		return encrypted_canary;
 	}
 
+	uint8_t GetEncryptionVersion() {
+		return encryption_version;
+	}
+
 	void Write(WriteStream &ser);
 	static MainHeader Read(ReadStream &source);
 
@@ -170,6 +178,7 @@ private:
 	//! The unique database identifier and optional encryption salt.
 	data_t db_identifier[DB_IDENTIFIER_LEN];
 	data_t encrypted_canary[CANARY_BYTE_SIZE];
+	uint8_t encryption_version;
 };
 
 //! The DatabaseHeader contains information about the current state of the database. Every storage file has two

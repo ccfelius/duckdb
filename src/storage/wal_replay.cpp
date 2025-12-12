@@ -163,7 +163,7 @@ public:
 			//! read and verify the stored tag
 			stream.ReadData(tag.data(), tag.size());
 
-			encryption_state->Finalize(buffer.get(), ciphertext_size, tag.data(), tag.size());
+			encryption_state->FinalizeInternal(buffer.get(), ciphertext_size, tag.data(), tag.size());
 
 			//! read the stored checksum
 			auto stored_checksum = Load<uint64_t>(buffer.get());

@@ -386,7 +386,7 @@ void MbedTlsWrapper::AESStateMBEDTLS::FinalizeGCM(duckdb::data_ptr_t tag, duckdb
 	}
 }
 
-size_t MbedTlsWrapper::AESStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag,
+size_t MbedTlsWrapper::AESStateMBEDTLS::FinalizeInternal(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag,
 													duckdb::idx_t tag_len) {
 	size_t result = out_len;
 	if (mbedtls_cipher_finish(context.get(), out, &result)) {

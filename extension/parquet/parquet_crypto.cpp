@@ -212,7 +212,7 @@ public:
 
 		// Finalize the last encrypted data
 		data_t tag[ParquetCrypto::TAG_BYTES];
-		auto write_size = aes->Finalize(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
+		auto write_size = aes->FinalizeInternal(aes_buffer, 0, tag, ParquetCrypto::TAG_BYTES);
 		trans.write(aes_buffer, write_size);
 		// Write tag for verification
 		trans.write(tag, ParquetCrypto::TAG_BYTES);
@@ -284,7 +284,7 @@ public:
 
 		data_t computed_tag[ParquetCrypto::TAG_BYTES];
 		transport_remaining -= trans.read(computed_tag, ParquetCrypto::TAG_BYTES);
-		aes->Finalize(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES);
+		aes->FinalizeInternal(read_buffer, 0, computed_tag, ParquetCrypto::TAG_BYTES);
 
 		if (transport_remaining != 0) {
 			throw InvalidInputException("Encoded ciphertext length differs from actual ciphertext length");
