@@ -73,10 +73,11 @@ void GenerateDBIdentifier(uint8_t *db_identifier) {
 
 void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &encryption_state,
                    const_data_ptr_t derived_key) {
+
 	auto canary_stream = make_uniq<MemoryStream>(MainHeader::MAX_CANARY_STREAM_SIZE);
 
 	if (main_header.GetEncryptionVersion() > 0) {
-		// generate random data for the Nonce/IV
+		// generate random data for the Nonce/IV and put it in the stream
 		encryption_state->GenerateRandomData(*canary_stream, MainHeader::AES_NONCE_LEN);
 
 		// set the nonce and key
@@ -87,6 +88,7 @@ void EncryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 		encryption_state->Process(reinterpret_cast<const_data_ptr_t>(MainHeader::CANARY), MainHeader::CANARY_BYTE_SIZE,
 		                          canary_buffer, MainHeader::CANARY_BYTE_SIZE);
 	} else {
+		// For the old encryption version, we do not store the canary
 		uint8_t canary_buffer[MainHeader::CANARY_BYTE_SIZE];
 		// we zero-out the iv and the (not yet) encrypted canary buffer
 		uint8_t iv[MainHeader::AES_NONCE_LEN_OLD];

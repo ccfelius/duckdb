@@ -29,7 +29,7 @@ size_t EncryptionState::Process(data_ptr_t, idx_t, MemoryStream &stream) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
-size_t EncryptionState::Finalize(MemoryStream &stream) {
+size_t EncryptionState::Finalize(MemoryStream &stream, data_ptr_t, idx_t) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
 
