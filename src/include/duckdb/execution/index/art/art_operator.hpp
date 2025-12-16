@@ -154,7 +154,7 @@ public:
 					continue;
 				}
 				// Unique indexes can have duplicates, if another transaction DELETE + INSERT
-				// the same key-> In that case, the previous value must be kept alive until all
+				// the same key. In that case, the previous value must be kept alive until all
 				// other transactions do not depend on it anymore.
 
 				// We restrict this transactionality to two-value leaves, so any subsequent
@@ -257,6 +257,8 @@ public:
 				if (parent.get().GetType() == NType::PREFIX) {
 					// We might have to compress:
 					// PREFIX (greatgrandparent) - Node4 (grandparent) - PREFIX - INLINED_LEAF.
+					// The parent does not have to be passed in, as it is a child of the possibly being compressed N4.
+					// Then, when we delete that child, we also free it.
 					Node::DeleteChild(art, grandparent, greatgrandparent, (*current_key.get())[grandparent_depth],
 					                  status, row_id);
 					return;
