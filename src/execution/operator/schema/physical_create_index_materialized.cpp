@@ -112,6 +112,7 @@ public:
 		auto &lstate = input.local_state.Cast<CreateIndexLocalState>();
 		auto &gstate = input.global_state.Cast<CreateIndexGlobalState>();
 		lstate.collection->Append(lstate.append_state, chunk);
+		// can we not make a for-loop or something?
 		gstate.loaded_count += chunk.size();
 		return SinkResultType::NEED_MORE_INPUT;
 	}
