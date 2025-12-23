@@ -12,6 +12,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
 
@@ -37,7 +38,40 @@ enum class GateStatus : uint8_t {
 
 class ART;
 class Prefix;
-class IndexKey;
+class ARTKey;
+class FixedSizeAllocator;
+
+//! State for TransformToDeprecated operations
+class TransformToDeprecatedState {
+public:
+	explicit TransformToDeprecatedState(unsafe_unique_ptr<FixedSizeAllocator> allocator_p)
+	    : allocator(std::move(allocator_p)) {
+	}
+
+	TransformToDeprecatedState() = delete;
+	TransformToDeprecatedState(const TransformToDeprecatedState &) = delete;
+	TransformToDeprecatedState &operator=(const TransformToDeprecatedState &) = delete;
+	TransformToDeprecatedState(TransformToDeprecatedState &&) = delete;
+	TransformToDeprecatedState &operator=(TransformToDeprecatedState &&) = delete;
+
+public:
+	bool HasAllocator() const {
+		return allocator != nullptr;
+	}
+
+	FixedSizeAllocator &GetAllocator() const {
+		D_ASSERT(HasAllocator());
+		return *allocator;
+	}
+
+	unsafe_unique_ptr<FixedSizeAllocator> TakeAllocator() {
+		return std::move(allocator);
+	}
+
+private:
+	//! Allocator for creating deprecated nodes.
+	unsafe_unique_ptr<FixedSizeAllocator> allocator;
+};
 
 //! Options for ToString printing functions
 struct ToStringOptions {
@@ -52,7 +86,7 @@ struct ToStringOptions {
 	// to the optional key_path.
 	// This works in conjunction with the depth_remaining and structure_only arguments.
 	// Note that nested ARTs are printed in their entirety regardless.
-	optional_ptr<const IndexKey> key_path = nullptr;
+	optional_ptr<const ARTKey> key_path = nullptr;
 	idx_t key_depth = 0;
 	// If we have a key_path argument, we only print along a certain path to a specified key. depth_remaining allows us
 	// to short circuit that, and print the entire tree starting at a certain depth. So if we are traversing towards
@@ -67,7 +101,7 @@ struct ToStringOptions {
 
 	ToStringOptions() = default;
 
-	ToStringOptions(idx_t indent_level, bool inside_gate, bool display_ascii, optional_ptr<const IndexKey> key_path,
+	ToStringOptions(idx_t indent_level, bool inside_gate, bool display_ascii, optional_ptr<const ARTKey> key_path,
 	                idx_t key_depth, idx_t depth_remaining, bool print_deprecated_leaves, bool structure_only,
 	                idx_t indent_amount = 2)
 	    : indent_level(indent_level), indent_amount(indent_amount), inside_gate(inside_gate),
@@ -118,7 +152,7 @@ public:
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child = Node());
 	//! Delete the child at byte.
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, const GateStatus status,
-	                        const unique_ptr<IndexKey> &row_id);
+	                        const ARTKey &row_id);
 
 	//! Get the immutable child at byte.
 	const unsafe_optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
@@ -140,8 +174,7 @@ public:
 	static NType GetNodeType(const idx_t count);
 
 	//! Transform the node storage to deprecated storage.
-	static void TransformToDeprecated(ART &art, Node &node,
-	                                  unsafe_unique_ptr<FixedSizeAllocator> &deprecated_prefix_allocator);
+	static void TransformToDeprecated(ART &art, Node &node, TransformToDeprecatedState &state);
 
 	//! Returns the string representation of the node at indentation level.
 	//!
@@ -196,9 +229,9 @@ public:
 private:
 	template <class NODE>
 	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
-	                                          unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
+	                                          TransformToDeprecatedState &state) {
 		if (ptr) {
-			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, allocator); });
+			NODE::Iterator(*ptr, [&](Node &child) { Node::TransformToDeprecated(art, child, state); });
 		}
 	}
 };

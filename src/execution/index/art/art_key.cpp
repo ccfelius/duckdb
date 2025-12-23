@@ -163,7 +163,7 @@ idx_t ARTKey::GetMismatchPos(const unique_ptr<IndexKey> &other, const idx_t star
 			return i;
 		}
 	}
-	return DConstants::INVALID_INDEX;
+	throw FatalException("Corrupted ART index - likely the same row id was inserted twice into the same ART");
 }
 
 } // namespace duckdb

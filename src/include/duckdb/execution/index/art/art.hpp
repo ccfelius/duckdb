@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/execution/index/bound_index.hpp"
-#include "duckdb/execution/index/index_key.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/common/array.hpp"
 
@@ -20,11 +19,20 @@ enum class ARTConflictType : uint8_t { NO_CONFLICT = 0, CONSTRAINT = 1, TRANSACT
 enum class ARTHandlingResult : uint8_t { CONTINUE = 0, SKIP = 1, YIELD = 2, NONE = 3 };
 
 class ConflictManager;
-class IndexKey;
+class ARTKey;
 class ARTKeySection;
 class FixedSizeAllocator;
 
 struct ARTIndexScanState;
+
+struct DeleteIndexInfo {
+	DeleteIndexInfo() : delete_indexes(nullptr) {
+	}
+	explicit DeleteIndexInfo(vector<reference<BoundIndex>> &delete_indexes) : delete_indexes(delete_indexes) {
+	}
+
+	optional_ptr<vector<reference<BoundIndex>>> delete_indexes;
+};
 
 class ART : public BoundIndex {
 public:
@@ -64,12 +72,11 @@ public:
 	bool owns_data;
 	//! True, if keys need a key length verification pass.
 	bool verify_max_key_len;
-	//! The number of bytes fitting in the prefix.
-	uint8_t prefix_count;
 
 public:
 	//! Try to initialize a scan on the ART with the given expression and filter.
 	unique_ptr<IndexScanState> TryInitializeScan(const Expression &expr, const Expression &filter_expr);
+	unique_ptr<IndexScanState> InitializeFullScan();
 	//! Perform a lookup on the ART, fetching up to max_count row IDs.
 	//! If all row IDs were fetched, it return true, else false.
 	bool Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_ids);
@@ -88,13 +95,13 @@ public:
 	void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) override;
 
 	//! Delete a chunk from the ART.
-	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_ids) override;
+	idx_t TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
+	                optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) override;
 	//! Drop the ART.
 	void CommitDrop(IndexLock &index_lock) override;
 
 	//! Build an ART from a vector of sorted keys and their row IDs.
-	ARTConflictType Build(unsafe_vector<unique_ptr<IndexKey>> &keys, unsafe_vector<unique_ptr<IndexKey>> &row_ids,
-	                      const idx_t row_count);
+	ARTConflictType Build(unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_ids, const idx_t row_count);
 
 	//! Merge another ART into this ART. Both must be locked.
 	//! FIXME: Return ARTConflictType instead of a boolean.
@@ -111,16 +118,14 @@ public:
 	//! Returns the in-memory usage of the ART.
 	idx_t GetInMemorySize(IndexLock &index_lock) override;
 
-	bool RequiresTransactionality() const override;
-	unique_ptr<BoundIndex> CreateEmptyCopy(const string &name_prefix,
-	                                       IndexConstraintType constraint_type) const override;
+	bool SupportsDeltaIndexes() const override;
+	unique_ptr<BoundIndex> CreateDeltaIndex(DeltaIndexType delta_index_type) const override;
 
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
-	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<unique_ptr<IndexKey>> &keys);
-	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids,
-	                        unsafe_vector<unique_ptr<IndexKey>> &keys,
-	                        unsafe_vector<unique_ptr<IndexKey>> &row_id_keys);
+	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
+	                        unsafe_vector<ARTKey> &row_id_keys);
 
 	//! Verifies the nodes.
 	void Verify(IndexLock &l) override;
@@ -132,17 +137,26 @@ public:
 	//! Returns string representation of the ART.
 	string ToString(IndexLock &l, bool display_ascii = false) override;
 
+	//! Returns the configured prefix byte capacity.
+	uint8_t PrefixCount() const {
+		return prefix_count;
+	}
+
 private:
-	bool SearchEqual(unique_ptr<IndexKey> &key, idx_t max_count, set<row_t> &row_ids);
-	bool SearchGreater(unique_ptr<IndexKey> &key, bool equal, idx_t max_count, set<row_t> &row_ids);
-	bool SearchLess(unique_ptr<IndexKey> &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
-	bool SearchCloseRange(unique_ptr<IndexKey> &lower_bound, unique_ptr<IndexKey> &upper_bound, bool left_equal,
-	                      bool right_equal, idx_t max_count, set<row_t> &row_ids);
+	//! The number of bytes fitting in the prefix.
+	uint8_t prefix_count;
+
+	bool FullScan(idx_t max_count, set<row_t> &row_ids);
+	bool SearchEqual(ARTKey &key, idx_t max_count, set<row_t> &row_ids);
+	bool SearchGreater(ARTKey &key, bool equal, idx_t max_count, set<row_t> &row_ids);
+	bool SearchLess(ARTKey &upper_bound, bool equal, idx_t max_count, set<row_t> &row_ids);
+	bool SearchCloseRange(ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal, bool right_equal, idx_t max_count,
+	                      set<row_t> &row_ids);
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row);
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name);
-	void VerifyLeaf(const Node &leaf, const unique_ptr<IndexKey> &key, optional_ptr<ART> delete_art,
-	                ConflictManager &manager, optional_idx &conflict_idx, idx_t i);
+	void VerifyLeaf(const Node &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
+	                optional_idx &conflict_idx, idx_t i);
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override;
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
@@ -164,5 +178,11 @@ private:
 	void VerifyInternal();
 	void VerifyAllocationsInternal();
 };
+
+template <>
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+
+template <>
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
 
 } // namespace duckdb
