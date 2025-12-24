@@ -63,6 +63,10 @@ public:
 		atomic<bool> is_building = {false};
 		atomic<idx_t> loaded_count = {0};
 		atomic<idx_t> built_count = {0};
+
+		// bool
+		bool needs_sorting = true;
+		bool is_sorted = false;
 	};
 
 	unique_ptr<GlobalSinkState> PhysicalCreateIndexMaterialized::GetGlobalSinkState(ClientContext &context) const {
@@ -111,8 +115,8 @@ public:
 	                                                     OperatorSinkInput &input) const {
 		auto &lstate = input.local_state.Cast<CreateIndexLocalState>();
 		auto &gstate = input.global_state.Cast<CreateIndexGlobalState>();
+		// make this atomic?
 		lstate.collection->Append(lstate.append_state, chunk);
-		// can we not make a for-loop or something?
 		gstate.loaded_count += chunk.size();
 		return SinkResultType::NEED_MORE_INPUT;
 	}
@@ -149,7 +153,7 @@ public:
 		                   size_t thread_id_p, const PhysicalCreateIndex &op_p)
 		    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p),
 		      local_scan_state() {
-			// Initialize the scan chunk
+			// Initialize the scan for a chunk
 			gstate.collection->InitializeScanChunk(scan_chunk);
 		}
 
