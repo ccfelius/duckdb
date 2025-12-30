@@ -55,7 +55,7 @@ public:
 	    const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
 	    const IndexStorageInfo &info = IndexStorageInfo());
 
-	//! Create a index instance of this type.
+	//! Create an index instance of this type.
 	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
 		auto art = make_uniq<ART>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
 		                          input.unbound_expressions, input.db, nullptr, input.storage_info);
