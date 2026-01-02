@@ -89,5 +89,15 @@ private:
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) override;
 };
+
+class DummyKey {
+public:
+	DummyKey();
+	DummyKey(data_ptr_t data, idx_t len);
+	DummyKey(ArenaAllocator &allocator, idx_t len);
+
+	idx_t len;
+	data_ptr_t data;
+};
 } // namespace duckdb
   // namespace duckdb

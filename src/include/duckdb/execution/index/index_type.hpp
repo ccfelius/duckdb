@@ -181,6 +181,8 @@ struct PlanIndexInput {
 
 typedef unique_ptr<BoundIndex> (*index_create_function_t)(CreateIndexInput &input);
 typedef PhysicalOperator &(*index_build_plan_t)(PlanIndexInput &input);
+typedef unique_ptr<BoundIndex> (*index_create_function_t)(CreateIndexInput &input);
+typedef PhysicalOperator &(*index_build_plan_t)(PlanIndexInput &input);
 
 //! A index "type"
 class IndexType {

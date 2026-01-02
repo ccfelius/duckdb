@@ -5,58 +5,51 @@
 
 #include <cfloat>
 #include <iostream>
+#include <duckdb/execution/index/dummy_index.hpp>
 
 using namespace duckdb;
 using namespace std;
+
+void RegisterIndex(DatabaseInstance &db) {
+
+	IndexType index_type;
+
+	index_type.name = DUMMY_INDEX::TYPE_NAME;
+	index_type.build_bind = DUMMY_INDEX::BUILD_BIND;
+
+
+	index_type.create_instance = [](CreateIndexInput &input) -> unique_ptr<BoundIndex> {
+		auto res = make_uniq<HNSWIndex>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
+										input.unbound_expressions, input.db, input.options, input.storage_info);
+		return std::move(res);
+	};
+	index_type.create_plan = DUMMY_INDEX::CreatePlan;
+
+	// Register persistence option
+	db.config.AddExtensionOption("hnsw_enable_experimental_persistence",
+								 "experimental: enable creating HNSW indexes in persistent databases",
+								 LogicalType::BOOLEAN, Value::BOOLEAN(false));
+
+	// Register scan option
+	db.config.AddExtensionOption("hnsw_ef_search",
+								 "experimental: override the ef_search parameter when scanning HNSW indexes",
+								 LogicalType::BIGINT);
+
+	// Register the index type
+	db.config.GetIndexTypes().RegisterIndexType(index_type);
+}
 
 TEST_CASE("Create new index type", "[index][api]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	// add a new index
-	IndexType dummy_index_type;
-	dummy_index_type.name = DUMMY::TYPE_NAME;
-	dummy_index_type.create_instance = DUMMY::Create;
-	dummy_index_type.build_bind = DUMMYBuildBind;
-	dummy_index_type.build_sort = DUMMYBuildSort;
-	dummy_index_type.build_global_init = DUMMYBuildGlobalInit;
-	dummy_index_type.build_local_init = DUMMYBuildLocalInit;
-	dummy_index_type.build_sink = DUMMYBuildSink;
-	dummy_index_type.build_combine = DUMMYBuildCombine;
-	dummy_index_type.build_finalize = DUMMYBuildFinalize;
+	IndexType custom_index;
 
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers using DUMMY(i)"));
-	idx_t count = 0;
-	for (int32_t it = 0; it < 10; it++) {
-		for (int32_t val = 0; val < 1000; val++) {
-			REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ($1)", val));
-			if (it + val % 2) {
-				count++;
-				REQUIRE_NO_FAIL(con.Query("COMMIT"));
-			} else {
-				REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
-			}
-		}
-	}
-	result = con.Query("SELECT COUNT(*) FROM integers");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(count)}));
-	result = con.Query("SELECT COUNT(*) FROM integers WHERE i < 1000000");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(count)}));
 }
 
 // If you directly use RAND_MAX:
-// > warning: implicit conversion from 'int' to 'float' changes value from 2147483647 to 2147483648
-constexpr float RAND_MAX_FLOAT = static_cast<float>(static_cast<double>(RAND_MAX));
-
-float generate_small_float() {
-	return static_cast<float>(rand()) / RAND_MAX_FLOAT;
-}
-
-float generate_float(float min_float, float max_float) {
-	return min_float + static_cast<float>(rand()) / (RAND_MAX_FLOAT / (max_float - min_float));
+// > warning: implicit conversion from 'int' to 'float' changes value from 2147483647 to 2147483648in_float));
 }
 
 double generate_small_double() {
