@@ -14,7 +14,6 @@
 #include <type_traits>
 
 namespace duckdb {
-
 static_assert(!std::is_abstract<duckdb::DUMMY_INDEX>::value, "DUMMY_INDEX is abstract");
 
 DummyKey::DummyKey() : len(0) {
@@ -28,19 +27,19 @@ DummyKey::DummyKey(ArenaAllocator &allocator, idx_t len) : len(len) {
 }
 
 DUMMY_INDEX::DUMMY_INDEX(
-    const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
-    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db,
-    const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
-    const IndexStorageInfo &info)
-    : BoundIndex(name, DUMMY_INDEX::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions,
-                 db) {
+	const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+	TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db,
+	const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
+	const IndexStorageInfo &info)
+	: BoundIndex(name, DUMMY_INDEX::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions,
+				 db) {
 	// TODO: implement stuff
 }
 
 unique_ptr<BoundIndex> DUMMY_INDEX::Create(CreateIndexInput &input) {
 	auto DUMMY_INDEX_index =
-	    make_uniq<DUMMY_INDEX>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
-	                           input.unbound_expressions, input.db, nullptr, input.storage_info);
+		make_uniq<DUMMY_INDEX>(input.name, input.constraint_type, input.column_ids, input.table_io_manager,
+							   input.unbound_expressions, input.db, nullptr, input.storage_info);
 	return std::move(DUMMY_INDEX_index);
 }
 
@@ -71,7 +70,7 @@ void DUMMY_INDEX::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional
 
 //! Delete a chunk from the ART.
 idx_t DUMMY_INDEX::TryDelete(IndexLock &state, DataChunk &entries, Vector &row_identifiers,
-                             optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) {
+							 optional_ptr<SelectionVector> deleted_sel, optional_ptr<SelectionVector> non_deleted_sel) {
 	return 2;
 };
 //! Drop the ART.
@@ -137,6 +136,20 @@ string DUMMY_INDEX::GetConstraintViolationMessage(VerifyExistenceType verify_typ
 	return "";
 }
 
+class DummyIndexBuildMaterializedData : public IndexBuildMaterializedData {
+public:
+	idx_t count = 0;
+
+	unique_ptr<IndexBuildMaterializedData> DummyIndexBuildMaterialize(IndexBuildMaterializeInput &input) {
+		auto bind_data = make_uniq<DummyIndexBuildMaterializedData>();
+
+		// TODO; count in parallel
+
+		// do the counting / materialization part (e.g. for rtree)
+
+		return std::move(bind_data);
+	}
+};
 
 class DummyIndexBuildBindData : public IndexBuildBindData {
 public:
@@ -145,14 +158,6 @@ public:
 
 unique_ptr<IndexBuildBindData> DummyIndexBuildBind(IndexBuildBindInput &input) {
 	auto bind_data = make_uniq<DummyIndexBuildBindData>();
-
-	// TODO: Verify that the the DUMMY_INDEX is applicable for the given columns and types.
-	bind_data->sorted = true;
-	if (input.expressions.size() > 1) {
-		bind_data->sorted = false;
-	} else if (input.expressions[0]->return_type.InternalType() == PhysicalType::VARCHAR) {
-		bind_data->sorted = false;
-	}
 
 	return std::move(bind_data);
 }

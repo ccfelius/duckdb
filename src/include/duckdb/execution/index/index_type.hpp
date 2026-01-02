@@ -15,6 +15,9 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
+
+#include <duckdb/execution/operator/schema/physical_create_index.hpp>
 
 namespace duckdb {
 
@@ -63,6 +66,21 @@ struct IndexTypeInfo {
 
 struct IndexBuildBindData {
 	DUCKDB_API virtual ~IndexBuildBindData() = default;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
+struct IndexBuildMaterializedData {
+	DUCKDB_API virtual ~IndexBuildMaterializedData() = default;
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -157,6 +175,31 @@ struct IndexBuildFinalizeInput {
 	IndexBuildGlobalState &global_state;
 };
 
+struct IndexBuildConstructEventInput {
+	// Contains all necessary input for event construction
+	IndexBuildCombineInput combine_input;
+
+	// event construction specific input
+	Pipeline &pipeline;
+
+	//! for HNSW
+	const vector<column_t> &storage_ids;
+};
+
+struct IndexBuildConstructTaskInput {
+	IndexBuildGlobalState &global_state;
+	const PhysicalCreateIndex &create_index;
+	shared_ptr<Event> event;
+	ClientContext &context;
+};
+
+struct IndexBuildMaterializeInput {
+	IndexBuildGlobalState &global_state;
+	const PhysicalCreateIndex &create_index;
+	shared_ptr<Event> event;
+	ClientContext &context;
+};
+
 typedef unique_ptr<IndexBuildBindData> (*index_build_bind_t)(IndexBuildBindInput &input);
 typedef bool (*index_build_sort_t)(IndexBuildSortInput &input);
 typedef unique_ptr<IndexBuildGlobalState> (*index_build_global_init_t)(IndexBuildInitGlobalStateInput &input);
@@ -164,6 +207,15 @@ typedef unique_ptr<IndexBuildLocalState> (*index_build_local_init_t)(IndexBuildI
 typedef void (*index_build_sink_t)(IndexBuildSinkInput &input, DataChunk &key_chunk, DataChunk &row_chunk);
 typedef void (*index_build_combine_t)(IndexBuildCombineInput &input);
 typedef unique_ptr<BoundIndex> (*index_build_finalize_t)(IndexBuildFinalizeInput &input);
+
+// sort order and materialization
+// typedef unique_ptr<BasePipelineEvent> (*index_construction_event_t)(IndexBuildConstructEventInput &input);
+typedef unique_ptr<IndexBuildMaterializedData> (*index_build_materialize_t)(IndexBuildMaterializeInput &input);
+
+//! events and tasks
+typedef unique_ptr<BasePipelineEvent> (*index_construction_event_t)(IndexBuildConstructEventInput &input);
+typedef unique_ptr<ExecutorTask> (*index_construct_task_t)(IndexBuildConstructTaskInput &input);
+
 
 struct PlanIndexInput {
 	ClientContext &context;
