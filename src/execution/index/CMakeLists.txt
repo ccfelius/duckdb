@@ -4,6 +4,7 @@ add_library_unity(
   OBJECT
   fixed_size_allocator.cpp
   fixed_size_buffer.cpp
+        dummy_index.cpp
   unbound_index.cpp
   index_type_set.cpp
   bound_index.cpp)
