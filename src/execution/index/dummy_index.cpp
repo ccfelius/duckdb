@@ -50,7 +50,7 @@ bool DUMMY_INDEX::Scan(IndexScanState &state, idx_t max_count, set<row_t> &row_i
 
 //! Appends data to the locked index.
 ErrorData DUMMY_INDEX::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
-	return BoundIndex::Append(l, chunk, row_ids);
+	throw NotImplementedException("DUMMY_INDEX::Append");
 }
 //! Appends data to the locked index and verifies constraint violations.
 ErrorData DUMMY_INDEX::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
@@ -59,7 +59,7 @@ ErrorData DUMMY_INDEX::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, I
 
 //! Insert a chunk.
 ErrorData DUMMY_INDEX::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
-	return BoundIndex::Insert(l, chunk, row_ids);
+	throw NotImplementedException("DUMMY_INDEX::Append");
 }
 //! Insert a chunk and verifies constraint violations.
 ErrorData DUMMY_INDEX::Insert(IndexLock &l, DataChunk &data, Vector &row_ids, IndexAppendInfo &info) {
@@ -129,12 +129,14 @@ string DUMMY_INDEX::ToString(IndexLock &l, bool display_ascii) {
 	return "";
 }
 
-void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) {
+void DUMMY_INDEX::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) {
+	throw NotImplementedException("DUMMY_INDEX::VerifyConstraint");
 }
 
-string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
+string DUMMY_INDEX::GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index, DataChunk &input) {
 	return "";
 }
+
 
 class DummyIndexBuildBindData : public IndexBuildBindData {
 public:
