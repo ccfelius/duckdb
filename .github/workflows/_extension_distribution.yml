@@ -55,7 +55,7 @@ jobs:
       duckdb_version: ${{ inputs.override_duckdb_version != '' && inputs.override_duckdb_version || github.sha }}
 
       # CI tools is pinned to main
-      override_ci_tools_repository: https://github.com/ccfelius/extension-ci-tools
+      override_ci_tools_repository: ccfelius/extension-ci-tools
       ci_tools_version: bump_vcpkg
 
       exclude_archs: ${{ inputs.exclude_archs }}
