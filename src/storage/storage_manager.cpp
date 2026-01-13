@@ -24,6 +24,7 @@ namespace duckdb {
 using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
+	// this comment is just to trigger CI
 	string storage_version_user_provided = "";
 	for (auto &entry : options) {
 		if (entry.first == "block_size") {
