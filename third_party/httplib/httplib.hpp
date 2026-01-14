@@ -9074,7 +9074,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
    	 // s3 requests will not return a location header, and instead a
 	 // X-Amx-Region-Bucket header. Return true so all response headers
 	 // are returned to the httpfs/calling extension
-	 return false;
+	 return true;
 	}
 
   thread_local const Regex re(
