@@ -9070,12 +9070,12 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   }
 
   auto location = res.get_header_value("location");
-   if (location.empty()) {
-   	 // s3 requests will not return a location header, and instead a
-	 // X-Amx-Region-Bucket header. Return true so all response headers
-	 // are returned to the httpfs/calling extension
-	 return true;
-	}
+  if (location.empty()) {
+    // s3 requests will not return a location header, and instead a
+    // X-Amx-Region-Bucket header. Return true so all response headers
+    // are returned to the httpfs/calling extension
+    return true;
+  }
 
   thread_local const Regex re(
       R"((?:(https?):)?(?://(?:\[([a-fA-F\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
@@ -9108,8 +9108,9 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   // Same host redirect - use current client
   if (next_scheme == scheme && next_host == host_ && next_port == port_) {
     return detail::redirect(*this, req, res, path, location, error);
-  } else {
-    if (next_scheme == "https") {
+  }
+
+  if (next_scheme == "https") {
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
       SSLClient cli(next_host, next_port);
       cli.copy_settings(*this);
@@ -9118,9 +9119,10 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
 #else
       return false;
 #endif
-  // Cross-host/scheme redirect - create new client with robust setup
-  return create_redirect_client(next_scheme, next_host, next_port, req, res,
-                                path, location, error);
+    }
+    // Cross-host/scheme redirect - create new client with robust setup
+    return create_redirect_client(next_scheme, next_host, next_port, req, res,
+                                  path, location, error);
 }
 
 // New method for robust redirect client creation
