@@ -82,6 +82,7 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 }
 
 void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
+	// some comment
 	string storage_version_user_provided = "";
 	for (auto &entry : options) {
 		if (entry.first == "block_size") {

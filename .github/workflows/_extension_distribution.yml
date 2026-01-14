@@ -40,7 +40,7 @@ on:
 jobs:
   build:
     name: Build
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    uses: ccfelius/extension-ci-tools/.github/workflows/_extension_distribution.yml@fix_ccache
     with:
       # We piggy-back extension-template to build the extensions in extension_config, it's hacky, but it works ¯\_(ツ)_/¯
       override_repository: duckdb/extension-template
@@ -55,7 +55,7 @@ jobs:
       duckdb_version: ${{ inputs.override_duckdb_version != '' && inputs.override_duckdb_version || github.sha }}
 
       # CI tools is pinned to main
-      override_ci_tools_repository: duckdb/extension-ci-tools
+      override_ci_tools_repository: ccfelius/extension-ci-tools
       ci_tools_version: main
 
       exclude_archs: ${{ inputs.exclude_archs }}
