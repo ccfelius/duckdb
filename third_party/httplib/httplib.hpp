@@ -435,7 +435,7 @@ make_unique(std::size_t n) {
 namespace case_ignore {
 
 inline unsigned char to_lower(int c) {
-  const static unsigned char table[256] = {
+  const unsigned char table[256] = {
       0,   1,   2,   3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,
       15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,
       30,  31,  32,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,
@@ -9074,7 +9074,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
    	 // s3 requests will not return a location header, and instead a
 	 // X-Amx-Region-Bucket header. Return true so all response headers
 	 // are returned to the httpfs/calling extension
-	 return true;
+	 return false;
 	}
 
   thread_local const Regex re(
@@ -11520,7 +11520,7 @@ inline Client::Client(const std::string &scheme_host_port)
 inline Client::Client(const std::string &scheme_host_port,
                       const std::string &client_cert_path,
                       const std::string &client_key_path) {
-  const static Regex re(
+  const Regex re(
       R"((?:([a-z]+):\/\/)?(?:\[([a-fA-F\d:]+)\]|([^:/?#]+))(?::(\d+))?)");
 
   Match m;
