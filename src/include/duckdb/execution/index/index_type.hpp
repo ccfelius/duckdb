@@ -64,6 +64,9 @@ struct IndexTypeInfo {
 struct IndexBuildBindData {
 	DUCKDB_API virtual ~IndexBuildBindData() = default;
 
+	//! The query to select from the base table when creating the index
+	string query;
+
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);
@@ -202,7 +205,6 @@ struct IndexBuildWorkInput {
 
 struct IndexBuildWorkCombineInput {
 	optional_ptr<IndexBuildBindData> bind_data;
-	// Or should this be; IndexBuildSinkState?
 	optional_ptr<IndexBuildState> global_state;
 	optional_ptr<IndexBuildWorkState> local_state;
 };
@@ -220,6 +222,10 @@ struct IndexBuildFinalizeInput {
 	idx_t exact_count = 0;
 };
 
+struct IndexBuildProgressInput {
+	optional_ptr<IndexBuildState> global_state;
+};
+
 typedef unique_ptr<IndexBuildBindData> (*index_build_bind_t)(IndexBuildBindInput &input);
 typedef bool (*index_build_sort_t)(IndexBuildSortInput &input);
 
@@ -235,7 +241,7 @@ typedef bool (*index_build_work_t)(IndexBuildWorkInput &input); // TODO: Figure 
 typedef void (*index_build_work_combine_t)(IndexBuildWorkCombineInput &input);
 
 typedef unique_ptr<BoundIndex> (*index_build_finalize_t)(IndexBuildFinalizeInput &input);
-
+typedef ProgressData (*index_build_progress_t)(IndexBuildProgressInput &input);
 struct PlanIndexInput {
 	ClientContext &context;
 	LogicalCreateIndex &op;
@@ -261,6 +267,11 @@ public:
 
 	// Callbacks
 	index_build_bind_t build_bind = nullptr;
+
+	// project/sort before building (if needed)
+	// projection should return <vector> expressions
+
+
 	index_build_sort_t build_sort = nullptr;
 	// former global init
 	index_build_init_t build_init = nullptr;
@@ -286,6 +297,8 @@ public:
 	// Finalize
 	index_build_finalize_t build_finalize = nullptr;
 
+	// Progress
+	index_build_progress_t build_sink_progress = nullptr;
 	//! Extra information for the index type
 	shared_ptr<IndexTypeInfo> index_info = nullptr;
 

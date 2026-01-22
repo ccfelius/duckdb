@@ -28,6 +28,7 @@ public:
 	unique_ptr<IndexBuildSinkState> lstate;
 	DataChunk key_chunk;
 	DataChunk row_chunk;
+	DataChunk chunk;
 };
 
 //! Physical index creation operator.
@@ -84,6 +85,7 @@ public:
 	unique_ptr<LocalSinkState> GetLocalWorkState(ExecutionContext &context);
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
+	ProgressData GetSinkProgress(OperatorSinkFinalizeInput &input) const;
 
 	bool IsSink() const override {
 		return true;

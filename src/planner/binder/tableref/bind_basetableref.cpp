@@ -163,6 +163,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	BindSchemaOrCatalog(entry_retriever, ref.catalog_name, ref.schema_name);
 	auto table_or_view =
 	    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);
+
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES || GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {

@@ -180,7 +180,6 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 		idx_t len = std::min(end - iter, segment_size);
 		to_hash.resize(len);
 		handle->Read((void *)to_hash.data(), len, iter);
-
 		state.AddString(to_hash);
 
 		iter += segment_size;

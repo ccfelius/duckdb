@@ -12,6 +12,9 @@
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+
+#include <duckdb/parser/parser.hpp>
 
 namespace duckdb {
 
@@ -55,7 +58,7 @@ static PhysicalOperator &AddFilter(PhysicalPlanGenerator &plan, LogicalCreateInd
 static PhysicalOperator &AddProjection(PhysicalPlanGenerator &plan, LogicalCreateIndex &op, PhysicalOperator &prev) {
 	auto cardinality = op.estimated_cardinality;
 
-	// Create a project on on the indexed columns + rowid
+	// Create a projection on the indexed columns + rowid
 	auto select_types = vector<LogicalType>();
 	auto select_exprs = vector<unique_ptr<Expression>>();
 
@@ -95,6 +98,48 @@ static PhysicalOperator &AddSort(PhysicalPlanGenerator &plan, LogicalCreateIndex
 	return sortby;
 }
 
+unique_ptr<LogicalProjection> ComposeDynamicPlan(ClientContext &context, const string &sql_query) {
+	// 1. PARSE: Turn SQL string into a ParsedStatement
+	Parser parser;
+	parser.ParseQuery(sql_query);
+	auto &statement = parser.statements[0];
+
+	// 2. BIND: Turn ParsedStatement into a BoundStatement
+	// This resolves column names and types (as discussed in duckdb_bound_statement.md)
+	auto binder = Binder::CreateBinder(context);
+	binder->SetBindingMode(BindingMode::EXTRACT_NAMES);
+	auto bound_statement = binder->Bind(*statement);
+
+	// This is the "Sub-Plan" (the output of your query string)
+	auto sub_plan = std::move(bound_statement.plan);
+	auto &sub_plan_types = bound_statement.types;
+
+	// 3. COMPOSE: Create a new LogicalOperator and plug in the sub_plan
+	// Here we create a LogicalProjection that acts as a wrapper.
+	vector<unique_ptr<Expression>> select_list;
+
+	// For example: Let's manually add a projection that just passes through
+	// the first column of the sub-plan.
+	auto col_ref = make_uniq<BoundColumnRefExpression>(
+		sub_plan_types[0],
+		ColumnBinding(0, 0) // (table_index 0, column_index 0)
+	);
+
+	select_list.push_back(std::move(col_ref));
+
+	// Create the "Parent" operator
+	auto parent_plan = make_uniq<LogicalProjection>(binder->GenerateTableIndex(), std::move(select_list));
+
+	// PLUG IT IN: Set the sub_plan as the child of the parent_plan
+	parent_plan->children.push_back(std::move(sub_plan));
+
+	return std::move(parent_plan);
+
+	// 4. EXECUTE: In a real scenario, you would now pass this parent_plan
+	// to the Optimizer and then the Physical Planner.
+	// context.Query(std::move(parent_plan));
+}
+
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	// Early-out, if the index already exists.
 	auto &schema = op.table.schema;
@@ -132,10 +177,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->column_ids.size());
 
 	D_ASSERT(op.children.size() == 1);
-	auto &scan = CreatePlan(*op.children[0]);
 
 	// Index has a plan replacement function
 	if (index_type->create_plan) {
+		auto &scan = CreatePlan(*op.children[0]);
 		PlanIndexInput input(context, op, *this, scan, index_type->index_info);
 		return index_type->create_plan(input);
 	}
@@ -148,7 +193,59 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	IndexBuildBindInput bind_input {context, duck_table, *op.info, op.unbound_expressions};
 	auto bind_data = index_type->build_bind(bind_input);
 
-	bool need_sort = false;
+
+	// If the index requests a custom query, we need to embed into our plan now
+	if (bind_data && !bind_data->query.empty()) {
+
+		auto child_plan = ComposeDynamicPlan(context, bind_data->query);
+		auto &inner = CreatePlan(*child_plan);
+
+		// Parser parser;
+		// auto stmt = parser.GetStatement(bind_data->query);
+		//
+		// if (!stmt) {
+		// 	// TODO: This should maybe be internal exception / or more informative
+		// 	throw BinderException("Cannot parse index creation query!");
+		// }
+		//
+		// // create a new binder
+		// auto binder = Binder::CreateBinder(context);
+		// auto &tbl = op.children.back()->Cast<LogicalGet>();
+		//
+		// // What do bound ids do
+		// vector<ColumnIndex> bound_ids;
+		// binder->bind_context.AddBaseTable(tbl.table_index, "tbl", tbl.names, tbl.types, bound_ids, "tbl");
+		//
+		// // This allows to add a dummy table name
+		// binder->SetBindingMode(BindingMode::EXTRACT_NAMES);
+		// auto bound_stmt = binder->Bind(*stmt);
+		// auto &inner = CreatePlan(*bound_stmt.plan);
+
+#ifdef DEBUG
+		// auto tbl_names = binder->GetTableNames();
+#endif
+
+		//! While it is possible to copy a logical plan using `Copy()`, both, the original and the copy
+		//! are—by design—identical. This includes any table_idx values etc. This is bad, when we try
+		//! to use part of a logical plan multiple times in the same plan.
+		//! The LogicalOperatorDeepCopy first copies a LogicalOperator, but then traverses the entire plan
+		//! and replaces all table indexes. We store a map from the original table index to the new index,
+		//! which we use in the TableBindingReplacer to correct all column accesses.
+
+		// then we need to bind again to the real columns?  or replace the binder for the real binder
+		//! The TableBindingReplacer updates table bindings, utility for optimizers
+		// class TableBindingReplacer : LogicalOperatorVisitor {
+		// public:
+		// 	TableBindingReplacer(std::unordered_map<idx_t, idx_t> &table_idx_replacements,
+		// 						 optional_ptr<bound_parameter_map_t> parameter_data);
+		//
+		// public:
+
+
+		return AddCreateIndex(*this, op, inner, *index_type, std::move(bind_data));
+	}
+
+    bool need_sort = false;
 
 	// if build_sort contains a callback
 	if (index_type->build_sort) {
@@ -158,6 +255,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 
 	// Determine if this is a fresh index creation or an ALTER TABLE ADD INDEX
 	auto need_filter = op.alter_table_info == nullptr;
+
+	auto &scan = CreatePlan(*op.children[0]);
 
 	// Construct the plan
 	auto plan = &scan;

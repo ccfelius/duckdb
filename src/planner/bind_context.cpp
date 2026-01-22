@@ -704,6 +704,11 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 	AddGenericBinding(index, alias, names, subquery.types);
 }
 
+void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundStatement &subquery) {
+	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
+	AddGenericBinding(index, alias, names, subquery.types);
+}
+
 void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
                                   const vector<LogicalType> &types, StandardEntry &entry) {
 	AddBinding(make_uniq<EntryBinding>(alias, types, names, index, entry));
@@ -715,10 +720,6 @@ void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, Bo
 	AddEntryBinding(index, alias, names, subquery.types, view.Cast<StandardEntry>());
 }
 
-void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundStatement &subquery) {
-	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddGenericBinding(index, alias, names, subquery.types);
-}
 
 void BindContext::AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
                                     const vector<LogicalType> &types) {
