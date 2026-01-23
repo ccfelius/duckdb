@@ -13,16 +13,16 @@
 
 namespace duckdb {
 PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOperator &op, TableCatalogEntry &table_p,
-										 const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
-										 vector<unique_ptr<Expression>> unbound_expressions_p,
-										 idx_t estimated_cardinality, IndexType index_type,
-										 unique_ptr<IndexBuildBindData> bind_data,
-										 unique_ptr<AlterTableInfo> alter_table_info)
+                                         const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
+                                         vector<unique_ptr<Expression>> unbound_expressions_p,
+                                         idx_t estimated_cardinality, IndexType index_type,
+                                         unique_ptr<IndexBuildBindData> bind_data,
+                                         unique_ptr<AlterTableInfo> alter_table_info)
 
-	: PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
-	  table(table_p.Cast<DuckTableEntry>()), info(std::move(info)),
-	  unbound_expressions(std::move(unbound_expressions_p)), index_type(std::move(index_type)),
-	  bind_data(std::move(bind_data)), alter_table_info(std::move(alter_table_info)) {
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
+      table(table_p.Cast<DuckTableEntry>()), info(std::move(info)),
+      unbound_expressions(std::move(unbound_expressions_p)), index_type(std::move(index_type)),
+      bind_data(std::move(bind_data)), alter_table_info(std::move(alter_table_info)) {
 	// Convert the logical column ids to physical column ids.
 	for (auto &column_id : column_ids) {
 		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
@@ -45,7 +45,7 @@ PhysicalCreateIndex::PhysicalCreateIndex(PhysicalPlan &physical_plan, LogicalOpe
 unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
 	auto g_sink_state = make_uniq<CreateIndexGlobalSinkState>();
 	IndexBuildInitStateInput global_state_input {
-		bind_data, context, table, *info, unbound_expressions, storage_ids, estimated_cardinality};
+	    bind_data, context, table, *info, unbound_expressions, storage_ids, estimated_cardinality};
 
 	g_sink_state->gstate = index_type.build_init(global_state_input);
 	return std::move(g_sink_state);
@@ -64,7 +64,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	}
 	if (index_type.build_sink_init) {
 		IndexBuildInitSinkInput local_state_input {bind_data,  context.client,      table,      *info,
-												   data_types, unbound_expressions, storage_ids};
+		                                           data_types, unbound_expressions, storage_ids};
 
 		lstate->lstate = index_type.build_sink_init(local_state_input);
 	}
@@ -128,9 +128,9 @@ SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, Op
 class IndexConstructTask final : public ExecutorTask {
 public:
 	IndexConstructTask(shared_ptr<Event> event_p, ClientContext &context, CreateIndexGlobalSinkState &gstate_p,
-					   size_t thread_id_p, const PhysicalCreateIndex &op_p)
-		: ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p), index_op(op_p),
-		  local_scan_state() {
+	                   size_t thread_id_p, const PhysicalCreateIndex &op_p)
+	    : ExecutorTask(context, std::move(event_p), op_p), gstate(gstate_p), thread_id(thread_id_p), index_op(op_p),
+	      local_scan_state() {
 	}
 
 public:
@@ -175,8 +175,8 @@ private:
 
 struct IndexConstructionEventInput {
 	IndexConstructionEventInput(const PhysicalCreateIndex &op, CreateIndexGlobalSinkState &gstate, Pipeline &pipeline,
-								CreateIndexInfo &info, const vector<column_t> &storage_ids, DuckTableEntry &table)
-		: op(op), gstate(gstate), pipeline(pipeline), info(info), storage_ids(storage_ids), table(table) {
+	                            CreateIndexInfo &info, const vector<column_t> &storage_ids, DuckTableEntry &table)
+	    : op(op), gstate(gstate), pipeline(pipeline), info(info), storage_ids(storage_ids), table(table) {
 	}
 
 	const PhysicalCreateIndex &op;
@@ -190,8 +190,8 @@ struct IndexConstructionEventInput {
 class IndexConstructionEvent final : public BasePipelineEvent {
 public:
 	explicit IndexConstructionEvent(const IndexConstructionEventInput &input)
-		: BasePipelineEvent(input.pipeline), op(input.op), gstate(input.gstate), info(input.info),
-		  storage_ids(input.storage_ids), table(input.table), context(pipeline->GetClientContext()) {
+	    : BasePipelineEvent(input.pipeline), op(input.op), gstate(input.gstate), info(input.info),
+	      storage_ids(input.storage_ids), table(input.table), context(pipeline->GetClientContext()) {
 	}
 
 	const PhysicalCreateIndex &op;
@@ -203,7 +203,6 @@ public:
 
 public:
 	void Schedule() override {
-
 		//! Midpoint
 		if (op.index_type.build_prepare) {
 			// TODO: Put this in a separate event-chain to not block in Schedule()
@@ -282,7 +281,7 @@ void PhysicalCreateIndex::FinalizeIndexBuild(ClientContext &context, CreateIndex
 	auto &storage = table.GetStorage();
 	if (!storage.IsMainTable()) {
 		throw TransactionException(
-			"Transaction conflict: cannot add an index to a table that has been altered or dropped");
+		    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
 	}
 
 	auto &schema = table.schema;
@@ -323,14 +322,14 @@ void PhysicalCreateIndex::FinalizeIndexBuild(ClientContext &context, CreateIndex
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-											   OperatorSinkFinalizeInput &input) const {
+                                               OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 
 	// determine if we still need to do some processing before finalizing
 	if (index_type.build_work && index_type.build_work_init) {
 		// determine how many tasks we need to spawn
 		auto index_construction_event_input =
-			IndexConstructionEventInput(*this, gstate, pipeline, *info, storage_ids, table);
+		    IndexConstructionEventInput(*this, gstate, pipeline, *info, storage_ids, table);
 		auto new_event = make_shared_ptr<IndexConstructionEvent>(index_construction_event_input);
 		event.InsertEvent(std::move(new_event));
 	} else {
@@ -344,9 +343,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 ProgressData PhysicalCreateIndex::GetSinkProgress(OperatorSinkFinalizeInput &input) const {
 	// Create final index
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
-	IndexBuildProgressInput progress_input {gstate.gstate };
+	IndexBuildProgressInput progress_input {gstate.gstate};
 	auto progress = this->index_type.build_sink_progress(progress_input);
 	return progress;
 }
 
-}// namespace duckdb
+} // namespace duckdb

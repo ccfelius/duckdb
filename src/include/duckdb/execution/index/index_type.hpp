@@ -271,7 +271,6 @@ public:
 	// project/sort before building (if needed)
 	// projection should return <vector> expressions
 
-
 	index_build_sort_t build_sort = nullptr;
 	// former global init
 	index_build_init_t build_init = nullptr;

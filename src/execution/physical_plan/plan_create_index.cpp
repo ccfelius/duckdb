@@ -98,42 +98,35 @@ static PhysicalOperator &AddSort(PhysicalPlanGenerator &plan, LogicalCreateIndex
 	return sortby;
 }
 
-unique_ptr<LogicalProjection> ComposeDynamicPlan(ClientContext &context, const string &sql_query) {
+unique_ptr<LogicalProjection> CreatePlanFromSQLString(ClientContext &context, const string &sql_query) {
 	Parser parser;
 	parser.ParseQuery(sql_query);
 	auto &statement = parser.statements[0];
 
+	if (statement->type != StatementType::SELECT_STATEMENT) {
+		throw InternalException(
+		    "CreatePlanFromSQLString: Only SELECT statements are supported for internal transformations");
+	}
+
 	auto binder = Binder::CreateBinder(context);
-	binder->SetBindingMode(BindingMode::EXTRACT_NAMES);
 	auto bound_statement = binder->Bind(*statement);
 
-	auto sub_plan = std::move(bound_statement.plan);
-	auto &sub_plan_types = bound_statement.types;
+	auto plan = std::move(bound_statement.plan);
 
-	// 3. COMPOSE: Create a new LogicalOperator and plug in the sub_plan
-	// Here we create a LogicalProjection that acts as a wrapper.
+	// If the root isn't a projection, create one that projects all columns
+	// TODO; this is probably not correct
+	auto table_index = binder->GenerateTableIndex();
 	vector<unique_ptr<Expression>> select_list;
+	for (idx_t i = 0; i < bound_statement.types.size(); i++) {
+		select_list.push_back(make_uniq<BoundColumnRefExpression>(
+		    bound_statement.types[i], ColumnBinding(0, i) // Binding to the first (and only) child's columns
+		    ));
+	}
 
-	// For example: Let's manually add a projection that just passes through
-	// the first column of the sub-plan.
-	auto col_ref = make_uniq<BoundColumnRefExpression>(
-		sub_plan_types[0],
-		ColumnBinding(0, 0) // (table_index 0, column_index 0)
-	);
+	auto projection = make_uniq<LogicalProjection>(table_index, std::move(select_list));
+	projection->children.push_back(std::move(plan));
 
-	select_list.push_back(std::move(col_ref));
-
-	// Create the "Parent" operator
-	auto parent_plan = make_uniq<LogicalProjection>(binder->GenerateTableIndex(), std::move(select_list));
-
-	// PLUG IT IN: Set the sub_plan as the child of the parent_plan
-	parent_plan->children.push_back(std::move(sub_plan));
-
-	return std::move(parent_plan);
-
-	// 4. EXECUTE: In a real scenario, you would now pass this parent_plan
-	// to the Optimizer and then the Physical Planner.
-	// context.Query(std::move(parent_plan));
+	return projection;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
@@ -189,11 +182,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	IndexBuildBindInput bind_input {context, duck_table, *op.info, op.unbound_expressions};
 	auto bind_data = index_type->build_bind(bind_input);
 
-
 	// If the index requests a custom query, we need to embed into our plan now
 	if (bind_data && !bind_data->query.empty()) {
+		// we get a logical projection
+		auto child_plan = CreatePlanFromSQLString(context, bind_data->query);
 
-		auto child_plan = ComposeDynamicPlan(context, bind_data->query);
+		// we create a new subplan
 		auto &inner = CreatePlan(*child_plan);
 
 		// Parser parser;
@@ -237,11 +231,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 		//
 		// public:
 
-
 		return AddCreateIndex(*this, op, inner, *index_type, std::move(bind_data));
 	}
 
-    bool need_sort = false;
+	bool need_sort = false;
 
 	// if build_sort contains a callback
 	if (index_type->build_sort) {
