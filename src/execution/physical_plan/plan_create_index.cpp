@@ -99,18 +99,14 @@ static PhysicalOperator &AddSort(PhysicalPlanGenerator &plan, LogicalCreateIndex
 }
 
 unique_ptr<LogicalProjection> ComposeDynamicPlan(ClientContext &context, const string &sql_query) {
-	// 1. PARSE: Turn SQL string into a ParsedStatement
 	Parser parser;
 	parser.ParseQuery(sql_query);
 	auto &statement = parser.statements[0];
 
-	// 2. BIND: Turn ParsedStatement into a BoundStatement
-	// This resolves column names and types (as discussed in duckdb_bound_statement.md)
 	auto binder = Binder::CreateBinder(context);
 	binder->SetBindingMode(BindingMode::EXTRACT_NAMES);
 	auto bound_statement = binder->Bind(*statement);
 
-	// This is the "Sub-Plan" (the output of your query string)
 	auto sub_plan = std::move(bound_statement.plan);
 	auto &sub_plan_types = bound_statement.types;
 
