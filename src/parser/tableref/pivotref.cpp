@@ -284,7 +284,7 @@ void PivotColumnEntry::Serialize(Serializer &serializer) const {
 		if (!TryFoldForBackwardsCompatibility(expr, dummy_values)) {
 			throw SerializationException(
 			    "Cannot serialize arbitrary expression pivot entries when targeting database storage version '%s'",
-			    serializer.GetOptions().serialization_compatibility.duckdb_version);
+			    serializer.GetOptions().storage_compatibility.duckdb_version);
 			;
 		}
 		serializer.WritePropertyWithDefault<vector<Value>>(100, "values", dummy_values);
