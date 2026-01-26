@@ -172,16 +172,20 @@ struct StorageVersionInfo {
 	const char *version_name;
 	StorageVersion storage_version;
 
-	static constexpr uint64_t GetStorageVersionValue(StorageVersion version) {
-		return static_cast<uint64_t>(version);
-	}
-
-	static constexpr uint64_t GetStorageVersionDefault() {
-		return GetStorageVersionValue(DEFAULT_STORAGE_VERSION_INFO);
+	static constexpr StorageVersion GetStorageVersionDefault() {
+		return DEFAULT_STORAGE_VERSION_INFO;
 	};
 
-	static constexpr uint64_t Invalid() {
-		return GetStorageVersionValue(StorageVersion::INVALID);
+	static constexpr idx_t GetStorageVersionDefaultInt() {
+		return static_cast<idx_t>(DEFAULT_STORAGE_VERSION_INFO);
+	};
+
+	static constexpr StorageVersion Invalid() {
+		return StorageVersion::INVALID;
+	};
+
+	static constexpr idx_t InvalidStorageVersionInt() {
+		return static_cast<idx_t>(StorageVersion::INVALID);
 	};
 };
 
@@ -191,7 +195,7 @@ struct StorageVersionMapping {
 
 	static StorageVersionMapping Default() {
 		StorageVersionMapping result;
-		result.version = StorageVersionInfo::GetStorageVersionDefault();
+		result.version = static_cast<idx_t>(StorageVersionInfo::GetStorageVersionDefault());
 		result.version_string = "v0.10.2";
 		return result;
 	}
@@ -218,7 +222,6 @@ string GetDuckDBVersions(const idx_t version_number);
 string GetStorageVersionNameInternal(const idx_t storage_version);
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix);
 idx_t GetSerializationVersionDeprecated(const char *version_string);
-idx_t GetStorageVersionValue(const char *version_string);
 StorageVersionMapping GetStorageVersion(const char *version_string);
 vector<string> GetStorageCandidates();
 
@@ -375,6 +378,10 @@ struct DatabaseHeader {
 	void Write(WriteStream &ser) const;
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);
 	static void SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version);
+	static void SetStorageVersionMapping(DatabaseHeader &header, StorageVersion storage_version,
+	                                     string storage_version_string);
+	static void SetStorageVersionMappingInternal(DatabaseHeader &header, idx_t storage_version,
+	                                             string storage_version_string);
 };
 
 //! Detect mismatching constant values when compiling

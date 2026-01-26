@@ -1,6 +1,7 @@
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 constexpr idx_t Storage::MAX_ROW_GROUP_SIZE;
@@ -119,11 +120,11 @@ static const SerializationVersionInfo serialization_version_info[] = {
 // clang-format on
 
 static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
-static_assert(StorageVersionInfo::GetStorageVersionValue(DEFAULT_STORAGE_VERSION_INFO) == VERSION_NUMBER,
-              "Check on VERSION_INFO");
+static_assert(static_cast<idx_t>(DEFAULT_STORAGE_VERSION_INFO) == VERSION_NUMBER, "Check on VERSION_INFO");
 
 string GetStorageVersionNameInternal(const idx_t storage_version) {
-	if (StorageManager::TargetAtLeastVersion(StorageVersion::V0_10_2, storage_version)) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
+		// TODO, what if we read duckdb 1.0 and 1.1?
 		// serialization version 1 is used for everything below 0.10.3
 		return "v0.10.2";
 	}
@@ -133,7 +134,7 @@ string GetStorageVersionNameInternal(const idx_t storage_version) {
 		if (strcmp(storage_version_info[i].version_name, "latest") == 0) {
 			continue;
 		}
-		if (StorageVersionInfo::GetStorageVersionValue(storage_version_info[i].storage_version) != storage_version) {
+		if (static_cast<idx_t>(storage_version_info[i].storage_version) != storage_version) {
 			continue;
 		}
 		if (!min_idx.IsValid()) {
@@ -149,7 +150,7 @@ string GetStorageVersionNameInternal(const idx_t storage_version) {
 }
 
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix) {
-	if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_2_0, storage_version)) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
 		// special handling for lower storage versions
 		return "v1.0.0+";
 	}
@@ -179,10 +180,10 @@ idx_t GetSerializationVersionDeprecated(const char *version_string) {
 idx_t GetStorageVersionValue(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (!strcmp(storage_version_info[i].version_name, version_string)) {
-			return StorageVersionInfo::GetStorageVersionValue(storage_version_info[i].storage_version);
+			return static_cast<idx_t>(storage_version_info[i].storage_version);
 		}
 	}
-	return StorageVersionInfo::Invalid();
+	return static_cast<idx_t>(StorageVersionInfo::Invalid());
 }
 
 StorageVersionMapping GetStorageVersion(const char *version_string) {
@@ -210,7 +211,7 @@ vector<string> GetStorageCandidates() {
 string GetDuckDBVersions(idx_t version_number) {
 	vector<string> versions;
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
-		if (version_number == StorageVersionInfo::GetStorageVersionValue(storage_version_info[i].storage_version)) {
+		if (version_number == static_cast<idx_t>(storage_version_info[i].storage_version)) {
 			versions.push_back(string(storage_version_info[i].version_name));
 		}
 	}

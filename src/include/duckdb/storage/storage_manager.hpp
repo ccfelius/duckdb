@@ -63,6 +63,8 @@ public:
 
 	static bool TargetAtLeastVersion(StorageVersion version, idx_t target_version);
 	static bool TargetAtLeastVersion(StorageVersion version, StorageVersion target_version);
+	static bool IsPriorToVersion(StorageVersion version, idx_t target_version);
+	static bool IsPriorToVersion(StorageVersion version, StorageVersion target_version);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() const {

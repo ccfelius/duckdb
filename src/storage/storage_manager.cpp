@@ -342,6 +342,23 @@ bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, idx_t s
 	return true;
 }
 
+// comparison used to see whether the storage version is compatible
+bool StorageManager::IsPriorToVersion(StorageVersion target_version, idx_t storage_version) {
+	if (storage_version < static_cast<idx_t>(target_version)) {
+		// storage version is lower then required storage version
+		return true;
+	}
+	return false;
+}
+
+bool StorageManager::IsPriorToVersion(StorageVersion target_version, StorageVersion storage_version) {
+	if (storage_version < target_version) {
+		// storage version is lower then required storage version
+		return true;
+	}
+	return false;
+}
+
 bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, StorageVersion storage_version) {
 	if (storage_version < target_version) {
 		// storage version is lower then required storage version

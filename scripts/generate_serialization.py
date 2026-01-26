@@ -536,9 +536,7 @@ class SerializableClass:
                 if not entry.isdigit():
                     code.append(f'\tif ({exclamation}serializer.ShouldSerialize(StorageVersion::V1_2_0)) {{')
                 else:
-                    code.append(
-                        f'\tif ({exclamation}serializer.ShouldSerialize(StorageVersion::V1_2_0)) {{'
-                    )
+                    code.append(f'\tif ({exclamation}serializer.ShouldSerialize(StorageVersion::V1_2_0)) {{')
 
             else:
                 # storage version 4 and higher
@@ -548,9 +546,7 @@ class SerializableClass:
                     version_string = get_version_string(storage_version)
 
                 formatted_version = version_string.upper().replace(".", "_")
-                code.append(
-                    f'\tif ({exclamation}serializer.ShouldSerialize(StorageVersion::{formatted_version})) {{'
-                )
+                code.append(f'\tif ({exclamation}serializer.ShouldSerialize(StorageVersion::{formatted_version})) {{')
 
         if conditional_serialization:
             code = []

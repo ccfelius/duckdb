@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <unistd.h>
 
 namespace duckdb {
 
@@ -284,18 +285,62 @@ void DatabaseHeader::Write(WriteStream &ser) const {
 	ser.Write<idx_t>(storage_header_version);
 }
 
-void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version) {
-	// Note that the main_header version number will never be changed after the database is created
-	// even if the db file gets bumped to a higher version
-	// (e.g. "ATTACH 'bump.dp' (STORAGE_VERSION 'v.1.4.0'), when bump.db already exists")
-	// Note that there is one exception on this
+void DatabaseHeader::SetStorageVersionMappingInternal(DatabaseHeader &header, idx_t read_version,
+                                                      string version_string) {
+	header.storage_compatibility.version = read_version;
+	header.storage_compatibility.version_string = version_string;
+}
 
+void DatabaseHeader::SetStorageVersionMapping(DatabaseHeader &header, StorageVersion read_version,
+                                              string version_string) {
+	SetStorageVersionMappingInternal(header, static_cast<idx_t>(read_version), version_string);
+}
+
+void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version) {
 	if (main_version == MainHeader::DEPRECATED_VERSION_NUMBER) {
 		// From v1.5.0 onwards, we use and store only the storage version number
-		header.storage_compatibility.version = read_version;
-		// this can also be any other version string right?
-		// todo, phase out the version string
-		header.storage_compatibility.version_string = "v1.5.0";
+		// TODO: phase out the version string if we feel confident
+		// TODO: when version is upgraded -> replace version string! make dynamic
+		SetStorageVersionMappingInternal(header, read_version, "v1.5.0");
+	} else {
+		// before V1.5.0
+		// The Storage Version in the main header could be written in two different ways
+		// 1) When the DB is created from scratch -- with e.g. ATTACH (STORAGE_VERSION "v1.4.0")
+		// 2) if the db file got bumped to a higher version
+		// (e.g. "ATTACH 'bump.dp' (STORAGE_VERSION 'v.1.4.0'), when bump.db already exists")
+		// in case 1, the main header serialized the explicit storage version (e.g. 1.4.0 = 67, in the example)
+		// in case 2, the main_header version number is bumped at maximum to 65 (v1.2.0)
+		// thus, in case 2, the main header storage version is often lower then the actual storage version
+		// that's also why we need all logic below for backwards compatibility
+		// if the main header version and db header version are < v1.5.0
+		// then we fall back to the serialization version
+		switch (read_version) {
+		case static_cast<idx_t>(SerializationVersionDeprecated::V0_10_2):
+			// If read version is 0
+		case static_cast<idx_t>(StorageVersion::INVALID):
+			// In some old duckdb versions, storage version (64)
+			// is (by mistake) serialized instead of serialization version
+		case static_cast<idx_t>(StorageVersion::V0_10_2):
+			SetStorageVersionMapping(header, StorageVersionInfo::GetStorageVersionDefault(), "v0.10.2");
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_0_0):
+			SetStorageVersionMapping(header, StorageVersionInfo::GetStorageVersionDefault(), "v1.0.0");
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_1_0):
+			SetStorageVersionMapping(header, StorageVersionInfo::GetStorageVersionDefault(), "v1.1.0");
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_2_0):
+			SetStorageVersionMapping(header, StorageVersion::V1_2_0, "v1.2.0");
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_3_0):
+			SetStorageVersionMapping(header, StorageVersion::V1_3_0, "v1.3.0");
+			break;
+		case static_cast<idx_t>(SerializationVersionDeprecated::V1_4_0):
+			SetStorageVersionMapping(header, StorageVersion::V1_4_0, "v1.4.0");
+			break;
+		default:
+			throw InvalidInputException("Deprecated Serialization Version is not found!");
+		}
 	}
 }
 
@@ -527,7 +572,8 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// If encryption is enabled, we also use it as the salt.
 	memset(options.db_identifier, 0, MainHeader::DB_IDENTIFIER_LEN);
 
-	if (encryption_enabled || options.version_number.GetIndex() >= static_cast<idx_t>(StorageVersion::V1_4_0)) {
+	if (encryption_enabled ||
+	    StorageManager::TargetAtLeastVersion(StorageVersion::V1_4_0, options.version_number.GetIndex())) {
 		GenerateDBIdentifier(options.db_identifier);
 	}
 
