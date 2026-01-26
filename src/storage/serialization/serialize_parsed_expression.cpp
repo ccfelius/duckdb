@@ -233,7 +233,7 @@ void LambdaExpression::Serialize(Serializer &serializer) const {
 	ParsedExpression::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "lhs", lhs);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(201, "expr", expr);
-	if (serializer.ShouldSerialize(static_cast<idx_t>(StorageVersion::V1_3_0))) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_3_0)) {
 		serializer.WritePropertyWithDefault<LambdaSyntaxType>(202, "syntax_type", syntax_type, LambdaSyntaxType::SINGLE_ARROW_STORAGE);
 	}
 }

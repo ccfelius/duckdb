@@ -272,7 +272,7 @@ static bool TryFoldForBackwardsCompatibility(const unique_ptr<ParsedExpression> 
 }
 
 void PivotColumnEntry::Serialize(Serializer &serializer) const {
-	if (serializer.ShouldSerialize(7) || !expr) {
+	if (serializer.ShouldSerialize(StorageVersion::V1_5_0) || !expr) {
 		serializer.WritePropertyWithDefault<vector<Value>>(100, "values", values);
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(101, "star_expr", expr);
 		serializer.WritePropertyWithDefault<string>(102, "alias", alias);

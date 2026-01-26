@@ -1363,7 +1363,7 @@ void LogicalType::Serialize(Serializer &serializer) const {
 	// 1. try to default-bind into a concrete logical type, and serialize that
 	// 2. if that fails, serialize normally, in which case the UNBOUND_TYPE_INFO will try to
 	//    write itself as an old-style USER type.
-	if (id_ == LogicalTypeId::UNBOUND && !serializer.ShouldSerialize(7)) {
+	if (id_ == LogicalTypeId::UNBOUND && !serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		try {
 			auto bound_type = UnboundType::TryDefaultBind(*this);
 			if (bound_type.id() != LogicalTypeId::INVALID && bound_type.id() != LogicalTypeId::UNBOUND) {

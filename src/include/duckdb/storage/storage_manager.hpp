@@ -61,6 +61,9 @@ public:
 	//! or the file's block allocation size, if it is an existing database.
 	void Initialize(QueryContext context);
 
+	static bool TargetAtLeastVersion(StorageVersion version, idx_t target_version);
+	static bool TargetAtLeastVersion(StorageVersion version, StorageVersion target_version);
+
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() const {
 		return db;

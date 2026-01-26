@@ -26,7 +26,7 @@ using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided) {
 	// storage version < v1.4.0
 	if (!storage_version.version.IsValid() ||
-	    storage_version.version.GetIndex() < StorageCompatibility::FromString("v1.4.0").storage_version) {
+	    StorageManager::TargetAtLeastVersion(StorageVersion::V1_4_0, storage_version.version.GetIndex())) {
 		if (!storage_version_user_provided.empty()) {
 			throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= "
 			                            "v1.4.0) are not compatible",
@@ -48,7 +48,7 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 			break;
 		}
 		// storage version set, but v1.4.0 =< storage < v1.5.0
-		if (storage_version.version.GetIndex() < StorageCompatibility::FromString("v1.5.0").storage_version) {
+		if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_5_0, storage_version.version.GetIndex())) {
 			if (!storage_version_user_provided.empty()) {
 				if (encryption_version == target_encryption_version) {
 					// encryption version is explicitly given, but not compatible with < v1.5.0
@@ -69,7 +69,7 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 	case EncryptionTypes::V0_0:
 		// we set this to V0 to V1.5.0 if no explicit storage version provided
 		if (!storage_version.version.IsValid() && storage_version_user_provided.empty()) {
-			storage_version.version = StorageCompatibility::FromString("v1.5.0").storage_version;
+			storage_version.version = static_cast<idx_t>(StorageVersion::V1_5_0);
 			break;
 		}
 		// if storage version is provided, we do nothing
@@ -331,6 +331,23 @@ void StorageManager::Initialize(QueryContext context) {
 	if (storage_options.encryption) {
 		ClearUserKey(storage_options.user_key);
 	}
+}
+
+// comparison used to see whether the storage version is compatible
+bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, idx_t storage_version) {
+	if (storage_version < static_cast<idx_t>(target_version)) {
+		// storage version is lower then required storage version
+		return false;
+	}
+	return true;
+}
+
+bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, StorageVersion storage_version) {
+	if (storage_version < target_version) {
+		// storage version is lower then required storage version
+		return false;
+	}
+	return true;
 }
 
 class SingleFileTableIOManager : public TableIOManager {

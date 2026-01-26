@@ -933,8 +933,12 @@ StorageCompatibility StorageCompatibility::Latest() {
 	return res;
 }
 
+bool StorageCompatibility::Compare(StorageVersion property_version) const {
+	return static_cast<idx_t>(property_version) < storage_version;
+}
+
 bool StorageCompatibility::Compare(idx_t property_version) const {
-	return property_version <= storage_version;
+	return property_version < storage_version;
 }
 
 bool StorageCompatibility::CompareVersionString(const string &property_version) const {

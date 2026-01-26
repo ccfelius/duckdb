@@ -115,7 +115,7 @@ public:
 
 		const auto storage_version = checkpoint_data.GetStorageManager().GetStorageVersionValueIdx();
 		const bool should_compress =
-		    compressed_size < uncompressed_size || storage_version < static_cast<idx_t>(StorageVersion::V1_5_0);
+		    compressed_size < uncompressed_size || StorageManager::TargetAtLeastVersion(StorageVersion::V1_5_0, storage_version);
 
 		const idx_t vector_size = should_compress ? compressed_size : uncompressed_size;
 

@@ -297,48 +297,6 @@ void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_versio
 		// todo, phase out the version string
 		header.storage_compatibility.version_string = "v1.5.0";
 	}
-
-	if (main_version < static_cast<idx_t>(StorageVersion::V1_5_0) &&
-	    read_version < static_cast<idx_t>(StorageVersion::V1_5_0)) {
-		// if the main header version and db header version are < v1.5.0
-		// then we fall back to the serialization version
-		switch (read_version) {
-		case static_cast<idx_t>(SerializationVersionDeprecated::V0_10_2):
-			// If read version is 0
-		case static_cast<idx_t>(StorageVersion::INVALID):
-			// In some old duckdb versions, storage version (64) is serialized instead of ser version
-		case static_cast<idx_t>(StorageVersion::V0_10_2):
-			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
-			header.storage_compatibility.version_string = "v0.10.2";
-			break;
-		case static_cast<idx_t>(SerializationVersionDeprecated::V1_0_0):
-			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
-			header.storage_compatibility.version_string = "v1.0.0";
-			break;
-		case static_cast<idx_t>(SerializationVersionDeprecated::V1_1_0):
-			header.storage_compatibility.version = StorageVersionInfo::GetStorageVersionDefault();
-			header.storage_compatibility.version_string = "v1.1.0";
-			break;
-		case static_cast<idx_t>(SerializationVersionDeprecated::V1_2_0):
-			header.storage_compatibility.version = static_cast<idx_t>(StorageVersion::V1_2_0);
-			header.storage_compatibility.version_string = "v1.2.0";
-			break;
-		case static_cast<idx_t>(SerializationVersionDeprecated::V1_3_0):
-			header.storage_compatibility.version = static_cast<idx_t>(StorageVersion::V1_3_0);
-			header.storage_compatibility.version_string = "v1.3.0";
-			break;
-		case static_cast<idx_t>(SerializationVersionDeprecated::V1_4_0):
-			header.storage_compatibility.version = static_cast<idx_t>(StorageVersion::V1_4_0);
-			header.storage_compatibility.version_string = "v1.4.0";
-			break;
-		default:
-			throw InvalidInputException("Deprecated Serialization Version is not found!");
-		}
-	} else {
-		// From v1.5.0 onwards, we use and store only the storage version number
-		header.storage_compatibility.version = read_version;
-		header.storage_compatibility.version_string = "v1.5.0";
-	}
 }
 
 DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &source) {
@@ -437,7 +395,7 @@ uint64_t SingleFileBlockManager::GetVersionNumber() const {
 	return VERSION_NUMBER;
 }
 
-MainHeader ConstructMainHeader(idx_t version_number) {
+MainHeader ConstructMainHeader(idx_t version_number = MainHeader::DEPRECATED_VERSION_NUMBER) {
 	MainHeader header;
 	header.deprecated_version_number = version_number;
 	memset(header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
@@ -1314,6 +1272,16 @@ protected:
 	}
 };
 
+void SingleFileBlockManager::RewriteMainHeader(QueryContext &context, uint64_t version_number) {
+	MainHeader main_header = ConstructMainHeader(version_number);
+	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
+	// now write the header to the file
+	ChecksumAndWrite(context, header_buffer, 0);
+	header_buffer.Clear();
+	// avoid having the Sync at the end write two blocks
+	handle->Sync();
+}
+
 void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header) {
 	auto free_list_blocks = GetFreeListBlocks();
 
@@ -1392,18 +1360,19 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	handle->Sync();
 	header_buffer.Clear();
 
+	if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_5_0, options.storage_version.version.GetIndex())) {
+		RewriteMainHeader(context);
+	}
+
 	// if we are upgrading the database from version 64 -> version 65, we need to re-write the main header
 	auto deprecated_serialization_version =
 	    GetSerializationVersionDeprecated(options.storage_version.version_string.c_str());
+
+	// todo; check this better
 	if (options.version_number.GetIndex() == static_cast<idx_t>(StorageVersion::V0_10_2) &&
 	    deprecated_serialization_version >= static_cast<idx_t>(SerializationVersionDeprecated::V1_2_0)) {
 		// rewrite the main header with storage version v1.2.0+
-		options.version_number = static_cast<idx_t>(StorageVersion::V1_2_0);
-		MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
-		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
-		// now write the header to the file
-		ChecksumAndWrite(context, header_buffer, 0);
-		header_buffer.Clear();
+		RewriteMainHeader(context, static_cast<idx_t>(StorageVersion::V1_2_0));
 	}
 
 	// set the header inside the buffer

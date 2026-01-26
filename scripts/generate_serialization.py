@@ -529,13 +529,15 @@ class SerializableClass:
                 exclamation = "!"
 
             # storage version 3 == serialization version 3 == v1.1.0
+            # everything gets serialized to v1.2.0
             if storage_version <= 3:
                 # write the version string
+                # write 65
                 if not entry.isdigit():
-                    code.append(f'\tif ({exclamation}serializer.ShouldSerialize("{entry}")) {{')
+                    code.append(f'\tif ({exclamation}serializer.ShouldSerialize(StorageVersion::V1_2_0)) {{')
                 else:
                     code.append(
-                        f'\tif ({exclamation}serializer.ShouldSerialize("{get_version_string(storage_version)}")) {{'
+                        f'\tif ({exclamation}serializer.ShouldSerialize(StorageVersion::V1_2_0)) {{'
                     )
 
             else:
@@ -547,7 +549,7 @@ class SerializableClass:
 
                 formatted_version = version_string.upper().replace(".", "_")
                 code.append(
-                    f'\tif ({exclamation}serializer.ShouldSerialize(static_cast<idx_t>(StorageVersion::{formatted_version}))) {{'
+                    f'\tif ({exclamation}serializer.ShouldSerialize(StorageVersion::{formatted_version})) {{'
                 )
 
         if conditional_serialization:

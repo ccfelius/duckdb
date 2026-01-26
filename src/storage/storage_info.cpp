@@ -123,7 +123,7 @@ static_assert(StorageVersionInfo::GetStorageVersionValue(DEFAULT_STORAGE_VERSION
               "Check on VERSION_INFO");
 
 string GetStorageVersionNameInternal(const idx_t storage_version) {
-	if (storage_version <= static_cast<idx_t>(StorageVersion::V0_10_2)) {
+	if (StorageManager::TargetAtLeastVersion(StorageVersion::V0_10_2, storage_version)) {
 		// serialization version 1 is used for everything below 0.10.3
 		return "v0.10.2";
 	}
@@ -149,7 +149,7 @@ string GetStorageVersionNameInternal(const idx_t storage_version) {
 }
 
 string GetStorageVersionName(const idx_t storage_version, const bool add_suffix) {
-	if (storage_version < static_cast<idx_t>(StorageVersion::V1_2_0)) {
+	if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_2_0, storage_version)) {
 		// special handling for lower storage versions
 		return "v1.0.0+";
 	}
