@@ -379,9 +379,9 @@ struct DatabaseHeader {
 	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);
 	static void SetStorageVersion(DatabaseHeader &header, idx_t main_version, idx_t read_version);
 	static void SetStorageVersionMapping(DatabaseHeader &header, StorageVersion storage_version,
-	                                     string storage_version_string);
+	                                     const string &storage_version_string);
 	static void SetStorageVersionMappingInternal(DatabaseHeader &header, idx_t storage_version,
-	                                             string storage_version_string);
+	                                             const string &storage_version_string);
 };
 
 //! Detect mismatching constant values when compiling

@@ -286,13 +286,13 @@ void DatabaseHeader::Write(WriteStream &ser) const {
 }
 
 void DatabaseHeader::SetStorageVersionMappingInternal(DatabaseHeader &header, idx_t read_version,
-                                                      string version_string) {
+                                                      const string &version_string) {
 	header.storage_compatibility.version = read_version;
 	header.storage_compatibility.version_string = version_string;
 }
 
 void DatabaseHeader::SetStorageVersionMapping(DatabaseHeader &header, StorageVersion read_version,
-                                              string version_string) {
+                                              const string &version_string) {
 	SetStorageVersionMappingInternal(header, static_cast<idx_t>(read_version), version_string);
 }
 
