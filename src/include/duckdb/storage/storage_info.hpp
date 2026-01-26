@@ -239,9 +239,11 @@ public:
 	static const char MAGIC_BYTES[];
 	//! The canary should be "DUCKKEY".
 	static const char CANARY[];
+	//! Indicates whether database is encrypted or not.
+	static constexpr uint64_t DEPRECATED_VERSION_NUMBER = 100;
 
 	//! The (storage) version of the database.
-	uint64_t version_number;
+	uint64_t deprecated_version_number = DEPRECATED_VERSION_NUMBER;
 	//! The set of flags used by the database.
 	uint64_t flags[FLAG_COUNT];
 	//! Encryption version

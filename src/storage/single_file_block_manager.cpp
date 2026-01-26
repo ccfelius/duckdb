@@ -182,7 +182,7 @@ bool DecryptCanary(MainHeader &main_header, const shared_ptr<EncryptionState> &e
 
 void MainHeader::Write(WriteStream &ser) {
 	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
-	ser.Write<uint64_t>(version_number);
+	ser.Write<uint64_t>(deprecated_version_number);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
@@ -219,28 +219,37 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		throw IOException("The file is not a valid DuckDB database file!");
 	}
 
-	header.version_number = source.Read<uint64_t>();
+	header.deprecated_version_number = source.Read<uint64_t>();
 
-	// Check the version number to determine if we can read this file.
-	if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
-		auto version = GetDuckDBVersions(header.version_number);
-		string version_text;
-		if (!version.empty()) {
-			// Known version.
-			version_text = "DuckDB version " + string(version);
-		} else {
-			version_text = string("an ") +
-			               (VERSION_NUMBER_UPPER > header.version_number ? "older development" : "newer") +
-			               string(" version of DuckDB");
+	if (header.deprecated_version_number == DEPRECATED_VERSION_NUMBER) {
+		// new (> 1.5.0) duckdb header, we only read the storage version number
+		// which is serialized in the database header(s)
+	} else {
+		// Check the version number to determine if we can read this file.
+		if (header.deprecated_version_number < VERSION_NUMBER_LOWER ||
+		    header.deprecated_version_number > VERSION_NUMBER_UPPER) {
+			auto version = GetDuckDBVersions(header.deprecated_version_number);
+			string version_text;
+			if (!version.empty()) {
+				// Known version.
+				version_text = "DuckDB version " + string(version);
+			} else {
+				version_text =
+				    string("an ") +
+				    (VERSION_NUMBER_UPPER > header.deprecated_version_number ? "older development" : "newer") +
+				    string(" version of DuckDB");
+			}
+			throw IOException(
+			    "Trying to read a database file with version number %lld, but we can only read versions between %lld "
+			    "and "
+			    "%lld.\n"
+			    "The database file was created with %s.\n\n"
+			    "Newer DuckDB version might introduce backward incompatible changes (possibly guarded by compatibility "
+			    "settings).\n"
+			    "See the storage page for migration strategy and more information: "
+			    "https://duckdb.org/internals/storage",
+			    header.deprecated_version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
 		}
-		throw IOException(
-		    "Trying to read a database file with version number %lld, but we can only read versions between %lld and "
-		    "%lld.\n"
-		    "The database file was created with %s.\n\n"
-		    "Newer DuckDB version might introduce backward incompatible changes (possibly guarded by compatibility "
-		    "settings).\n"
-		    "See the storage page for migration strategy and more information: https://duckdb.org/internals/storage",
-		    header.version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
 	}
 
 	// Read the flags.
@@ -280,6 +289,15 @@ void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_versio
 	// even if the db file gets bumped to a higher version
 	// (e.g. "ATTACH 'bump.dp' (STORAGE_VERSION 'v.1.4.0'), when bump.db already exists")
 	// Note that there is one exception on this
+
+	if (main_version == MainHeader::DEPRECATED_VERSION_NUMBER) {
+		// From v1.5.0 onwards, we use and store only the storage version number
+		header.storage_compatibility.version = read_version;
+		// this can also be any other version string right?
+		// todo, phase out the version string
+		header.storage_compatibility.version_string = "v1.5.0";
+	}
+
 	if (main_version < static_cast<idx_t>(StorageVersion::V1_5_0) &&
 	    read_version < static_cast<idx_t>(StorageVersion::V1_5_0)) {
 		// if the main header version and db header version are < v1.5.0
@@ -348,7 +366,7 @@ DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &s
 	}
 
 	auto database_header_storage_version = source.Read<idx_t>();
-	SetStorageVersion(header, main_header.version_number, database_header_storage_version);
+	SetStorageVersion(header, main_header.deprecated_version_number, database_header_storage_version);
 
 	return header;
 }
@@ -421,7 +439,7 @@ uint64_t SingleFileBlockManager::GetVersionNumber() const {
 
 MainHeader ConstructMainHeader(idx_t version_number) {
 	MainHeader header;
-	header.version_number = version_number;
+	header.deprecated_version_number = version_number;
 	memset(header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
 	return header;
 }
@@ -607,7 +625,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
-	h1.storage_compatibility.version = SetSerializeOrStorageVersion(main_header.version_number);
+	h1.storage_compatibility.version = SetSerializeOrStorageVersion(main_header.deprecated_version_number);
 	h1.storage_compatibility.version_string = options.storage_version.version_string;
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE);
@@ -621,7 +639,7 @@ void SingleFileBlockManager::CreateNewDatabase(QueryContext context) {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
-	h2.storage_compatibility.version = SetSerializeOrStorageVersion(main_header.version_number);
+	h2.storage_compatibility.version = SetSerializeOrStorageVersion(main_header.deprecated_version_number);
 	h2.storage_compatibility.version_string = options.storage_version.version_string;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
 	ChecksumAndWrite(context, header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
@@ -713,7 +731,7 @@ void SingleFileBlockManager::LoadExistingDatabase(QueryContext context) {
 		db.GetStorageManager().SetCipher(stored_cipher);
 	}
 
-	options.version_number = main_header.version_number;
+	options.version_number = main_header.deprecated_version_number;
 
 	// read the database headers from disk
 	DatabaseHeader h1;
