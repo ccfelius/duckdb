@@ -98,35 +98,113 @@ static PhysicalOperator &AddSort(PhysicalPlanGenerator &plan, LogicalCreateIndex
 	return sortby;
 }
 
+static void ReplaceInExpression(Expression &expr, idx_t old_idx, idx_t new_idx) {
+	// Handle the current expression node if it's a column reference
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+		auto &col_ref = expr.Cast<BoundColumnRefExpression>();
+		if (col_ref.binding.table_index == old_idx) {
+			col_ref.binding.table_index = new_idx;
+		}
+	}
+	// Use ExpressionIterator::EnumerateChildren to recurse into sub-expressions
+	// (e.g., arguments of a function call or operands of an operator)
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
+		ReplaceInExpression(*child, old_idx, new_idx);
+	});
+}
+
+static void Replace(LogicalOperator &op, idx_t old_index, idx_t new_index) {
+	// 1. Remap expressions held directly by this operator
+	for (auto &expr : op.expressions) {
+		ReplaceInExpression(*expr, old_index, new_index);
+	}
+
+	// 2. Recurse into children operators (the plan tree)
+	for (auto &child : op.children) {
+		Replace(*child, old_index, new_index);
+	}
+}
+
+
 unique_ptr<LogicalProjection> CreatePlanFromSQLString(ClientContext &context, const string &sql_query) {
-	Parser parser;
-	parser.ParseQuery(sql_query);
-	auto &statement = parser.statements[0];
+    Parser parser;
+    parser.ParseQuery(sql_query);
+    if (parser.statements.empty()) {
+        throw InternalException("CreatePlanFromSQLString: No statements found.");
+    }
 
-	if (statement->type != StatementType::SELECT_STATEMENT) {
-		throw InternalException(
-		    "CreatePlanFromSQLString: Only SELECT statements are supported for internal transformations");
+    auto &statement = parser.statements[0];
+    if (statement->type != StatementType::SELECT_STATEMENT) {
+        throw InternalException("CreatePlanFromSQLString: Only SELECT statements supported.");
+    }
+
+    auto binder = Binder::CreateBinder(context);
+    auto bound_statement = binder->Bind(*statement);
+    auto plan = std::move(bound_statement.plan);
+
+    // FIX: If the root is already a projection, we use unique_ptr_cast to convert
+    // from unique_ptr<LogicalOperator> to unique_ptr<LogicalProjection>.
+    if (plan->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+        return unique_ptr_cast<LogicalOperator, LogicalProjection>(std::move(plan));
+    }
+
+    // MANUAL WRAPPING: If it's a LogicalGet or LogicalFilter, we create the projection here.
+    auto table_index = binder->GenerateTableIndex();
+    vector<unique_ptr<Expression>> select_list;
+    for (idx_t i = 0; i < bound_statement.types.size(); i++) {
+        // We create a reference to the i-th column of the child (plan).
+        // In an isolated binder, the child table index is usually 0.
+        select_list.push_back(make_uniq<BoundColumnRefExpression>(
+            bound_statement.types[i],
+            ColumnBinding(table_index, i)
+        ));
+    }
+
+    // This constructor returns a unique_ptr<LogicalProjection> directly.
+    auto projection = make_uniq<LogicalProjection>(table_index, std::move(select_list));
+    projection->children.push_back(std::move(plan));
+
+    return projection;
+}
+
+
+void GraftTransformationPlan(ClientContext &context, LogicalOperator &index_op, const string &transform_sql) {
+	if (index_op.type != LogicalOperatorType::LOGICAL_CREATE_INDEX){
+		throw InternalException("GraftTransformationPlan: Operator is not an Index creation operator");
+		}
+
+	// 1. Get our transformation projection (it has its own unique table_index)
+	auto sub_plan = CreatePlanFromSQLString(context, transform_sql);
+	idx_t sub_plan_output_idx = sub_plan->table_index;
+
+	// 2. Identify the original source of data (the table scan)
+	auto &original_scan = index_op.children[0];
+	auto scan_indices = original_scan->GetTableIndex();
+	if (scan_indices.empty()) {
+		throw InternalException("GraftTransformationPlan: Source scan has no table index.");
+	}
+	idx_t actual_source_idx = scan_indices[0];
+
+	// 3. REMAP THE SUB-PLAN:
+	// The sub-plan expressions currently point to '0'.
+	// We update them to point to the actual table scan (actual_source_idx).
+	Replace(*sub_plan, 0, actual_source_idx);
+
+	// 4. REMAP THE INDEX OPERATOR (Crucial Fix for the "Unknown Type" Error):
+	// The index_op's expressions (the keys) currently point to the 'actual_source_idx'.
+	// Since we are putting 'sub_plan' in the middle, the index_op's expressions
+	// MUST now point to the output of the 'sub_plan' (sub_plan_output_idx).
+	for (auto &expr : index_op.expressions) {
+		ReplaceInExpression(*expr, actual_source_idx, sub_plan_output_idx);
 	}
 
-	auto binder = Binder::CreateBinder(context);
-	auto bound_statement = binder->Bind(*statement);
+	// 5. STITCH THE TREE:
+	// Discard the dummy child scan from the sub-plan and plug in the real one.
+	sub_plan->children.clear();
+	sub_plan->children.push_back(std::move(original_scan));
 
-	auto plan = std::move(bound_statement.plan);
-
-	// If the root isn't a projection, create one that projects all columns
-	// TODO; this is probably not correct
-	auto table_index = binder->GenerateTableIndex();
-	vector<unique_ptr<Expression>> select_list;
-	for (idx_t i = 0; i < bound_statement.types.size(); i++) {
-		select_list.push_back(make_uniq<BoundColumnRefExpression>(
-		    bound_statement.types[i], ColumnBinding(0, i) // Binding to the first (and only) child's columns
-		    ));
-	}
-
-	auto projection = make_uniq<LogicalProjection>(table_index, std::move(select_list));
-	projection->children.push_back(std::move(plan));
-
-	return projection;
+	// Finally, set the transformation as the new child of the index operator.
+	index_op.children[0] = std::move(sub_plan);
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
@@ -189,47 +267,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 
 		// we create a new subplan
 		auto &inner = CreatePlan(*child_plan);
-
-		// Parser parser;
-		// auto stmt = parser.GetStatement(bind_data->query);
-		//
-		// if (!stmt) {
-		// 	// TODO: This should maybe be internal exception / or more informative
-		// 	throw BinderException("Cannot parse index creation query!");
-		// }
-		//
-		// // create a new binder
-		// auto binder = Binder::CreateBinder(context);
-		// auto &tbl = op.children.back()->Cast<LogicalGet>();
-		//
-		// // What do bound ids do
-		// vector<ColumnIndex> bound_ids;
-		// binder->bind_context.AddBaseTable(tbl.table_index, "tbl", tbl.names, tbl.types, bound_ids, "tbl");
-		//
-		// // This allows to add a dummy table name
-		// binder->SetBindingMode(BindingMode::EXTRACT_NAMES);
-		// auto bound_stmt = binder->Bind(*stmt);
-		// auto &inner = CreatePlan(*bound_stmt.plan);
-
-#ifdef DEBUG
-		// auto tbl_names = binder->GetTableNames();
-#endif
-
-		//! While it is possible to copy a logical plan using `Copy()`, both, the original and the copy
-		//! are—by design—identical. This includes any table_idx values etc. This is bad, when we try
-		//! to use part of a logical plan multiple times in the same plan.
-		//! The LogicalOperatorDeepCopy first copies a LogicalOperator, but then traverses the entire plan
-		//! and replaces all table indexes. We store a map from the original table index to the new index,
-		//! which we use in the TableBindingReplacer to correct all column accesses.
-
-		// then we need to bind again to the real columns?  or replace the binder for the real binder
-		//! The TableBindingReplacer updates table bindings, utility for optimizers
-		// class TableBindingReplacer : LogicalOperatorVisitor {
-		// public:
-		// 	TableBindingReplacer(std::unordered_map<idx_t, idx_t> &table_idx_replacements,
-		// 						 optional_ptr<bound_parameter_map_t> parameter_data);
-		//
-		// public:
 
 		return AddCreateIndex(*this, op, inner, *index_type, std::move(bind_data));
 	}
