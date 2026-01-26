@@ -38,6 +38,8 @@ struct EncryptionOptions {
 	uint32_t key_length = MainHeader::DEFAULT_ENCRYPTION_KEY_LENGTH;
 	//! User key pointer (to StorageOptions)
 	shared_ptr<string> user_key;
+	//! Version of duckdb-encryption
+	EncryptionTypes::EncryptionVersion encryption_version = EncryptionTypes::NONE;
 };
 
 struct StorageManagerOptions {
@@ -156,6 +158,8 @@ private:
 	static void StoreEncryptedCanary(AttachedDatabase &db, MainHeader &main_header, const string &key_id);
 	static void StoreDBIdentifier(MainHeader &main_header, const data_ptr_t db_identifier);
 	void StoreEncryptionMetadata(MainHeader &main_header) const;
+	template <typename T>
+	static void WriteEncryptionData(MemoryStream &stream, const T &val);
 	uint64_t SetSerializeOrStorageVersion(uint64_t version_number) const;
 
 	//! Check and adding Encryption Keys
