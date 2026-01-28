@@ -300,7 +300,7 @@ void DatabaseHeader::SetStorageVersion(DatabaseHeader &header, idx_t main_versio
 	if (main_version == MainHeader::DEPRECATED_VERSION_NUMBER) {
 		// From v1.5.0 onwards, we use and store only the storage version number
 		// TODO: phase out the version string if we feel confident
-		// TODO: when version is upgraded -> replace version string! make dynamic
+		// TODO: when version is upgraded -> replace version string!
 		SetStorageVersionMappingInternal(header, read_version, "v1.5.0");
 	} else {
 		// before V1.5.0
@@ -442,7 +442,11 @@ uint64_t SingleFileBlockManager::GetVersionNumber() const {
 
 MainHeader ConstructMainHeader(idx_t version_number = MainHeader::DEPRECATED_VERSION_NUMBER) {
 	MainHeader header;
-	header.deprecated_version_number = version_number;
+
+	if (!version_number == MainHeader::DEPRECATED_VERSION_NUMBER) {
+		header.deprecated_version_number = version_number;
+	}
+
 	memset(header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
 	return header;
 }
