@@ -1354,7 +1354,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 		case PhysicalType::VARCHAR: {
 			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 			// new way to serialize strings, two blobs, first lengths, then string bytes
-			if (serializer.ShouldSerialize(8)) {
+			if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 				// we write all the lengths whether the string is null or not. lets not pull a parquet.
 				auto length_data_length = sizeof(uint32_t) * count;
 				auto length_data = make_unsafe_uniq_array_uninitialized<data_t>(length_data_length);
