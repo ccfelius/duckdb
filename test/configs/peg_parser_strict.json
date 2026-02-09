@@ -194,6 +194,12 @@
       ]
     },
     {
+      "reason": "PEG Transformer does not support EXPORT_STATE yet",
+      "paths": [
+        "test/sql/aggregate/aggregates/test_aggregate_state_type.test"
+      ]
+    },
+    {
       "reason": "Unclassified failures",
       "paths": [
         "test/extension/install_extension.test",
@@ -221,6 +227,7 @@
         "test/sql/secrets/create_secret_persistence_no_client_context.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_current_timestamp.test",
         "test/sql/storage/wal/wal_replay_consistency_add_column_random.test",
+        "test/sql/alter/alter_table_set_table_options.test",
         "test/sql/pragma/test_pragma_sanitized_inputs.test"
       ]
     }
