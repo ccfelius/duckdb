@@ -443,7 +443,7 @@ uint64_t SingleFileBlockManager::GetVersionNumber() const {
 MainHeader ConstructMainHeader(idx_t version_number = MainHeader::DEPRECATED_VERSION_NUMBER) {
 	MainHeader header;
 
-	if (!version_number == MainHeader::DEPRECATED_VERSION_NUMBER) {
+	if (!(version_number == MainHeader::DEPRECATED_VERSION_NUMBER)) {
 		header.deprecated_version_number = version_number;
 	}
 
