@@ -21,11 +21,11 @@ static void InitStringVector() {
 	}
 }
 
-static void RunStringSerializationBenchmark(idx_t serialization_version) {
+static void RunStringSerializationBenchmark(StorageVersionMapping &storage_version_mapping) {
 	for (idx_t i = 0; i < 10000; i++) {
 		MemoryStream stream;
-		SerializationOptions options;
-		options.serialization_compatibility = SerializationCompatibility::FromIndex(serialization_version);
+		StorageOptions options;
+		options.storage_compatibility = StorageCompatibility::FromIndex(storage_version_mapping);
 		BinarySerializer serializer(stream, options);
 		serializer.Begin();
 		string_vector.Serialize(serializer, STANDARD_VECTOR_SIZE, true);

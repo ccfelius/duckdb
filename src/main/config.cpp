@@ -879,14 +879,6 @@ StorageCompatibility StorageCompatibility::FromDatabase(AttachedDatabase &db) {
 	return FromIndex(db.GetStorageManager().GetStorageVersionMap());
 }
 
-StorageCompatibility StorageCompatibility::FromIndex(const StorageVersionMapping &storage_version_p) {
-	StorageCompatibility result;
-	result.duckdb_version = storage_version_p.version_string;
-	result.storage_version = storage_version_p.version.GetIndex();
-	result.manually_set = false;
-	return result;
-}
-
 StorageCompatibility StorageCompatibility::FromString(const string &input) {
 	if (input.empty()) {
 		throw InvalidInputException("Version string can not be empty");
@@ -904,6 +896,15 @@ StorageCompatibility StorageCompatibility::FromString(const string &input) {
 	result.duckdb_version = input;
 	result.storage_version = storage_version.version.GetIndex();
 	result.manually_set = true;
+	return result;
+}
+
+StorageCompatibility StorageCompatibility::FromIndex(StorageVersion &storage_version) {
+	StorageCompatibility result;
+
+	result.storage_version = storage_version;
+	result.duckdb_version = GetStorageVersionString(storage_version);
+	result.manually_set = false;
 	return result;
 }
 
@@ -936,10 +937,6 @@ StorageCompatibility StorageCompatibility::Latest() {
 }
 
 bool StorageCompatibility::Compare(StorageVersion property_version) const {
-	return static_cast<idx_t>(property_version) < storage_version;
-}
-
-bool StorageCompatibility::Compare(idx_t property_version) const {
 	return property_version < storage_version;
 }
 
@@ -949,10 +946,8 @@ bool StorageCompatibility::CompareVersionString(const string &property_version) 
 	return property_version_val <= deprecated_serialization_version;
 }
 
-StorageVersionMapping StorageCompatibility::GetStorageVersionMapping() const {
-	StorageVersionMapping result;
-	result.version = storage_version;
-	result.version_string = duckdb_version;
-	return result;
+StorageVersion StorageCompatibility::GetStorageVersionCompatibility() const {
+	return storage_version;
 }
+
 } // namespace duckdb

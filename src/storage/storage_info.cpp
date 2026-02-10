@@ -169,7 +169,7 @@ string GetStorageVersionName(const idx_t storage_version, const bool add_suffix)
 
 idx_t GetSerializationVersionDeprecated(const char *version_string) {
 	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
-		if (!strcmp(serialization_version_info[i].version_name, version_string)) {
+		if (strcmp(serialization_version_info[i].version_name, version_string)) {
 			return SerializationVersionInfo::GetSerializationVersionValue(
 			    serialization_version_info[i].storage_version);
 		}
@@ -177,27 +177,34 @@ idx_t GetSerializationVersionDeprecated(const char *version_string) {
 	return SerializationVersionInfo::Invalid();
 }
 
-idx_t GetStorageVersionValue(const char *version_string) {
+StorageVersion GetStorageVersionValue(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (!strcmp(storage_version_info[i].version_name, version_string)) {
-			return static_cast<idx_t>(storage_version_info[i].storage_version);
+			return storage_version_info[i].storage_version;
 		}
 	}
-	return static_cast<idx_t>(StorageVersionInfo::Invalid());
+	return StorageVersionInfo::Invalid();
 }
 
-StorageVersionMapping GetStorageVersion(const char *version_string) {
-	StorageVersionMapping result;
+StorageVersion GetStorageVersion(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (!strcmp(storage_version_info[i].version_name, version_string)) {
-			result.version = GetStorageVersionValue(version_string);
-			if (result.version.IsValid()) {
-				result.version_string = version_string;
+			auto version = GetStorageVersionValue(version_string);
+			if (version != StorageVersion::INVALID) {
+				return version;
 			}
-			return result;
 		}
 	}
-	return result;
+	return StorageVersion::INVALID;
+}
+
+string GetStorageVersionString(const StorageVersion &version) {
+	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
+		if (storage_version_info[i].storage_version == version) {
+			return storage_version_info[i].version_name;
+		}
+	}
+	throw InvalidInputException("Invalid storage version %d", static_cast<int>(version));
 }
 
 vector<string> GetStorageCandidates() {

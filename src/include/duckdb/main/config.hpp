@@ -68,22 +68,21 @@ struct SettingLookupResult;
 class StorageCompatibility {
 public:
 	static StorageCompatibility FromDatabase(AttachedDatabase &db);
-	static StorageCompatibility FromIndex(const StorageVersionMapping &storage_version_p);
+	static StorageCompatibility FromIndex(StorageVersion &storage_version);
 	static StorageCompatibility FromString(const string &input);
 	static StorageCompatibility Default();
 	static StorageCompatibility Latest();
 
 public:
 	bool Compare(StorageVersion property_version) const;
-	bool Compare(idx_t property_version) const;
 	bool CompareVersionString(const string &property_version) const;
-	StorageVersionMapping GetStorageVersionMapping() const;
+	StorageVersion GetStorageVersionCompatibility() const;
 
 public:
 	//! The user provided version
 	string duckdb_version;
 	//! The max version that should be serialized
-	idx_t storage_version;
+	StorageVersion storage_version;
 	//! Whether this was set by a manual SET/PRAGMA or default
 	bool manually_set;
 	//! serialization version (2 or 3, which are both storage version 64)

@@ -189,18 +189,6 @@ struct StorageVersionInfo {
 	};
 };
 
-struct StorageVersionMapping {
-	optional_idx version = optional_idx();
-	string version_string = "";
-
-	static StorageVersionMapping Default() {
-		StorageVersionMapping result;
-		result.version = static_cast<idx_t>(StorageVersionInfo::GetStorageVersionDefault());
-		result.version_string = "v0.10.2";
-		return result;
-	}
-};
-
 struct SerializationVersionInfo {
 	const char *version_name;
 	SerializationVersionDeprecated storage_version;
