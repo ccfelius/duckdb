@@ -122,34 +122,38 @@ static const SerializationVersionInfo serialization_version_info[] = {
 static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
 static_assert(static_cast<idx_t>(DEFAULT_STORAGE_VERSION_INFO) == VERSION_NUMBER, "Check on VERSION_INFO");
 
-string GetStorageVersionNameInternal(const idx_t storage_version) {
-	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
+const StorageVersionInfo* GetStorageVersionInfo() {
+	return storage_version_info;
+}
+
+string GetStorageVersionNameInternal(const StorageVersion storage_version) {
+	if (StorageManager::IsPriorToVersion(StorageVersion::V0_10_3, storage_version)) {
 		// TODO, what if we read duckdb 1.0 and 1.1?
 		// serialization version 1 is used for everything below 0.10.3
 		return "v0.10.2";
 	}
 
-	optional_idx min_idx;
+	StorageVersion min_version;
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (strcmp(storage_version_info[i].version_name, "latest") == 0) {
 			continue;
 		}
-		if (static_cast<idx_t>(storage_version_info[i].storage_version) != storage_version) {
+		if (storage_version_info[i].storage_version != storage_version) {
 			continue;
 		}
-		if (!min_idx.IsValid()) {
-			min_idx = i;
+		if (min_version != StorageVersion::INVALID) {
+			min_version = storage_version_info[i].storage_version;
 		}
 	}
-	if (!min_idx.IsValid()) {
+	if (min_version == StorageVersion::INVALID) {
 		D_ASSERT(0);
 		return "";
 	}
 
-	return string(storage_version_info[min_idx.GetIndex()].version_name);
+	return StorageVersionInfo::GetStorageVersionString(storage_version);
 }
 
-string GetStorageVersionName(const idx_t storage_version, const bool add_suffix) {
+string GetStorageVersionName(const StorageVersion storage_version, const bool add_suffix) {
 	if (StorageManager::IsPriorToVersion(StorageVersion::V1_2_0, storage_version)) {
 		// special handling for lower storage versions
 		return "v1.0.0+";
@@ -198,7 +202,7 @@ StorageVersion GetStorageVersion(const char *version_string) {
 	return StorageVersion::INVALID;
 }
 
-string GetStorageVersionString(const StorageVersion &version) {
+string StorageVersionInfo::GetStorageVersionString(const StorageVersion &version) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (storage_version_info[i].storage_version == version) {
 			return storage_version_info[i].version_name;

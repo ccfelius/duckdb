@@ -25,8 +25,8 @@ using SHA256State = duckdb_mbedtls::MbedTlsWrapper::SHA256State;
 
 void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided) {
 	// storage version < v1.4.0
-	if (!storage_version.version.IsValid() ||
-	    StorageManager::TargetAtLeastVersion(StorageVersion::V1_4_0, storage_version.version.GetIndex())) {
+	if (storage_version == StorageVersion::INVALID ||
+	    StorageManager::TargetAtLeastVersion(StorageVersion::V1_4_0, storage_version)) {
 		if (!storage_version_user_provided.empty()) {
 			throw InvalidInputException("Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= "
 			                            "v1.4.0) are not compatible",
@@ -43,12 +43,12 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 	switch (target_encryption_version) {
 	case EncryptionTypes::V0_1:
 		// storage version not explicitly set
-		if (!storage_version.version.IsValid() && storage_version_user_provided.empty()) {
-			storage_version.version = StorageCompatibility::FromString("v1.5.0").storage_version;
+		if (storage_version == StorageVersion::INVALID&& storage_version_user_provided.empty()) {
+			storage_version = StorageVersion::V1_4_0;
 			break;
 		}
 		// storage version set, but v1.4.0 =< storage < v1.5.0
-		if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_5_0, storage_version.version.GetIndex())) {
+		if (StorageManager::TargetAtLeastVersion(StorageVersion::V1_5_0, storage_version)) {
 			if (!storage_version_user_provided.empty()) {
 				if (encryption_version == target_encryption_version) {
 					// encryption version is explicitly given, but not compatible with < v1.5.0
@@ -68,8 +68,8 @@ void StorageOptions::SetEncryptionVersion(string &storage_version_user_provided)
 
 	case EncryptionTypes::V0_0:
 		// we set this to V0 to V1.5.0 if no explicit storage version provided
-		if (!storage_version.version.IsValid() && storage_version_user_provided.empty()) {
-			storage_version.version = static_cast<idx_t>(StorageVersion::V1_5_0);
+		if (storage_version == StorageVersion::INVALID && storage_version_user_provided.empty()) {
+			storage_version = StorageVersion::V1_5_0;
 			break;
 		}
 		// if storage version is provided, we do nothing
@@ -111,8 +111,7 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 			row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {
 			storage_version_user_provided = entry.second.ToString();
-			storage_version.version = StorageCompatibility::FromString(storage_version_user_provided).storage_version;
-			storage_version.version_string = storage_version_user_provided;
+			storage_version = StorageCompatibility::FromString(storage_version_user_provided).storage_version;
 		} else if (entry.first == "compress") {
 			if (entry.second.DefaultCastAs(LogicalType::BOOLEAN).GetValue<bool>()) {
 				compress_in_memory = CompressInMemory::COMPRESS;
@@ -131,16 +130,15 @@ void StorageOptions::Initialize(const unordered_map<string, Value> &options) {
 	}
 
 	if (encryption &&
-	    (!storage_version.version.IsValid() ||
-	     storage_version.version.GetIndex() < StorageCompatibility::FromString("v1.4.0").storage_version)) {
+	    (storage_version == StorageVersion::INVALID ||
+	     storage_version < StorageCompatibility::FromString("v1.4.0").storage_version)) {
 		if (!storage_version_user_provided.empty()) {
 			throw InvalidInputException(
 			    "Explicit provided STORAGE_VERSION (\"%s\") and ENCRYPTION_KEY (storage >= v1.4.0) are not compatible",
 			    storage_version_user_provided);
 		}
 		// set storage version to v1.4.0
-		storage_version.version_string = "v1.4.0";
-		storage_version.version = StorageCompatibility::FromString("v1.4.0").storage_version;
+		storage_version = StorageVersion::V1_4_0;
 	}
 }
 
@@ -343,14 +341,6 @@ bool StorageManager::TargetAtLeastVersion(StorageVersion target_version, idx_t s
 }
 
 // comparison used to see whether the storage version is compatible
-bool StorageManager::IsPriorToVersion(StorageVersion target_version, idx_t storage_version) {
-	if (storage_version < static_cast<idx_t>(target_version)) {
-		// storage version is lower then required storage version
-		return true;
-	}
-	return false;
-}
-
 bool StorageManager::IsPriorToVersion(StorageVersion target_version, StorageVersion storage_version) {
 	if (storage_version < target_version) {
 		// storage version is lower then required storage version
@@ -401,7 +391,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		// in-memory databases can always use the latest storage version
-		storage_version = GetStorageVersion("latest");
+		storage_version = StorageVersion::LATEST;
 		load_complete = true;
 		return;
 	}
@@ -471,9 +461,9 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 			// No encryption; use the default option.
 			options.block_header_size = config.options.default_block_header_size;
 		}
-		if (!options.storage_version.version.IsValid()) {
+		if (options.storage_version == StorageVersion::INVALID) {
 			// when creating a new database we default to the default storage version specified in the config
-			options.storage_version = config.options.storage_compatibility.GetStorageVersionMapping();
+			options.storage_version = config.options.storage_compatibility.GetStorageVersionCompatibility();
 		}
 
 		// Initialize the block manager before creating a new database.
@@ -565,7 +555,7 @@ void SingleFileStorageManager::LoadDatabase(QueryContext context) {
 		}
 	}
 
-	if (row_group_size > 122880ULL && GetStorageVersionValueIdx() < static_cast<idx_t>(StorageVersion::V1_2_0)) {
+	if (row_group_size > 122880ULL && GetStorageVersion() < StorageVersion::V1_2_0) {
 		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
 		                            "with STORAGE_VERSION '1.2.0' or above.\nExplicitly specify a newer storage "
 		                            "version when creating the database to enable larger row groups",

@@ -239,7 +239,7 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		auto &storage_manager = attached.GetStorageManager();
 		const auto since = StorageCompatibility::FromString("v1.4.0").storage_version;
 		store_types = info.temporary || attached.IsTemporary() || storage_manager.InMemory() ||
-		              storage_manager.GetStorageVersionValueIdx() >= since;
+		              storage_manager.GetStorageVersion() >= since;
 	}
 	// try to bind each of the included functions
 	vector_of_logical_type_set_t type_overloads;

@@ -358,10 +358,9 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
                     const string &name) {
 	case_insensitive_map_t<Value> options;
-	auto storage_version = db.GetStorageManager().GetStorageVersionValueIdx();
+	auto storage_version = db.GetStorageManager().GetStorageVersion();
 
-	// Todo, make this peace nicer
-	// origininally, the check is for < storage version 1.1.0
+	// originally, the check is for < storage version 1.1.0
 	bool v1_0_0_storage = StorageManager::TargetAtLeastVersion(StorageVersion::V1_2_0, storage_version);
 
 	if (!v1_0_0_storage) {

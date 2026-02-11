@@ -68,7 +68,7 @@ struct SettingLookupResult;
 class StorageCompatibility {
 public:
 	static StorageCompatibility FromDatabase(AttachedDatabase &db);
-	static StorageCompatibility FromIndex(StorageVersion &storage_version);
+	static StorageCompatibility FromIndex(const StorageVersion &storage_version);
 	static StorageCompatibility FromString(const string &input);
 	static StorageCompatibility Default();
 	static StorageCompatibility Latest();

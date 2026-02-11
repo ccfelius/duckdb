@@ -876,7 +876,7 @@ SerializationOptions::SerializationOptions(AttachedDatabase &db) {
 }
 
 StorageCompatibility StorageCompatibility::FromDatabase(AttachedDatabase &db) {
-	return FromIndex(db.GetStorageManager().GetStorageVersionMap());
+	return FromIndex(db.GetStorageManager().GetStorageVersion());
 }
 
 StorageCompatibility StorageCompatibility::FromString(const string &input) {
@@ -886,7 +886,7 @@ StorageCompatibility StorageCompatibility::FromString(const string &input) {
 
 	auto storage_version = GetStorageVersion(input.c_str());
 
-	if (!storage_version.version.IsValid()) {
+	if (storage_version == StorageVersion::INVALID) {
 		auto candidates = GetStorageCandidates();
 		throw InvalidInputException("The version string '%s' is not a known DuckDB version, valid options are: %s",
 		                            input, StringUtil::Join(candidates, ", "));
@@ -894,16 +894,16 @@ StorageCompatibility StorageCompatibility::FromString(const string &input) {
 
 	StorageCompatibility result;
 	result.duckdb_version = input;
-	result.storage_version = storage_version.version.GetIndex();
+	result.storage_version = storage_version;
 	result.manually_set = true;
 	return result;
 }
 
-StorageCompatibility StorageCompatibility::FromIndex(StorageVersion &storage_version) {
+StorageCompatibility StorageCompatibility::FromIndex(const StorageVersion &storage_version) {
 	StorageCompatibility result;
 
 	result.storage_version = storage_version;
-	result.duckdb_version = GetStorageVersionString(storage_version);
+	result.duckdb_version = StorageVersionInfo::GetStorageVersionString(storage_version);
 	result.manually_set = false;
 	return result;
 }
