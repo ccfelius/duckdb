@@ -26,6 +26,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/planner/query_node/list.hpp"
 #include "duckdb/planner/tableref/list.hpp"
+#include "duckdb/main/client_data.hpp"
 
 #include <algorithm>
 
@@ -78,6 +79,27 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
+	// set search paths
+	auto &system_catalog = Catalog::GetSystemCatalog(*context.db);
+	std::vector<std::string> all_schemas;
+	system_catalog.ScanSchemas(context, [&](SchemaCatalogEntry &schema) {
+		// schema.name contains the string name of the schema
+		all_schemas.push_back(schema.name);
+	});
+
+	auto &path = context.client_data->catalog_search_path;
+	// this is hardcoded and ugly
+	if (all_schemas.size() > 3) {
+		vector<CatalogSearchEntry> search_paths;
+		auto existing_paths = path->Get();
+		for (uint32_t i = 3; i < all_schemas.size(); i++) {
+			// add them to the catalog search path
+			CatalogSearchEntry entry(SYSTEM_CATALOG, all_schemas[i]);
+			search_paths.push_back(entry);
+		}
+		path->Set(search_paths, CatalogSetPathType::SET_SCHEMAS);
+	}
+
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		return Bind(statement.Cast<SelectStatement>());

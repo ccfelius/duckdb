@@ -40,6 +40,8 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 
+#include <duckdb/main/client_data.hpp>
+
 namespace duckdb {
 
 static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyType alter_fk_type,

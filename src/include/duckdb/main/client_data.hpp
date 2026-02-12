@@ -45,7 +45,7 @@ public:
 	//! The catalog search path.
 	unique_ptr<CatalogSearchPath> catalog_search_path;
 	//! Extension Function Mapping
-	//unique_ptr<ExtensionFunctionMapping> extension_function_mapping;
+	// unique_ptr<ExtensionFunctionMapping> extension_function_mapping;
 
 	//! The file opener of the client context.
 	unique_ptr<FileOpener> file_opener;

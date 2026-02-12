@@ -3,6 +3,7 @@
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/main/client_data.hpp"
 
 #include <duckdb/parser/parsed_data/create_schema_info.hpp>
 
@@ -73,15 +74,19 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 }
 
 void ExtensionManager::CreateExtensionSchema(const string &name) {
+	// create a dummy connection
+	auto context = std::make_shared<ClientContext>(db.shared_from_this());
+	context->transaction.BeginTransaction();
+
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 
-	// Create the extension schema
 	CreateSchemaInfo info;
 	info.schema = name;
 	info.internal = true;
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateSchema(data, info);
+	context->transaction.Commit();
 }
 
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) {
