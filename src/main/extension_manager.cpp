@@ -109,12 +109,15 @@ void ExtensionManager::SyncExtensionPaths(ClientContext &context) {
 	auto all_extension_schemas = GetExtensions();
 	auto &current_path = context.client_data->catalog_search_path;
 
+	vector<CatalogSearchEntry> new_paths;
 	for (const auto &schema : all_extension_schemas) {
 		if (!(current_path->HasSchema(schema))) {
-			current_path->Set(CatalogSearchEntry(SYSTEM_CATALOG, schema), CatalogSetPathType::SET_SCHEMA);
+			new_paths.push_back(CatalogSearchEntry(SYSTEM_CATALOG, schema));
 		}
 	}
+
 	// Update local search path version
+	current_path->Set(new_paths, CatalogSetPathType::SET_SCHEMAS);
 	context.client_data->catalog_search_path_version = GetCatalogSearchPathsVersion();
 }
 

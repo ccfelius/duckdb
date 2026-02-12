@@ -185,9 +185,8 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 	}
 	if (set_type == CatalogSetPathType::SET_SCHEMA) {
 		if (new_paths[0].catalog == TEMP_CATALOG || new_paths[0].catalog == SYSTEM_CATALOG) {
-			// TODO; why can this not be?
-			// throw CatalogException("%s cannot be set to internal schema \"%s\"", GetSetName(set_type),
-			//                        new_paths[0].catalog);
+			throw CatalogException("%s cannot be set to internal schema \"%s\"", GetSetName(set_type),
+			                       new_paths[0].catalog);
 		}
 	}
 	SetPathsInternal(std::move(new_paths));
