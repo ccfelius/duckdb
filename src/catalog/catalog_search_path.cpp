@@ -306,14 +306,14 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 }
 
 void CatalogSearchPath::UpdateCatalogSearchPaths(const vector<CatalogSearchEntry> &new_paths) {
-	auto &current_set_paths = this->set_paths;
+	auto current_set_paths = this->set_paths;
 
 	for (auto &entry : new_paths) {
 		D_ASSERT(!HasSchema(entry.schema));
 		current_set_paths.push_back(entry);
 	}
 
-	SetPathsInternal(current_set_paths);
+	SetPathsInternal(std::move(current_set_paths));
 }
 
 bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string &catalog_name,
