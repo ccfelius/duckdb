@@ -189,7 +189,7 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 			                       new_paths[0].catalog);
 		}
 	}
-	SetPathsInternal(std::move(new_paths));
+	UpdateCatalogSearchPaths(new_paths);
 }
 
 void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type) {
@@ -297,13 +297,23 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	paths.clear();
 	paths.reserve(set_paths.size() + 4);
 	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
-
 	for (auto &path : set_paths) {
 		paths.push_back(path);
 	}
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+}
+
+void CatalogSearchPath::UpdateCatalogSearchPaths(const vector<CatalogSearchEntry> &new_paths) {
+	auto &current_set_paths = this->set_paths;
+
+	for (auto &entry : new_paths) {
+		D_ASSERT(!HasSchema(entry.schema));
+		current_set_paths.push_back(entry);
+	}
+
+	SetPathsInternal(current_set_paths);
 }
 
 bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string &catalog_name,

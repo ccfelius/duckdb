@@ -66,6 +66,7 @@ public:
 	                                   const string &schema_name) const;
 
 private:
+	void UpdateCatalogSearchPaths(const vector<CatalogSearchEntry> &new_paths);
 	//! Set paths without checking if they exist
 	void SetPathsInternal(vector<CatalogSearchEntry> new_paths);
 	string GetSetName(CatalogSetPathType set_type);

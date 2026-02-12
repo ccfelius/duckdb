@@ -6,8 +6,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-
-#include <duckdb/parser/parsed_data/create_schema_info.hpp>
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 
 namespace duckdb {
 
@@ -118,7 +117,8 @@ void ExtensionManager::SyncExtensionPaths(ClientContext &context) {
 
 	// Update local search path version
 	current_path->Set(new_paths, CatalogSetPathType::SET_SCHEMAS);
-	context.client_data->catalog_search_path_version = GetCatalogSearchPathsVersion();
+	context.client_data->catalog_search_path_version += new_paths.size();
+	D_ASSERT(context.client_data->catalog_search_path_version == GetCatalogSearchPathsVersion());
 }
 
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) {
