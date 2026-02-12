@@ -36,6 +36,7 @@ add_library_unity(
   error_manager.cpp
   extension.cpp
   extension_callback_manager.cpp
+  extension_function_mapping.cpp
   extension_install_info.cpp
   extension_manager.cpp
   materialized_query_result.cpp

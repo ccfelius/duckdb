@@ -1,0 +1,6 @@
+# name: test/sql/extensions/multiple_similar_functions.test
+# description: Test that loading extensions from arbitrary paths is forbidden
+# group: [extensions]
+
+statement ok
+LOAD 'quack';

@@ -4,6 +4,8 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
+#include <duckdb/parser/parsed_data/create_schema_info.hpp>
+
 namespace duckdb {
 
 ExtensionInfo::ExtensionInfo() : is_loaded(false) {
@@ -70,6 +72,18 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	return info->is_loaded;
 }
 
+void ExtensionManager::CreateExtensionSchema(const string &name) {
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+
+	// Create the extension schema
+	CreateSchemaInfo info;
+	info.schema = name;
+	info.internal = true;
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	system_catalog.CreateSchema(data, info);
+}
+
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 
@@ -82,6 +96,12 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 		auto extension_info = make_uniq<ExtensionInfo>();
 		info = extension_info.get();
 		loaded_extensions_info.emplace(extension_name, std::move(extension_info));
+
+		if (extension_name == "quack") {
+			// directly create and register a schema for this extension
+			CreateExtensionSchema(extension_name);
+		}
+
 	} else {
 		// we already have an entry
 		if (entry->second->is_loaded) {
@@ -91,6 +111,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 		// it is not loaded yet - try to load it
 		info = entry->second.get();
 	}
+
 	extension_list_lock.unlock();
 
 	// we have an extension and we want to try to load it - instantiate the load

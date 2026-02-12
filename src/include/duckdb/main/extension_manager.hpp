@@ -46,6 +46,7 @@ public:
 	DUCKDB_API vector<string> GetExtensions();
 	DUCKDB_API optional_ptr<ExtensionInfo> GetExtensionInfo(const string &name);
 	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const string &extension);
+	DUCKDB_API void CreateExtensionSchema(const string &name);
 
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);

@@ -195,6 +195,10 @@ bool CatalogSet::CreateEntryInternal(CatalogTransaction transaction, const strin
 bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name, unique_ptr<CatalogEntry> value,
                              const LogicalDependencyList &dependencies) {
 	CheckCatalogEntryInvariants(*value, name);
+	auto second_name = "";
+	if (name == "quack") {
+		second_name = "quack";
+	}
 
 	// Mark this entry as being created by the current active transaction
 	value->timestamp = transaction.transaction_id;

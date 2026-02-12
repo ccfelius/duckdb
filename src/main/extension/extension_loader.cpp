@@ -17,6 +17,8 @@
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/main/database.hpp"
 
+#include <duckdb/parser/parsed_data/create_schema_info.hpp>
+
 namespace duckdb {
 
 ExtensionLoader::ExtensionLoader(ExtensionActiveLoad &load_info)
@@ -43,6 +45,18 @@ void ExtensionLoader::FinalizeLoad() {
 	}
 }
 
+void ExtensionLoader::CreateExtensionSchema() {
+	// auto &system_catalog = Catalog::GetSystemCatalog(db);
+	// auto data = CatalogTransaction::GetSystemTransaction(db);
+	//
+	// // create the extension schema
+	// CreateSchemaInfo info;
+	// info.schema = extension_name;
+	// info.internal = true;
+	// info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	// system_catalog.CreateSchema(data, info);
+}
+
 void ExtensionLoader::RegisterFunction(ScalarFunction function) {
 	ScalarFunctionSet set(function.name);
 	set.AddFunction(std::move(function));
@@ -57,6 +71,12 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 
 void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
+
+	if (function.name == "quack") {
+		function.schema = extension_name;
+	}
+
+	// auto &extension_catalog = Catalog::GetExtensionCatalog(db);
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);

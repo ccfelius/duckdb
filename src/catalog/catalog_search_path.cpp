@@ -287,6 +287,7 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	paths.clear();
 	paths.reserve(set_paths.size() + 4);
 	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
+
 	for (auto &path : set_paths) {
 		paths.push_back(path);
 	}
