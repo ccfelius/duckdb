@@ -4,6 +4,8 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 #include <duckdb/parser/parsed_data/create_schema_info.hpp>
 
@@ -74,7 +76,7 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 }
 
 void ExtensionManager::CreateExtensionSchema(const string &name) {
-	// create a dummy connection
+	// create a dummy connection to persist the create schema change
 	auto context = std::make_shared<ClientContext>(db.shared_from_this());
 	context->transaction.BeginTransaction();
 
@@ -86,7 +88,34 @@ void ExtensionManager::CreateExtensionSchema(const string &name) {
 	info.internal = true;
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateSchema(data, info);
+
 	context->transaction.Commit();
+
+	// Add the extension to the search path
+	CatalogSearchEntry entry(SYSTEM_CATALOG, name);
+	search_paths.push_back(entry);
+	++catalog_version;
+}
+
+vector<CatalogSearchEntry> &ExtensionManager::GetSearchPaths() {
+	return search_paths;
+}
+
+uint64_t ExtensionManager::GetCatalogSearchPathsVersion() {
+	return catalog_version;
+}
+
+void ExtensionManager::SyncExtensionPaths(ClientContext &context) {
+	auto all_extension_schemas = GetExtensions();
+	auto &current_path = context.client_data->catalog_search_path;
+
+	for (const auto &schema : all_extension_schemas) {
+		if (!(current_path->HasSchema(schema))) {
+			current_path->Set(CatalogSearchEntry(SYSTEM_CATALOG, schema), CatalogSetPathType::SET_SCHEMA);
+		}
+	}
+	// Update local search path version
+	context.client_data->catalog_search_path_version = GetCatalogSearchPathsVersion();
 }
 
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) {
@@ -101,12 +130,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 		auto extension_info = make_uniq<ExtensionInfo>();
 		info = extension_info.get();
 		loaded_extensions_info.emplace(extension_name, std::move(extension_info));
-
-		if (extension_name == "quack") {
-			// directly create and register a schema for this extension
-			CreateExtensionSchema(extension_name);
-		}
-
+		CreateExtensionSchema(extension_name);
 	} else {
 		// we already have an entry
 		if (entry->second->is_loaded) {

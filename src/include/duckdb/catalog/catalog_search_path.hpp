@@ -44,6 +44,7 @@ public:
 	DUCKDB_API CatalogSearchPath(ClientContext &client_p, vector<CatalogSearchEntry> entries);
 	CatalogSearchPath(const CatalogSearchPath &other) = delete;
 
+	DUCKDB_API bool HasSchema(const string &schema) const;
 	DUCKDB_API void Set(CatalogSearchEntry new_value, CatalogSetPathType set_type);
 	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type);
 	DUCKDB_API void Reset();

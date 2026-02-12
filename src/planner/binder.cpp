@@ -79,25 +79,10 @@ BoundStatement Binder::BindWithCTE(T &statement) {
 }
 
 BoundStatement Binder::Bind(SQLStatement &statement) {
-	// set search paths
-	auto &system_catalog = Catalog::GetSystemCatalog(*context.db);
-	std::vector<std::string> all_schemas;
-	system_catalog.ScanSchemas(context, [&](SchemaCatalogEntry &schema) {
-		// schema.name contains the string name of the schema
-		all_schemas.push_back(schema.name);
-	});
-
-	auto &path = context.client_data->catalog_search_path;
-	// this is hardcoded and ugly
-	if (all_schemas.size() > 3) {
-		vector<CatalogSearchEntry> search_paths;
-		auto existing_paths = path->Get();
-		for (uint32_t i = 3; i < all_schemas.size(); i++) {
-			// add them to the catalog search path
-			CatalogSearchEntry entry(SYSTEM_CATALOG, all_schemas[i]);
-			search_paths.push_back(entry);
-		}
-		path->Set(search_paths, CatalogSetPathType::SET_SCHEMAS);
+	// Check whether the catalog extension counter is out-of-sync
+	auto &extension_manager = ExtensionManager::Get(*context.db);
+	if (context.client_data->catalog_search_path_version < extension_manager.GetCatalogSearchPathsVersion()) {
+		extension_manager.SyncExtensionPaths(context);
 	}
 
 	switch (statement.type) {

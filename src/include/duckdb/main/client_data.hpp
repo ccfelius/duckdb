@@ -44,6 +44,8 @@ public:
 
 	//! The catalog search path.
 	unique_ptr<CatalogSearchPath> catalog_search_path;
+	//! version of the catalog search path
+	atomic<uint64_t> catalog_search_path_version {0};
 	//! Extension Function Mapping
 	// unique_ptr<ExtensionFunctionMapping> extension_function_mapping;
 

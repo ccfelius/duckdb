@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 namespace duckdb {
 class ErrorData;
@@ -46,7 +47,11 @@ public:
 	DUCKDB_API vector<string> GetExtensions();
 	DUCKDB_API optional_ptr<ExtensionInfo> GetExtensionInfo(const string &name);
 	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const string &extension);
+
 	DUCKDB_API void CreateExtensionSchema(const string &name);
+	DUCKDB_API vector<CatalogSearchEntry> &GetSearchPaths();
+	DUCKDB_API uint64_t GetCatalogSearchPathsVersion();
+	DUCKDB_API void SyncExtensionPaths(ClientContext &context);
 
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);
@@ -55,6 +60,9 @@ private:
 	DatabaseInstance &db;
 	mutex lock;
 	unordered_map<string, unique_ptr<ExtensionInfo>> loaded_extensions_info;
+
+	atomic<uint64_t> catalog_version {0};
+	vector<CatalogSearchEntry> search_paths;
 };
 
 } // namespace duckdb
