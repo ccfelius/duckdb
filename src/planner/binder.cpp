@@ -82,6 +82,7 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 	// Check whether the catalog extension counter is out-of-sync
 	auto &extension_manager = ExtensionManager::Get(*context.db);
 	if (context.client_data->catalog_search_path_version < extension_manager.GetCatalogSearchPathsVersion()) {
+		auto &local_search_path = entry_retriever.GetSearchPath();
 		extension_manager.SyncExtensionPaths(context);
 	}
 

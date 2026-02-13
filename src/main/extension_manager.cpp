@@ -96,7 +96,7 @@ void ExtensionManager::CreateExtensionSchema(const string &name) {
 	++catalog_version;
 }
 
-vector<CatalogSearchEntry> &ExtensionManager::GetSearchPaths() {
+vector<CatalogSearchEntry> &ExtensionManager::GetExtensionSearchPaths() {
 	return search_paths;
 }
 
@@ -106,7 +106,7 @@ uint64_t ExtensionManager::GetCatalogSearchPathsVersion() {
 
 void ExtensionManager::SyncExtensionPaths(ClientContext &context) {
 	auto all_extension_schemas = GetExtensions();
-	auto &current_path = context.client_data->catalog_search_path;
+	auto &client_search_path = context.client_data->catalog_search_path;
 
 	vector<CatalogSearchEntry> all_paths;
 	for (const auto &schema : all_extension_schemas) {
@@ -116,7 +116,7 @@ void ExtensionManager::SyncExtensionPaths(ClientContext &context) {
 	}
 
 	// Update local search path version
-	current_path->Set(all_paths, CatalogSetPathType::SET_SCHEMAS);
+	client_search_path->Set(all_paths, CatalogSetPathType::SET_SCHEMAS);
 	context.client_data->catalog_search_path_version += all_paths.size();
 	D_ASSERT(context.client_data->catalog_search_path_version == GetCatalogSearchPathsVersion());
 }

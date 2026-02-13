@@ -49,7 +49,7 @@ public:
 	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const string &extension);
 
 	DUCKDB_API void CreateExtensionSchema(const string &name);
-	DUCKDB_API vector<CatalogSearchEntry> &GetSearchPaths();
+	DUCKDB_API vector<CatalogSearchEntry> &GetExtensionSearchPaths();
 	DUCKDB_API uint64_t GetCatalogSearchPathsVersion();
 	DUCKDB_API void SyncExtensionPaths(ClientContext &context);
 
