@@ -189,7 +189,8 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 			                       new_paths[0].catalog);
 		}
 	}
-	UpdateCatalogSearchPaths(new_paths);
+
+	SetPathsInternal(new_paths);
 }
 
 void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type) {

@@ -108,16 +108,16 @@ void ExtensionManager::SyncExtensionPaths(ClientContext &context) {
 	auto all_extension_schemas = GetExtensions();
 	auto &current_path = context.client_data->catalog_search_path;
 
-	vector<CatalogSearchEntry> new_paths;
+	vector<CatalogSearchEntry> all_paths;
 	for (const auto &schema : all_extension_schemas) {
-		if (!(current_path->HasSchema(schema))) {
-			new_paths.push_back(CatalogSearchEntry(SYSTEM_CATALOG, schema));
-		}
+		// we override the whole schema
+		// extensions also might be unloaded
+		all_paths.push_back(CatalogSearchEntry(SYSTEM_CATALOG, schema));
 	}
 
 	// Update local search path version
-	current_path->Set(new_paths, CatalogSetPathType::SET_SCHEMAS);
-	context.client_data->catalog_search_path_version += new_paths.size();
+	current_path->Set(all_paths, CatalogSetPathType::SET_SCHEMAS);
+	context.client_data->catalog_search_path_version += all_paths.size();
 	D_ASSERT(context.client_data->catalog_search_path_version == GetCatalogSearchPathsVersion());
 }
 
