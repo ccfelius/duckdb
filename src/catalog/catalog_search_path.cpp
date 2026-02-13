@@ -126,7 +126,7 @@ vector<CatalogSearchEntry> CatalogSearchEntry::ParseList(const string &input) {
 	return result;
 }
 
-CatalogSearchPath::CatalogSearchPath(ClientContext &context_p, vector<CatalogSearchEntry> entries)
+CatalogSearchPath::CatalogSearchPath(ClientContext &context_p, vector<CatalogSearchEntry> entries, vector<CatalogSearchEntry> entries)
     : context(context_p) {
 	SetPathsInternal(std::move(entries));
 }
@@ -150,7 +150,7 @@ string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
 	}
 }
 
-void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type) {
+void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type, CatalogSearchPathType search_path_type) {
 	if (set_type == CatalogSetPathType::SET_SCHEMA && new_paths.size() != 1) {
 		throw CatalogException("%s can set only 1 schema. This has %d", GetSetName(set_type), new_paths.size());
 	}
@@ -190,10 +190,10 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 		}
 	}
 
-	SetPathsInternal(new_paths);
+	SetPathsInternal(new_paths, search_path_type);
 }
 
-void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type) {
+void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type, CatalogSearchPathType search_path_type) {
 	vector<CatalogSearchEntry> new_paths {std::move(new_value)};
 	Set(std::move(new_paths), set_type);
 }
@@ -287,21 +287,20 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 }
 
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
-	for (const auto &path : paths) {
-		if (path.catalog == TEMP_CATALOG || path.catalog == SYSTEM_CATALOG) {
-			continue;
-		}
-		return path;
-	}
-	D_ASSERT(paths.size() > 2);
+	D_ASSERT(paths.size() >= 2);
+	D_ASSERT(!paths[1].schema.empty());
 	return paths[1];
 }
 
-void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
-	this->set_paths = std::move(new_paths);
+void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths, CatalogSearchPathType search_path_type) {
+	if (search_path_type == CatalogSearchPathType::EXTENSION_PATH){
+		this->extension_paths = std::move(new_paths);
+	} else {
+		this->set_paths = std::move(new_paths);
+	}
 
 	paths.clear();
-	paths.reserve(set_paths.size() + 4);
+	paths.reserve(set_paths.size() + 4 + extension_paths.size());
 	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
 	for (auto &path : set_paths) {
 		paths.push_back(path);
@@ -309,6 +308,11 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+
+	// we append extension paths at the end
+	for (auto &path : extension_paths) {
+		paths.push_back(path);
+	}
 }
 
 void CatalogSearchPath::UpdateCatalogSearchPaths(const vector<CatalogSearchEntry> &new_paths) {

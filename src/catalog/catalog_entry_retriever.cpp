@@ -99,6 +99,7 @@ void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 	// push the set paths from the ClientContext behind the provided paths
 	auto &client_search_path = *ClientData::Get(context).catalog_search_path;
 	auto &set_paths = client_search_path.GetSetPaths();
+	auto &extension_paths = client_search_path.GetExtensionPaths();
 	for (auto path : set_paths) {
 		if (IsInvalidCatalog(path.catalog)) {
 			path.catalog = DatabaseManager::GetDefaultDatabase(context);
