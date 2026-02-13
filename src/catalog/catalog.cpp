@@ -1068,6 +1068,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 	}
 	return result.entry.get();
 }
+
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const string &catalog, const string &schema,
                                              const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	CatalogEntryRetriever retriever(context);

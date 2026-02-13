@@ -103,6 +103,7 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 			// the schema is set - check if we can turn this the schema into a column ref
 			// does this function exist in the system catalog?
 			func = GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+			//func = GetCatalogEntry(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
 			if (func) {
 				// the function exists in the system catalog - turn this into a dot call
 				ErrorData error;
