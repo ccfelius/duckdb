@@ -289,6 +289,9 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 	D_ASSERT(paths.size() >= 2);
 	D_ASSERT(!paths[1].schema.empty());
+#ifdef DEBUG
+	auto default_path = paths[1];
+#endif
 	return paths[1];
 }
 
