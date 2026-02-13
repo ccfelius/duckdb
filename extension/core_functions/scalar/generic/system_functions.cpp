@@ -64,7 +64,7 @@ unique_ptr<FunctionData> CurrentSchemasBind(ClientContext &context, ScalarFuncti
 		auto implicit_schemas = BooleanValue::Get(schema_value);
 		vector<Value> schema_list;
 		auto &catalog_search_path = ClientData::Get(context).catalog_search_path;
-		auto &search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetSetPaths();
+		auto &search_path = implicit_schemas ? catalog_search_path->Get() : catalog_search_path->GetUserPaths();
 		std::transform(search_path.begin(), search_path.end(), std::back_inserter(schema_list),
 		               [](const CatalogSearchEntry &s) -> Value { return Value(s.schema); });
 		result_val = Value::LIST(LogicalType::VARCHAR, schema_list);
