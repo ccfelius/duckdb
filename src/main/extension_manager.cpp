@@ -41,8 +41,18 @@ ExtensionManager &ExtensionManager::Get(DatabaseInstance &db) {
 	return db.GetExtensionManager();
 }
 
+void ExtensionManager::AddSearchPath(DatabaseInstance &db, const CatalogSearchEntry &entry) {
+	auto &manager = Get(db);
+	manager.GetExtensionSearchPaths().push_back(entry);
+}
+
+void ExtensionManager::AddSearchPath(ClientContext &context, const CatalogSearchEntry &entry) {
+	auto &manager = Get(context);
+	manager.GetExtensionSearchPaths().push_back(entry);
+}
+
 ExtensionManager &ExtensionManager::Get(ClientContext &context) {
-	return ExtensionManager::Get(DatabaseInstance::GetDatabase(context));
+	return Get(DatabaseInstance::GetDatabase(context));
 }
 
 optional_ptr<ExtensionInfo> ExtensionManager::GetExtensionInfo(const string &name) {
@@ -75,10 +85,6 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 }
 
 void ExtensionManager::CreateExtensionSchema(const string &name) {
-	// create a dummy connection to persist the create schema change
-	auto context = std::make_shared<ClientContext>(db.shared_from_this());
-	context->transaction.BeginTransaction();
-
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 
@@ -88,37 +94,13 @@ void ExtensionManager::CreateExtensionSchema(const string &name) {
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateSchema(data, info);
 
-	context->transaction.Commit();
-
-	// Add the extension to the search path
+	// i know we need to move this
 	CatalogSearchEntry entry(SYSTEM_CATALOG, name);
 	search_paths.push_back(entry);
-	++catalog_version;
 }
 
 vector<CatalogSearchEntry> &ExtensionManager::GetExtensionSearchPaths() {
 	return search_paths;
-}
-
-uint64_t ExtensionManager::GetCatalogSearchPathsVersion() {
-	return catalog_version;
-}
-
-void ExtensionManager::SyncExtensionPaths(ClientContext &context) {
-	auto all_extension_schemas = GetExtensions();
-	auto &client_search_path = context.client_data->catalog_search_path;
-
-	vector<CatalogSearchEntry> extension_paths;
-	for (const auto &schema : all_extension_schemas) {
-		// we override the whole schema
-		// extensions also might be unloaded
-		extension_paths.push_back(CatalogSearchEntry(SYSTEM_CATALOG, schema));
-	}
-
-	// Update local search path version
-	client_search_path->Set(extension_paths, CatalogSetPathType::SET_SCHEMAS, CatalogSearchPathType::EXTENSION_PATH);
-	context.client_data->extension_path_version += extension_paths.size();
-	D_ASSERT(context.client_data->extension_path_version == GetCatalogSearchPathsVersion());
 }
 
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) {

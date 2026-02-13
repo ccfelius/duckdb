@@ -44,8 +44,6 @@ public:
 
 	//! The catalog search path.
 	unique_ptr<CatalogSearchPath> catalog_search_path;
-	//! version of the catalog search path
-	uint64_t extension_path_version = 0;
 
 	//! The file opener of the client context.
 	unique_ptr<FileOpener> file_opener;

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "client_data.hpp"
 #include "duckdb.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -96,6 +97,17 @@ public:
 	static void LoadAllExtensions(DuckDB &db);
 	static vector<string> LoadedExtensionTestPaths();
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension,
+	                                         shared_ptr<ClientContext> context) {
+		auto result = LoadExtension(db, extension);
+
+		// add extension to catalog search path
+		if (result == ExtensionLoadResult::LOADED_EXTENSION && context) {
+			context->client_data->catalog_search_path->AddExtension(extension);
+		}
+
+		return result;
+	}
 
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,

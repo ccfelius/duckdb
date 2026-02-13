@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/extension_manager.hpp"
 
 #include "duckdb/common/exception/parser_exception.hpp"
 
@@ -126,9 +127,27 @@ vector<CatalogSearchEntry> CatalogSearchEntry::ParseList(const string &input) {
 	return result;
 }
 
-CatalogSearchPath::CatalogSearchPath(ClientContext &context_p, vector<CatalogSearchEntry> entries, vector<CatalogSearchEntry> entries)
+void CatalogSearchPath::SyncExtensionPaths() {
+	auto &extension_manager = ExtensionManager::Get(context);
+	auto extensions = extension_manager.GetExtensionSearchPaths();
+
+	vector<CatalogSearchEntry> extension_entries;
+	for (auto &entry : extensions) {
+		extension_entries.emplace_back(entry);
+	}
+
+	if (extension_entries.empty()) {
+		return;
+	}
+
+	SetPathsInternal(std::move(extension_entries), CatalogSearchPathType::EXTENSION_PATH);
+}
+
+CatalogSearchPath::CatalogSearchPath(ClientContext &context_p, vector<CatalogSearchEntry> entries)
     : context(context_p) {
-	SetPathsInternal(std::move(entries));
+	SyncExtensionPaths();
+	// todo avoid calling SetPathsInternal twice
+	SetPathsInternal(std::move(entries), CatalogSearchPathType::USER_PATH);
 }
 
 CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : CatalogSearchPath(context_p, {}) {
@@ -136,7 +155,7 @@ CatalogSearchPath::CatalogSearchPath(ClientContext &context_p) : CatalogSearchPa
 
 void CatalogSearchPath::Reset() {
 	vector<CatalogSearchEntry> empty;
-	SetPathsInternal(empty);
+	SetPathsInternal(INTERNAL_PATH_SIZE);
 }
 
 string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
@@ -150,7 +169,8 @@ string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
 	}
 }
 
-void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type, CatalogSearchPathType search_path_type) {
+void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type,
+                            CatalogSearchPathType search_path_type) {
 	if (set_type == CatalogSetPathType::SET_SCHEMA && new_paths.size() != 1) {
 		throw CatalogException("%s can set only 1 schema. This has %d", GetSetName(set_type), new_paths.size());
 	}
@@ -193,7 +213,8 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 	SetPathsInternal(new_paths, search_path_type);
 }
 
-void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type, CatalogSearchPathType search_path_type) {
+void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type,
+                            CatalogSearchPathType search_path_type) {
 	vector<CatalogSearchEntry> new_paths {std::move(new_value)};
 	Set(std::move(new_paths), set_type);
 }
@@ -292,38 +313,56 @@ const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 	return paths[1];
 }
 
-void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths, CatalogSearchPathType search_path_type) {
-	if (search_path_type == CatalogSearchPathType::EXTENSION_PATH){
-		this->extension_paths = std::move(new_paths);
-	} else {
-		this->set_paths = std::move(new_paths);
-	}
+void CatalogSearchPath::AddExtension(const string &extension_name) {
+	CatalogSearchEntry entry(SYSTEM_CATALOG, extension_name);
+	SetPathsInternal({entry}, CatalogSearchPathType::EXTENSION_PATH);
+}
 
-	paths.clear();
-	paths.reserve(set_paths.size() + 4 + extension_paths.size());
-	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
-	for (auto &path : set_paths) {
+void CatalogSearchPath::SetPaths(const vector<CatalogSearchEntry> &new_paths) {
+	if (new_paths.empty()) {
+		return;
+	}
+	for (auto &path : new_paths) {
 		paths.push_back(path);
 	}
+}
+
+void CatalogSearchPath::SetPathsInternal(size_t total_path_size) {
+	paths.clear();
+	paths.reserve(total_path_size);
+
+	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
+
+	// set user paths
+	SetPaths(user_paths);
+
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
 
 	// we append extension paths at the end
-	for (auto &path : extension_paths) {
-		paths.push_back(path);
-	}
+	SetPaths(extension_paths);
 }
 
-void CatalogSearchPath::UpdateCatalogSearchPaths(const vector<CatalogSearchEntry> &new_paths) {
-	auto current_set_paths = this->set_paths;
+void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths, CatalogSearchPathType search_path_type) {
+	auto total_path_size = INTERNAL_PATH_SIZE + new_paths.size();
 
-	for (auto &entry : new_paths) {
-		D_ASSERT(!HasSchema(entry.schema));
-		current_set_paths.push_back(entry);
+	switch (search_path_type) {
+	case CatalogSearchPathType::USER_PATH:
+		// keep the extension paths
+		total_path_size += extension_paths.size();
+		this->user_paths = std::move(new_paths);
+		break;
+	case CatalogSearchPathType::EXTENSION_PATH:
+		// keep the user paths
+		total_path_size += user_paths.size();
+		this->extension_paths = std::move(new_paths);
+		break;
+	default:
+		throw InvalidConfigurationException("Unrecognized CatalogSearchPathType");
 	}
 
-	SetPathsInternal(std::move(current_set_paths));
+	SetPathsInternal(total_path_size);
 }
 
 bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string &catalog_name,

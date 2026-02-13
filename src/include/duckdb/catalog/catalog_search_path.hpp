@@ -16,6 +16,8 @@
 
 namespace duckdb {
 
+uint8_t constexpr INTERNAL_PATH_SIZE = 4;
+
 class ClientContext;
 
 struct CatalogSearchEntry {
@@ -36,26 +38,28 @@ private:
 };
 
 enum class CatalogSetPathType { SET_SCHEMA, SET_SCHEMAS, SET_DIRECTLY };
-enum class CatalogSearchPathType { SET_PATH, EXTENSION_PATH };
+enum class CatalogSearchPathType { INTERNAL_PATH, USER_PATH, EXTENSION_PATH };
 
 //! The schema search path, in order by which entries are searched if no schema entry is provided
 class CatalogSearchPath {
 public:
 	DUCKDB_API explicit CatalogSearchPath(ClientContext &client_p);
-	DUCKDB_API CatalogSearchPath(ClientContext &client_p, vector<CatalogSearchEntry> entries, vector<CatalogSearchEntry> extension_paths);
+	DUCKDB_API CatalogSearchPath(ClientContext &client_p, vector<CatalogSearchEntry> entries);
 	CatalogSearchPath(const CatalogSearchPath &other) = delete;
 
 	DUCKDB_API bool HasSchema(const string &schema) const;
-	DUCKDB_API void Set(CatalogSearchEntry new_value, CatalogSetPathType set_type, CatalogSearchPathType search_path_type = CatalogSearchPathType::SET_PATH);
-	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type, CatalogSearchPathType search_path_type = CatalogSearchPathType::SET_PATH);
+	DUCKDB_API void Set(CatalogSearchEntry new_value, CatalogSetPathType set_type,
+	                    CatalogSearchPathType search_path_type = CatalogSearchPathType::USER_PATH);
+	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type,
+	                    CatalogSearchPathType search_path_type = CatalogSearchPathType::USER_PATH);
 	DUCKDB_API void Reset();
 
 	DUCKDB_API vector<CatalogSearchEntry> Get() const;
 	const vector<CatalogSearchEntry> &GetExtensionPaths() const {
 		return extension_paths;
 	}
-	const vector<CatalogSearchEntry> &GetSetPaths() const {
-		return set_paths;
+	const vector<CatalogSearchEntry> &GetUserPaths() const {
+		return user_paths;
 	}
 	DUCKDB_API const CatalogSearchEntry &GetDefault() const;
 	//! FIXME: this method is deprecated
@@ -68,18 +72,22 @@ public:
 
 	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const string &catalog_name,
 	                                   const string &schema_name) const;
+	// TODO: string can be alias
+	DUCKDB_API void AddExtension(const string &extension_name);
 
 private:
-	void UpdateCatalogSearchPaths(const vector<CatalogSearchEntry> &new_paths);
+	void SyncExtensionPaths();
 	//! Set paths without checking if they exist
-	void SetPathsInternal(vector<CatalogSearchEntry> new_paths, CatalogSearchPathType search_path_type = CatalogSearchPathType::SET_PATH);
+	void SetPathsInternal(vector<CatalogSearchEntry> new_paths, CatalogSearchPathType search_path_type);
+	void SetPathsInternal(size_t total_path_size);
+	void SetPaths(const vector<CatalogSearchEntry> &new_paths);
 	string GetSetName(CatalogSetPathType set_type);
 
 private:
 	ClientContext &context;
 	vector<CatalogSearchEntry> paths;
 	//! Only the paths that were explicitly set (minus the always included paths)
-	vector<CatalogSearchEntry> set_paths;
+	vector<CatalogSearchEntry> user_paths;
 	//! Only the extension paths
 	vector<CatalogSearchEntry> extension_paths;
 };

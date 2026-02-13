@@ -522,7 +522,7 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	runner.config->options = runner.con->context->db->config.options;
 	runner.config->user_settings = runner.con->context->db->config.user_settings;
 	auto client_config = runner.con->context->config;
-	auto catalog_search_paths = runner.con->context->client_data->catalog_search_path->GetSetPaths();
+	auto catalog_search_paths = runner.con->context->client_data->catalog_search_path->GetUserPaths();
 	string low_query_writer_path;
 	if (runner.con->context->client_data->log_query_writer) {
 		low_query_writer_path = runner.con->context->client_data->log_query_writer->path;
