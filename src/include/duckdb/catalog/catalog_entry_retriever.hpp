@@ -54,7 +54,7 @@ public:
 	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
 	const CatalogSearchPath &GetSearchPath() const;
-	void SetSearchPath(vector<CatalogSearchEntry> entries);
+	void SetUserSearchPath(vector<CatalogSearchEntry> entries);
 
 	void SetCallback(catalog_entry_callback_t callback);
 	catalog_entry_callback_t GetCallback();

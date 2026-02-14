@@ -1477,7 +1477,7 @@ void SearchPathSetting::ResetLocal(ClientContext &context) {
 
 Value SearchPathSetting::GetSetting(const ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
-	auto &set_paths = client_data.catalog_search_path->GetUserPaths();
+	auto set_paths = client_data.catalog_search_path->GetUserPaths();
 	return Value(CatalogSearchEntry::ListToString(set_paths));
 }
 

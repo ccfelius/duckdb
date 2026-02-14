@@ -325,7 +325,7 @@ void Binder::BindDefaultValues(const ColumnList &columns, vector<unique_ptr<Expr
 	}
 
 	auto default_binder = Binder::CreateBinder(context, *this);
-	default_binder->entry_retriever.SetSearchPath(std::move(defaults_search_path));
+	default_binder->entry_retriever.SetUserSearchPath(std::move(defaults_search_path));
 
 	for (auto &column : columns.Physical()) {
 		unique_ptr<Expression> bound_default;

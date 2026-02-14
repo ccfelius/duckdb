@@ -84,7 +84,7 @@ const CatalogSearchPath &CatalogEntryRetriever::GetSearchPath() const {
 	return *ClientData::Get(context).catalog_search_path;
 }
 
-void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
+void CatalogEntryRetriever::SetUserSearchPath(vector<CatalogSearchEntry> entries) {
 	vector<CatalogSearchEntry> new_path;
 	for (auto &entry : entries) {
 		if (IsInvalidCatalog(entry.catalog) || entry.catalog == SYSTEM_CATALOG || entry.catalog == TEMP_CATALOG) {
@@ -98,7 +98,7 @@ void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 
 	// push the set paths from the ClientContext behind the provided paths
 	auto &client_search_path = *ClientData::Get(context).catalog_search_path;
-	auto &user_paths = client_search_path.GetUserPaths();
+	auto user_paths = client_search_path.GetUserPaths();
 	for (auto path : user_paths) {
 		if (IsInvalidCatalog(path.catalog)) {
 			path.catalog = DatabaseManager::GetDefaultDatabase(context);

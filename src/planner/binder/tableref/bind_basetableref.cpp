@@ -113,7 +113,7 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 
 void Binder::SetSearchPath(Catalog &catalog, const string &schema) {
 	auto search_path = GetSearchPath(catalog, schema);
-	entry_retriever.SetSearchPath(std::move(search_path));
+	entry_retriever.SetUserSearchPath(std::move(search_path));
 }
 
 BoundStatement Binder::Bind(BaseTableRef &ref) {
@@ -303,7 +303,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		// when binding a view, we always look into the catalog/schema where the view is stored first
 		auto view_search_path =
 		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name);
-		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
+		view_binder->entry_retriever.SetUserSearchPath(std::move(view_search_path));
 		// propagate the AT clause through the view
 		view_binder->entry_retriever.SetAtClause(entry_at_clause);
 

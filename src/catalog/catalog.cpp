@@ -449,7 +449,7 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 	auto &search_path = retriever.GetSearchPath();
 	if (IsInvalidCatalog(catalog) && IsInvalidSchema(schema)) {
 		// no catalog or schema provided - scan the entire search path
-		entries = search_path.Get();
+		entries = search_path.GetAllSearchPaths();
 	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
@@ -1123,7 +1123,7 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(CatalogEntryRetriever 
 		reference_set_t<Catalog> inserted_catalogs;
 
 		auto &search_path = retriever.GetSearchPath();
-		for (auto &entry : search_path.Get()) {
+		for (auto &entry : search_path.GetAllSearchPaths()) {
 			auto &catalog = Catalog::GetCatalog(retriever, entry.catalog);
 			if (inserted_catalogs.find(catalog) != inserted_catalogs.end()) {
 				continue;
