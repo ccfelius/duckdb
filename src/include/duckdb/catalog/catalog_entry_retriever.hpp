@@ -53,7 +53,7 @@ public:
 	optional_ptr<SchemaCatalogEntry> GetSchema(const string &catalog, const EntryLookupInfo &schema_lookup,
 	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
-	const CatalogSearchPath &GetSearchPath() const;
+	const CatalogSearchPath &GetSearchPath();
 	void SetUserSearchPath(vector<CatalogSearchEntry> entries);
 
 	void SetCallback(catalog_entry_callback_t callback);

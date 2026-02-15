@@ -24,6 +24,13 @@ SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND
 ----
 BASE TABLE
 
+query IIIIIIIIIII
+SELECT * FROM duckdb_databases();
+----
+memory	624	NULL	NULL	{}	false	duckdb	false	false	NULL	{}
+system	0	NULL	NULL	{}	true	duckdb	false	false	NULL	{}
+temp	1361	NULL	NULL	{}	true	duckdb	false	false	NULL	{}
+
 query ITT
 SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_name='integers'
 ----

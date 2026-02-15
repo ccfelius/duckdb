@@ -13,7 +13,7 @@
 
 namespace duckdb {
 CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p)
-	: catalog(std::move(catalog_p)), schema(std::move(schema_p)) {
+    : catalog(std::move(catalog_p)), schema(std::move(schema_p)) {
 }
 
 string CatalogSearchEntry::ToString() const {
@@ -49,41 +49,41 @@ CatalogSearchEntry CatalogSearchEntry::ParseInternal(const string &input, idx_t 
 	string schema;
 	string entry;
 	bool finished = false;
-	normal:
-		for (; idx < input.size(); idx++) {
-			if (input[idx] == '"') {
-				idx++;
-				goto quoted;
-			} else if (input[idx] == '.') {
-				goto separator;
-			} else if (input[idx] == ',') {
-				finished = true;
-				goto separator;
-			}
-			entry += input[idx];
+normal:
+	for (; idx < input.size(); idx++) {
+		if (input[idx] == '"') {
+			idx++;
+			goto quoted;
+		} else if (input[idx] == '.') {
+			goto separator;
+		} else if (input[idx] == ',') {
+			finished = true;
+			goto separator;
 		}
+		entry += input[idx];
+	}
 	finished = true;
 	goto separator;
-	quoted:
-		//! look for another quote
-		for (; idx < input.size(); idx++) {
-			if (input[idx] == '"') {
-				//! unquote
-				idx++;
-				if (idx < input.size() && input[idx] == '"') {
-					// escaped quote
-					entry += input[idx];
-					continue;
-				}
-				goto normal;
+quoted:
+	//! look for another quote
+	for (; idx < input.size(); idx++) {
+		if (input[idx] == '"') {
+			//! unquote
+			idx++;
+			if (idx < input.size() && input[idx] == '"') {
+				// escaped quote
+				entry += input[idx];
+				continue;
 			}
-			entry += input[idx];
+			goto normal;
 		}
+		entry += input[idx];
+	}
 	throw ParserException("Unterminated quote in qualified name!");
-	separator:
-		if (entry.empty()) {
-			throw ParserException("Unexpected dot - empty CatalogSearchEntry");
-		}
+separator:
+	if (entry.empty()) {
+		throw ParserException("Unexpected dot - empty CatalogSearchEntry");
+	}
 	if (schema.empty()) {
 		// if we parse one entry it is the schema
 		schema = std::move(entry);
@@ -100,10 +100,10 @@ CatalogSearchEntry CatalogSearchEntry::ParseInternal(const string &input, idx_t 
 		goto final;
 	}
 	goto normal;
-	final:
-		if (schema.empty()) {
-			throw ParserException("Unexpected end of entry - empty CatalogSearchEntry");
-		}
+final:
+	if (schema.empty()) {
+		throw ParserException("Unexpected end of entry - empty CatalogSearchEntry");
+	}
 	return CatalogSearchEntry(std::move(catalog), std::move(schema));
 }
 
@@ -143,7 +143,7 @@ void CatalogSearchPath::SyncExtensionPaths() {
 }
 
 CatalogSearchPath::CatalogSearchPath(ClientContext &context_p, vector<CatalogSearchEntry> entries)
-	: context(context_p) {
+    : context(context_p) {
 	SetPathsInternal(CatalogSearchPathType::INTERNAL_PATH);
 	SetPathsInternal(std::move(entries), CatalogSearchPathType::USER_PATH);
 	// sync and set extension paths
@@ -157,7 +157,6 @@ void CatalogSearchPath::Reset() {
 	SetPathsInternal(CatalogSearchPathType::INTERNAL_PATH);
 	user_paths.clear();
 	extension_paths.clear();
-
 }
 
 string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
@@ -172,7 +171,7 @@ string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
 }
 
 void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type,
-							CatalogSearchPathType search_path_type) {
+                            CatalogSearchPathType search_path_type) {
 	if (set_type == CatalogSetPathType::SET_SCHEMA && new_paths.size() != 1) {
 		throw CatalogException("%s can set only 1 schema. This has %d", GetSetName(set_type), new_paths.size());
 	}
@@ -208,7 +207,7 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 	if (set_type == CatalogSetPathType::SET_SCHEMA) {
 		if (new_paths[0].catalog == TEMP_CATALOG || new_paths[0].catalog == SYSTEM_CATALOG) {
 			throw CatalogException("%s cannot be set to internal schema \"%s\"", GetSetName(set_type),
-								   new_paths[0].catalog);
+			                       new_paths[0].catalog);
 		}
 	}
 
@@ -216,7 +215,7 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 }
 
 void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type,
-							CatalogSearchPathType search_path_type) {
+                            CatalogSearchPathType search_path_type) {
 	vector<CatalogSearchEntry> new_paths {std::move(new_value)};
 	Set(std::move(new_paths), set_type);
 }
@@ -227,12 +226,21 @@ vector<CatalogSearchEntry> CatalogSearchPath::GetAllSearchPaths() const {
 	vector<CatalogSearchEntry> paths;
 	paths.reserve(total_size);
 	for (auto &path : internal_paths) {
+		if (path.schema.empty()) {
+			continue;
+		}
 		paths.emplace_back(path);
 	}
 	for (auto &path : user_paths) {
+		if (path.schema.empty()) {
+			continue;
+		}
 		paths.emplace_back(path);
 	}
 	for (auto &path : extension_paths) {
+		if (path.schema.empty()) {
+			continue;
+		}
 		paths.emplace_back(path);
 	}
 
@@ -346,7 +354,7 @@ vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) con
 		}
 		// not sure if this is also necessary?
 		for (auto &path : extension_paths) {
-			if (StringUtil::CIEquals(path.schema, schema) || path.schema.empty()) {
+			if (StringUtil::CIEquals(path.schema, schema)) {
 				catalogs.push_back(path.catalog);
 			}
 		}
@@ -428,7 +436,6 @@ void CatalogSearchPath::SetPaths(const vector<CatalogSearchEntry> &new_paths, Ca
 	default:
 		throw InvalidInputException("Unrecognized CatalogSearchPathType");
 	}
-
 }
 
 void CatalogSearchPath::SetInternalPaths() {
@@ -474,9 +481,9 @@ bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string 
 			return true;
 		}
 		if (IsInvalidCatalog(path.catalog) &&
-			StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
+		    StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
 			return true;
-			}
+		}
 	}
 	for (auto &path : user_paths) {
 		if (!StringUtil::CIEquals(path.schema, schema_name)) {
@@ -486,9 +493,9 @@ bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string 
 			return true;
 		}
 		if (IsInvalidCatalog(path.catalog) &&
-			StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
+		    StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
 			return true;
-			}
+		}
 	}
 
 	for (auto &path : extension_paths) {
@@ -499,9 +506,9 @@ bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string 
 			return true;
 		}
 		if (IsInvalidCatalog(path.catalog) &&
-			StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
+		    StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
 			return true;
-			}
+		}
 	}
 	return false;
 }
