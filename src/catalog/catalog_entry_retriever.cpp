@@ -80,8 +80,8 @@ void CatalogEntryRetriever::Inherit(const CatalogEntryRetriever &parent) {
 const CatalogSearchPath &CatalogEntryRetriever::GetSearchPath() {
 	if (search_path) {
 		// make sure to return an updated search path
-		auto const &local_search_path = search_path->GetUserPaths();
-		SetUserSearchPath(local_search_path);
+		// auto const &local_search_path = search_path->GetUserPaths();
+		// SetUserSearchPath(local_search_path);
 		return *search_path;
 	}
 	auto &client_search_path = *ClientData::Get(context).catalog_search_path;
@@ -93,7 +93,7 @@ void CatalogEntryRetriever::SetUserSearchPath(vector<CatalogSearchEntry> entries
 
 // uncomment system catalog entry.catalog == SYSTEM_CATALOG
 	for (auto &entry : entries) {
-		if (IsInvalidCatalog(entry.catalog) || entry.catalog == TEMP_CATALOG) {
+		if (IsInvalidCatalog(entry.catalog) || entry.catalog == SYSTEM_CATALOG || entry.catalog == TEMP_CATALOG) {
 			continue;
 		}
 		new_path.push_back(std::move(entry));
@@ -112,11 +112,6 @@ void CatalogEntryRetriever::SetUserSearchPath(vector<CatalogSearchEntry> entries
 
 		// TODO, check if this is not already IN the search path
 		// to avoid duplicate entries
-		new_path.push_back(std::move(path));
-	}
-
-	auto extension_paths = client_search_path.GetExtensionPaths();
-	for (auto path : extension_paths) {
 		new_path.push_back(std::move(path));
 	}
 

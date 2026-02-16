@@ -314,6 +314,7 @@ string CatalogSearchPath::GetDefaultSchema(ClientContext &context, const string 
 	if (catalog_entry) {
 		return catalog_entry->GetDefaultSchema();
 	}
+
 	return DEFAULT_SCHEMA;
 }
 

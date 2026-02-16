@@ -84,7 +84,7 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	return info->is_loaded;
 }
 
-void ExtensionManager::CreateExtensionSchema(const string &name) {
+void ExtensionManager:: CreateExtensionSchema(const string &name) {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 
@@ -94,7 +94,6 @@ void ExtensionManager::CreateExtensionSchema(const string &name) {
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateSchema(data, info);
 
-	// i know we need to move this
 	CatalogSearchEntry entry(SYSTEM_CATALOG, name);
 	search_paths.push_back(entry);
 }
