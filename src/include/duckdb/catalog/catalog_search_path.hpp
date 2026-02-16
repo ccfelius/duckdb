@@ -48,6 +48,8 @@ public:
 	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type);
 	DUCKDB_API void Reset();
 
+	DUCKDB_API void SyncExtensionPaths();
+
 	DUCKDB_API vector<CatalogSearchEntry> Get() const;
 	DUCKDB_API const vector<CatalogSearchEntry> &GetSetPaths() {
 		this->set_and_extension_paths.clear();
@@ -61,7 +63,7 @@ public:
 		}
 		return this->set_and_extension_paths;
 	}
-	void SyncExtensionPaths();
+	DUCKDB_API void SyncCatalogSearchPath();
 	DUCKDB_API const CatalogSearchEntry &GetDefault() const;
 	DUCKDB_API vector<CatalogSearchEntry> GetExtensionPaths() const;
 	//! FIXME: this method is deprecated
@@ -78,6 +80,7 @@ public:
 private:
 	//! Set paths without checking if they exist
 	void SetPathsInternal(vector<CatalogSearchEntry> new_paths);
+	void SetPathsInternal();
 	string GetSetName(CatalogSetPathType set_type);
 
 private:

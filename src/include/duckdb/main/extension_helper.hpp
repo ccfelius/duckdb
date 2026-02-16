@@ -12,6 +12,7 @@
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/settings.hpp"
+#include "client_data.hpp"
 
 #include <string>
 
@@ -96,6 +97,29 @@ public:
 	static void LoadAllExtensions(DuckDB &db);
 	static vector<string> LoadedExtensionTestPaths();
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension,
+	                                         shared_ptr<ClientContext> context) {
+		auto result = LoadExtension(db, extension);
+
+		// add extension to catalog search path
+		if (context && result == ExtensionLoadResult::LOADED_EXTENSION) {
+			context->client_data->catalog_search_path->SyncCatalogSearchPath();
+
+#ifdef DEBUG
+			auto extension_paths = context->client_data->catalog_search_path->GetExtensionPaths();
+			auto is_found = false;
+			for (auto &path : extension_paths) {
+				if (StringUtil::CIEquals(path.catalog, SYSTEM_CATALOG) &&
+				    StringUtil::CIEquals(path.schema, extension)) {
+					is_found = true;
+				}
+			}
+			D_ASSERT(is_found);
+#endif
+		}
+
+		return result;
+	}
 
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,

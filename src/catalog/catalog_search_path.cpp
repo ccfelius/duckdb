@@ -304,6 +304,13 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 	return schemas;
 }
 
+void CatalogSearchPath::SyncCatalogSearchPath() {
+	SyncExtensionPaths();
+	// Set Internal Paths
+	// But keep the "set paths" instead of overwriting them
+	SetPathsInternal();
+}
+
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 	D_ASSERT(paths.size() >= 2);
 	D_ASSERT(!paths[1].schema.empty());
@@ -313,13 +320,11 @@ const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 		return set_paths[0];
 	}
 
-	// FIXME this reference breaks when out-of-scope
-	return CatalogSearchEntry(INVALID_CATALOG, DEFAULT_SCHEMA);
+	auto default_entry_index = (set_paths.size() + extension_paths.size()) + 1;
+	return paths[default_entry_index];
 }
 
-void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
-	this->set_paths = std::move(new_paths);
-
+void CatalogSearchPath::SetPathsInternal() {
 	paths.clear();
 	paths.reserve(set_paths.size() + extension_paths.size() + 4);
 	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
@@ -337,6 +342,11 @@ void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+}
+
+void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
+	this->set_paths = std::move(new_paths);
+	SetPathsInternal();
 }
 
 bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string &catalog_name,

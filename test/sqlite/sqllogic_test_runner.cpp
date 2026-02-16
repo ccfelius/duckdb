@@ -130,7 +130,7 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 			return ExtensionLoadResult::LOADED_EXTENSION;
 		}
 	}
-	return ExtensionHelper::LoadExtension(db, extension);
+	return ExtensionHelper::LoadExtension(db, extension, context);
 }
 
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
