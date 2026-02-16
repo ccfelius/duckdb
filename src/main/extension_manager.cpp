@@ -3,6 +3,10 @@
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 
 namespace duckdb {
 
@@ -62,6 +66,35 @@ vector<string> ExtensionManager::GetExtensions() {
 	return result;
 }
 
+void ExtensionManager::CreateExtensionSchema(const string &name) {
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+
+	CreateSchemaInfo info;
+	info.schema = name;
+	info.internal = true;
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	system_catalog.CreateSchema(data, info);
+
+	// i know we need to move this
+	CatalogSearchEntry entry(SYSTEM_CATALOG, name);
+	search_paths.push_back(entry);
+}
+
+vector<CatalogSearchEntry> &ExtensionManager::GetExtensionSearchPaths() {
+	return search_paths;
+}
+
+void ExtensionManager::AddSearchPath(DatabaseInstance &db, const CatalogSearchEntry &entry) {
+	auto &manager = Get(db);
+	manager.GetExtensionSearchPaths().push_back(entry);
+}
+
+void ExtensionManager::AddSearchPath(ClientContext &context, const CatalogSearchEntry &entry) {
+	auto &manager = Get(context);
+	manager.GetExtensionSearchPaths().push_back(entry);
+}
+
 bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	auto info = GetExtensionInfo(name);
 	if (!info) {
@@ -82,6 +115,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 		auto extension_info = make_uniq<ExtensionInfo>();
 		info = extension_info.get();
 		loaded_extensions_info.emplace(extension_name, std::move(extension_info));
+		CreateExtensionSchema(extension_name);
 	} else {
 		// we already have an entry
 		if (entry->second->is_loaded) {

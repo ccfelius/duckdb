@@ -74,6 +74,9 @@ private:
 	vector<CatalogSearchEntry> paths;
 	//! Only the paths that were explicitly set (minus the always included paths)
 	vector<CatalogSearchEntry> set_paths;
+	// vector<CatalogSearchEntry> internal_paths;
+	//! Only the paths that are related to extensions
+	// vector<CatalogSearchEntry> extension_paths;
 };
 
 } // namespace duckdb
