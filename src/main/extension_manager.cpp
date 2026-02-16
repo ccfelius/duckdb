@@ -24,6 +24,11 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	for (auto &callback : ExtensionCallback::Iterate(db)) {
 		callback->OnExtensionLoaded(db, extension_name);
 	}
+
+	auto &manager = ExtensionManager::Get(this->db);
+	CatalogSearchEntry entry(SYSTEM_CATALOG, extension_name);
+	manager.AddSearchPath(entry);
+
 	DUCKDB_LOG_INFO(db, extension_name);
 }
 
@@ -73,12 +78,10 @@ void ExtensionManager::CreateExtensionSchema(const string &name) {
 	CreateSchemaInfo info;
 	info.schema = name;
 	info.internal = true;
+
+	// TODO might do overwrite on conflict?
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateSchema(data, info);
-
-	// i know we need to move this
-	CatalogSearchEntry entry(SYSTEM_CATALOG, name);
-	search_paths.push_back(entry);
 }
 
 vector<CatalogSearchEntry> &ExtensionManager::GetExtensionSearchPaths() {
@@ -93,6 +96,10 @@ void ExtensionManager::AddSearchPath(DatabaseInstance &db, const CatalogSearchEn
 void ExtensionManager::AddSearchPath(ClientContext &context, const CatalogSearchEntry &entry) {
 	auto &manager = Get(context);
 	manager.GetExtensionSearchPaths().push_back(entry);
+}
+
+void ExtensionManager::AddSearchPath(const CatalogSearchEntry &entry) {
+	this->search_paths.push_back(entry);
 }
 
 bool ExtensionManager::ExtensionIsLoaded(const string &name) {

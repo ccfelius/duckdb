@@ -54,6 +54,7 @@ public:
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);
 
+	DUCKDB_API void AddSearchPath(const CatalogSearchEntry &entry);
 	DUCKDB_API static void AddSearchPath(DatabaseInstance &db, const CatalogSearchEntry &entry);
 	DUCKDB_API static void AddSearchPath(ClientContext &context, const CatalogSearchEntry &entry);
 

@@ -474,6 +474,14 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
 		}
+		if (schema == DEFAULT_SCHEMA) {
+			// when the schema is not specified, i.e. "", "main"
+			// we also append all extension schemas as candidates
+			auto extension_paths = search_path.GetExtensionPaths();
+			for (auto &extension_path : extension_paths) {
+				entries.emplace_back(extension_path.catalog, extension_path.schema);
+			}
+		}
 		if (entries.empty()) {
 			auto &default_entry = search_path.GetDefault();
 			if (!IsInvalidCatalog(default_entry.catalog)) {

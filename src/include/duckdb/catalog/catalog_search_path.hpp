@@ -49,10 +49,21 @@ public:
 	DUCKDB_API void Reset();
 
 	DUCKDB_API vector<CatalogSearchEntry> Get() const;
-	const vector<CatalogSearchEntry> &GetSetPaths() const {
-		return set_paths;
+	DUCKDB_API const vector<CatalogSearchEntry> &GetSetPaths() {
+		this->set_and_extension_paths.clear();
+		this->set_and_extension_paths.reserve(set_paths.size() + extension_paths.size());
+
+		for (auto &path : set_paths) {
+			this->set_and_extension_paths.push_back(path);
+		}
+		for (auto &path : extension_paths) {
+			this->set_and_extension_paths.push_back(path);
+		}
+		return this->set_and_extension_paths;
 	}
+	void SyncExtensionPaths();
 	DUCKDB_API const CatalogSearchEntry &GetDefault() const;
+	DUCKDB_API vector<CatalogSearchEntry> GetExtensionPaths() const;
 	//! FIXME: this method is deprecated
 	DUCKDB_API string GetDefaultSchema(const string &catalog) const;
 	DUCKDB_API string GetDefaultSchema(ClientContext &context, const string &catalog) const;
@@ -74,7 +85,8 @@ private:
 	vector<CatalogSearchEntry> paths;
 	//! Only the paths that were explicitly set (minus the always included paths)
 	vector<CatalogSearchEntry> set_paths;
-	// vector<CatalogSearchEntry> internal_paths;
+	vector<CatalogSearchEntry> extension_paths;
+	vector<CatalogSearchEntry> set_and_extension_paths;
 	//! Only the paths that are related to extensions
 	// vector<CatalogSearchEntry> extension_paths;
 };

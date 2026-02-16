@@ -119,7 +119,8 @@ void SQLLogicTestRunner::EndLoop() {
 	}
 }
 
-ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension) {
+ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension,
+                                                      shared_ptr<ClientContext> context) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.GetExtensionAutoLoadingMode() != TestConfiguration::ExtensionAutoLoadingMode::NONE) {
 		// try LOAD extension
@@ -159,7 +160,11 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	// load any previously loaded extensions again
 	if (load_extensions) {
 		for (auto &extension : extensions) {
-			SQLLogicTestRunner::LoadExtension(*db, extension);
+			shared_ptr<ClientContext> context = nullptr;
+			if (con) {
+				context = con->context;
+			}
+			SQLLogicTestRunner::LoadExtension(*db, extension, context);
 		}
 	}
 }
@@ -615,7 +620,11 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	if (!Settings::Get<AutoloadKnownExtensionsSetting>(*config)) {
 		auto result = ExtensionLoadResult::NOT_LOADED;
 		try {
-			result = SQLLogicTestRunner::LoadExtension(*db, param);
+			shared_ptr<ClientContext> context = nullptr;
+			if (con) {
+				context = con->context;
+			}
+			result = SQLLogicTestRunner::LoadExtension(*db, param, context);
 		} catch (std::exception &ex) {
 			ErrorData error_data(ex);
 			parser.Fail("extension '%s' load threw an exception: %s", param, error_data.Message());
