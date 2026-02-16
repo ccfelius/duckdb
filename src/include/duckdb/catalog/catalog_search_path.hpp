@@ -87,8 +87,7 @@ private:
 	vector<CatalogSearchEntry> set_paths;
 	vector<CatalogSearchEntry> extension_paths;
 	vector<CatalogSearchEntry> set_and_extension_paths;
-	//! Only the paths that are related to extensions
-	// vector<CatalogSearchEntry> extension_paths;
+	CatalogSearchEntry default_entry = CatalogSearchEntry("", "");
 };
 
 } // namespace duckdb

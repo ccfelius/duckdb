@@ -215,26 +215,9 @@ void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set
 	Set(std::move(new_paths), set_type);
 }
 
-// vector<CatalogSearchEntry> CatalogSearchPath::Get() const {
-// 	vector<CatalogSearchEntry> res;
-// 	for (auto &path : paths) {
-// 		if (path.schema.empty()) {
-// 			continue;
-// 		}
-// 		res.emplace_back(path);
-// 	}
-// 	return res;
-// }
-
 vector<CatalogSearchEntry> CatalogSearchPath::Get() const {
 	vector<CatalogSearchEntry> res;
 	for (auto &path : paths) {
-		if (path.schema.empty()) {
-			continue;
-		}
-		res.emplace_back(path);
-	}
-	for (auto &path : extension_paths) {
 		if (path.schema.empty()) {
 			continue;
 		}
@@ -325,12 +308,12 @@ const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 	D_ASSERT(paths.size() >= 2);
 	D_ASSERT(!paths[1].schema.empty());
 
-	if (set_paths.size() > 1) {
+	if (!set_paths.empty()) {
 		// we return the first of an explicitly set path
-		// note that this are never any extension paths
 		return set_paths[0];
 	}
 
+	// FIXME this reference breaks when out-of-scope
 	return CatalogSearchEntry(INVALID_CATALOG, DEFAULT_SCHEMA);
 }
 
