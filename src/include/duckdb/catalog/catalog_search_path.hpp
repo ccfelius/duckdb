@@ -52,16 +52,7 @@ public:
 
 	DUCKDB_API vector<CatalogSearchEntry> Get() const;
 	DUCKDB_API const vector<CatalogSearchEntry> &GetSetPaths() {
-		this->set_and_extension_paths.clear();
-		this->set_and_extension_paths.reserve(set_paths.size() + extension_paths.size());
-
-		for (auto &path : set_paths) {
-			this->set_and_extension_paths.push_back(path);
-		}
-		for (auto &path : extension_paths) {
-			this->set_and_extension_paths.push_back(path);
-		}
-		return this->set_and_extension_paths;
+		return set_paths;
 	}
 	DUCKDB_API void SyncCatalogSearchPath();
 	DUCKDB_API const CatalogSearchEntry &GetDefault() const;
@@ -88,9 +79,10 @@ private:
 	vector<CatalogSearchEntry> paths;
 	//! Only the paths that were explicitly set (minus the always included paths)
 	vector<CatalogSearchEntry> set_paths;
+	//! Only the paths that point to extension schemes
 	vector<CatalogSearchEntry> extension_paths;
-	vector<CatalogSearchEntry> set_and_extension_paths;
-	CatalogSearchEntry default_entry = CatalogSearchEntry("", "");
+	// index of (fallback) default search entry
+	idx_t default_index = 1;
 };
 
 } // namespace duckdb

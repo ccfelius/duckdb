@@ -305,23 +305,20 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 }
 
 void CatalogSearchPath::SyncCatalogSearchPath() {
-	SyncExtensionPaths();
-	// Set Internal Paths
+	// Sets the extension and internal paths
 	// But keep the "set paths" instead of overwriting them
+	SyncExtensionPaths();
 	SetPathsInternal();
 }
 
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 	D_ASSERT(paths.size() >= 2);
 	D_ASSERT(!paths[1].schema.empty());
-
 	if (!set_paths.empty()) {
-		// we return the first of an explicitly set path
+		// we return the first entry of an explicitly set path
 		return set_paths[0];
 	}
-
-	auto default_entry_index = (set_paths.size() + extension_paths.size()) + 1;
-	return paths[default_entry_index];
+	return paths[default_index];
 }
 
 void CatalogSearchPath::SetPathsInternal() {
@@ -334,12 +331,14 @@ void CatalogSearchPath::SetPathsInternal() {
 	}
 
 	// also add the extension paths behind set_paths
-	// note that the order here matters!
 	for (auto &path : extension_paths) {
 		paths.push_back(path);
 	}
 
+	// sets the index for the default fallback schema
+	default_index = paths.size();
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
+
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
 }
