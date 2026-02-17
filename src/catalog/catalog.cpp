@@ -1011,6 +1011,7 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                            const string &schema, const EntryLookupInfo &lookup_info,
                                            OnEntryNotFound if_not_found) {
+
 	auto entries = GetCatalogEntries(retriever, catalog, schema);
 	vector<CatalogLookup> lookups;
 	vector<CatalogLookup> final_lookups;
@@ -1094,6 +1095,14 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
                                              const string &schema, const EntryLookupInfo &lookup_info,
                                              OnEntryNotFound if_not_found) {
 	auto result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
+
+#ifdef DEBUG
+	if (!result.Found()) {
+		if (lookup_info.GetEntryName() == "current_database") {
+			result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
+		}
+	}
+#endif
 
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {

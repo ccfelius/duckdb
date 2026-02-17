@@ -1,0 +1,37 @@
+# name: test/sql/catalog/test_catalog_restart.test
+# description: Testing catalog search path on restart
+# group: [catalog]
+
+load __TEST_DIR__/database_catalog_restart.db
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (3), (4), (5)
+
+query I
+SELECT * FROM integers
+----
+3
+4
+5
+
+query II
+SELECT current_database(), current_schema();
+----
+database_catalog_restart	main
+
+restart
+
+query II
+SELECT current_database(), current_schema();
+----
+database_catalog_restart	main
+
+query I
+SELECT * FROM integers
+----
+3
+4
+5

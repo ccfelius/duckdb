@@ -84,7 +84,7 @@ const CatalogSearchPath &CatalogEntryRetriever::GetSearchPath() const {
 	return *ClientData::Get(context).catalog_search_path;
 }
 
-void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
+void CatalogEntryRetriever::SetEntryRetrieverSearchPath(vector<CatalogSearchEntry> entries) {
 	vector<CatalogSearchEntry> new_path;
 	for (auto &entry : entries) {
 		if (IsInvalidCatalog(entry.catalog) || entry.catalog == SYSTEM_CATALOG || entry.catalog == TEMP_CATALOG) {
