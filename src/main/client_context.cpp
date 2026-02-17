@@ -1204,7 +1204,7 @@ void ClientContext::SyncSearchPath() const {
 	client_data->catalog_search_path->SyncExtensionPaths();
 }
 
-vector<CatalogSearchEntry> const &ClientContext::GetClientExtensionPaths() const {
+vector<CatalogSearchEntry> ClientContext::GetClientExtensionPaths() const {
 	return client_data->catalog_search_path->GetExtensionPaths();
 }
 

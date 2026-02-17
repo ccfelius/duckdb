@@ -116,7 +116,7 @@ public:
 
 	//! Sync and Get Search Path
 	DUCKDB_API void SyncSearchPath() const;
-	vector<CatalogSearchEntry> const &GetClientExtensionPaths() const;
+	vector<CatalogSearchEntry> GetClientExtensionPaths() const;
 
 	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT

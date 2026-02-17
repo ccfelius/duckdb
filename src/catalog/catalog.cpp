@@ -810,7 +810,20 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 		return {nullptr, nullptr, ErrorData()};
 	}
 	auto entry = schema_entry->LookupEntry(transaction, lookup_info);
+
 	if (!entry) {
+		if (schema == DEFAULT_SCHEMA) {
+			// Entry is not found in the main schema
+			// Loop through extension schema's
+			auto &manager = ExtensionManager::Get(db.GetDatabase());
+			auto extension_schema_paths = manager.GetExtensionSearchPaths();
+			for (auto &extension_path : extension_schema_paths) {
+				auto result = TryLookupEntryInternal(transaction, extension_path.schema, lookup_info);
+				if (result.entry) {
+					return result;
+				}
+			}
+		}
 		return {schema_entry, nullptr, ErrorData()};
 	}
 	return {schema_entry, entry, ErrorData()};
