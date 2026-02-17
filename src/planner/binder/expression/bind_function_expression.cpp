@@ -196,6 +196,9 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 
 	FunctionBinder function_binder(binder);
+	if (func.alias_of == "list_has_any") {
+		auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
+	}
 	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
