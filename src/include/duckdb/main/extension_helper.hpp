@@ -12,7 +12,6 @@
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/settings.hpp"
-#include "client_data.hpp"
 
 #include <string>
 
@@ -103,10 +102,10 @@ public:
 
 		// add extension to catalog search path
 		if (context && result == ExtensionLoadResult::LOADED_EXTENSION) {
-			context->client_data->catalog_search_path->SyncCatalogSearchPath();
+			context->SyncSearchPath();
 
 #ifdef DEBUG
-			auto extension_paths = context->client_data->catalog_search_path->GetExtensionPaths();
+			auto extension_paths = context->GetClientExtensionPaths();
 			auto is_found = false;
 			for (auto &path : extension_paths) {
 				if (StringUtil::CIEquals(path.catalog, SYSTEM_CATALOG) &&

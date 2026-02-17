@@ -31,6 +31,8 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/main/query_parameters.hpp"
 
+#include <duckdb/catalog/catalog_search_path.hpp>
+
 namespace duckdb {
 
 class Appender;
@@ -111,6 +113,10 @@ public:
 	DUCKDB_API void EnableProfiling();
 	//! Disable query profiling
 	DUCKDB_API void DisableProfiling();
+
+	//! Sync and Get Search Path
+	DUCKDB_API void SyncSearchPath() const;
+	vector<CatalogSearchEntry> const &GetClientExtensionPaths() const;
 
 	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT

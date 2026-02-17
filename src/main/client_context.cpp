@@ -1200,6 +1200,14 @@ void ClientContext::DisableProfiling() {
 	client_config.enable_profiler = false;
 }
 
+void ClientContext::SyncSearchPath() const {
+	client_data->catalog_search_path->SyncExtensionPaths();
+}
+
+vector<CatalogSearchEntry> const &ClientContext::GetClientExtensionPaths() const {
+	return client_data->catalog_search_path->GetExtensionPaths();
+}
+
 void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	RunFunctionInTransaction([&]() {
 		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, INVALID_CATALOG, info.schema,
