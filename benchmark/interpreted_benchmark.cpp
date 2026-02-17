@@ -480,7 +480,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 
 void LoadExtensions(InterpretedBenchmarkState &state, const std::unordered_set<string> &extensions_to_load) {
 	for (auto &extension : extensions_to_load) {
-		auto result = ExtensionHelper::LoadExtension(state.db, extension);
+		auto result = ExtensionHelper::LoadExtension(state.db, extension, state.con.context);
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 			throw InvalidInputException("Unknown extension " + extension);
 		} else if (result == ExtensionLoadResult::NOT_LOADED) {

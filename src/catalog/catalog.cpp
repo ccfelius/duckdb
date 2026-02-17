@@ -1095,14 +1095,6 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
                                              OnEntryNotFound if_not_found) {
 	auto result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
 
-#ifdef DEBUG
-	if (!result.Found()) {
-		if (lookup_info.GetEntryName() == "current_database") {
-			result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
-		}
-	}
-#endif
-
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),

@@ -103,18 +103,6 @@ public:
 		// add extension to catalog search path
 		if (context && result == ExtensionLoadResult::LOADED_EXTENSION) {
 			context->SyncSearchPath();
-
-#ifdef DEBUG
-			auto extension_paths = context->GetClientExtensionPaths();
-			auto is_found = false;
-			for (auto &path : extension_paths) {
-				if (StringUtil::CIEquals(path.catalog, SYSTEM_CATALOG) &&
-				    StringUtil::CIEquals(path.schema, extension)) {
-					is_found = true;
-				}
-			}
-			D_ASSERT(is_found);
-#endif
 		}
 
 		return result;

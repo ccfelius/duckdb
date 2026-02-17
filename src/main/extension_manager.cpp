@@ -78,8 +78,6 @@ void ExtensionManager::CreateExtensionSchema(const string &name) {
 	CreateSchemaInfo info;
 	info.schema = name;
 	info.internal = true;
-
-	// TODO might do overwrite on conflict?
 	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	system_catalog.CreateSchema(data, info);
 }
