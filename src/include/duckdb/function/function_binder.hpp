@@ -57,9 +57,9 @@ public:
 	DUCKDB_API FunctionBinderResult BindFunction(const string &name, PragmaFunctionSet &functions,
 	                                             vector<Value> &parameters, ErrorData &error);
 
-	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionRecursive(ScalarFunctionCatalogEntry &func,
-	                                                                  vector<unique_ptr<Expression>> &children,
-	                                                                  ErrorData &error);
+	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
+	                                                                        vector<unique_ptr<Expression>> &children,
+	                                                                        ErrorData &error);
 	DUCKDB_API unique_ptr<Expression> BindScalarFunctionInternal(unique_ptr<ScalarFunction> bound_function,
 	                                                             vector<unique_ptr<Expression>> children,
 	                                                             bool is_operator, optional_ptr<Binder> binder);

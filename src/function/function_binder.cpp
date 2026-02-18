@@ -323,9 +323,9 @@ struct ScalarBindingCandidate {
 	ScalarFunction bound_function;
 };
 
-unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionRecursive(ScalarFunctionCatalogEntry &func,
-                                                                       vector<unique_ptr<Expression>> &children,
-                                                                       ErrorData &error) {
+unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
+                                                                             vector<unique_ptr<Expression>> &children,
+                                                                             ErrorData &error) {
 	vector<ScalarBindingCandidate> candidate_functions;
 	// first try to bind the function with the given schema
 	auto best_function = BindFunction(func.name, func.functions, children, error);
@@ -340,26 +340,37 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionRecursive(ScalarFun
 	// we exclude the already searched schema from func in the search path
 	auto &manager = ExtensionManager::Get(context);
 	auto schema_names = manager.GetSearchPathSchemaNames(func.schema.GetInfo()->schema);
+	auto scalar_function_info = CreateScalarFunctionInfo(func.functions);
 
 	for (auto &schema_name : schema_names) {
-		// this only errors if the schema is nowhere in the system
-		auto &function =
-		    Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, schema_name, func.name);
-		D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
+		// if schema name is main, this only errors if the schema is nowhere in the system
+		ScalarFunctionCatalogEntry *function = nullptr;
 
-		// If schema_name = main, this loops through all the schemas
-		// so it can happen that the system finds again the same function
-		if (function.schema.GetInfo()->schema == func.schema.GetInfo()->schema) {
+		try {
+			function = &Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, schema_name,
+			                                                                                    func.name);
+		} catch (...) {
+			// function is not in function set for 'schema_name'
+		}
+
+		if (!function) {
 			continue;
 		}
 
-		auto best_function_current_scheme = BindFunction(function.name, function.functions, children, error);
+		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
+		if (function->schema.GetInfo()->schema == func.schema.GetInfo()->schema) {
+			// If schema_name = main, this loops through all the schemas
+			// so it can happen that the system finds again the same function
+			continue;
+		}
+
+		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
 		if (!best_function_current_scheme.index.IsValid()) {
 			continue;
 		}
 		D_ASSERT(best_function_current_scheme.schema == schema_name);
 		// found a matching function!
-		auto bound_function = function.functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex());
+		auto bound_function = function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex());
 		candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme, bound_function});
 	}
 
@@ -445,12 +456,12 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
 	auto &function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, schema, name);
 	D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	auto best_function = BindFunction(function.name, function.functions, children, error);
-	if (best_function.error.HasError()) {
-		best_function.error.Throw();
+
+	if (error.HasError()) {
+		// if the finding best function failed, we throw
+		error.Throw();
 	}
-	if (!best_function.index.IsValid()) {
-		throw BinderException("No matching function found!");
-	}
+
 	auto bound_function = function.functions.GetFunctionByOffset(best_function.index.GetIndex());
 	return BindScalarFunctionInternal(make_uniq<ScalarFunction>(bound_function), std::move(children), is_operator,
 	                                  binder);
@@ -460,7 +471,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
-	auto bound_function = BindScalarFunctionRecursive(func, children, error);
+	auto bound_function = BindScalarFunctionMultipleSchemas(func, children, error);
 	return BindScalarFunctionInternal(std::move(bound_function), std::move(children), is_operator, binder);
 }
 

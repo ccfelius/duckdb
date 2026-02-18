@@ -502,7 +502,8 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 			} else {
 				entries.emplace_back(catalog, DEFAULT_SCHEMA);
 			}
-			// we also append extension entries here
+			// TODO; double-check; is this necessary?
+			// we also append extension entries here if we did not find entries
 			auto extension_paths = search_path.GetExtensionPaths();
 			for (auto &extension_path : extension_paths) {
 				entries.emplace_back(extension_path.catalog, extension_path.schema);
@@ -807,6 +808,7 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, schema);
 	auto schema_entry = LookupSchema(transaction, schema_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
+		// if the entry is not found, we return an invalid CatalogEntryLookup
 		return {nullptr, nullptr, ErrorData()};
 	}
 	auto entry = schema_entry->LookupEntry(transaction, lookup_info);
