@@ -330,7 +330,8 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionRecursive(ScalarFun
 	// first try to bind the function with the given schema
 	auto best_function = BindFunction(func.name, func.functions, children, error);
 
-	if (!best_function.index.IsValid()) {
+	if (best_function.index.IsValid()) {
+		// add the function since it's valid
 		auto bound_function = func.functions.GetFunctionByOffset(best_function.index.GetIndex());
 		candidate_functions.push_back(ScalarBindingCandidate {best_function, bound_function});
 	}
@@ -345,6 +346,7 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionRecursive(ScalarFun
 	}
 
 	for (auto &schema_name : schema_names) {
+		// this sometimes errors because the function cannot be registered here
 		auto &function =
 		    Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, schema_name, func.name);
 		D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
@@ -369,15 +371,28 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionRecursive(ScalarFun
 		return make_uniq<ScalarFunction>(candidate_functions[0].bound_function);
 	}
 
-	// take the function with the lowest costs
-	ScalarBindingCandidate best_function_all_schemas = candidate_functions[0];
-	for (auto &candidate_function : candidate_functions) {
-		if (candidate_function.result.cost < best_function_all_schemas.result.cost) {
-			best_function_all_schemas = candidate_function;
+	// Find minimum cost
+	auto min_cost = candidate_functions[0].result.cost;
+	for (const auto &candidate : candidate_functions) {
+		if (candidate.result.cost < min_cost) {
+			min_cost = candidate.result.cost;
 		}
 	}
 
-	return make_uniq<ScalarFunction>(best_function_all_schemas.bound_function);
+	// Collect all candidates with that minimum cost
+	vector<ScalarBindingCandidate> best_candidates;
+	for (const auto &candidate : candidate_functions) {
+		if (candidate.result.cost == min_cost) {
+			best_candidates.push_back(candidate);
+		}
+	}
+
+	if (best_candidates.size() > 1) {
+		// TODO: improve error!
+		throw InvalidConfigurationException("Multiple valid candidates found!");
+	} else {
+		return make_uniq<ScalarFunction>(best_candidates[0].bound_function);
+	}
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunctionInternal(unique_ptr<ScalarFunction> bound_function,
@@ -413,9 +428,20 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunctionInternal(unique_ptr<Sca
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, const string &name,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
+
 	auto &function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, schema, name);
 	D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	auto best_function = BindFunction(function.name, function.functions, children, error);
+	// if no corresponding function is found
+	// we loop through all other schemes
+	// TODO; remove redundant functions
+	if (!best_function.index.IsValid()) {
+		// if there is an error, this already is thrown in the recursive function
+		auto bound_function = BindScalarFunctionRecursive(function, children, error);
+		return BindScalarFunctionInternal(std::move(bound_function), std::move(children), is_operator,
+								  binder);
+	}
+
 	auto bound_function = function.functions.GetFunctionByOffset(best_function.index.GetIndex());
 	return BindScalarFunctionInternal(make_uniq<ScalarFunction>(bound_function), std::move(children), is_operator,
 	                                  binder);
