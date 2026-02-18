@@ -92,6 +92,29 @@ vector<string> ExtensionManager::GetSearchPathSchemaNames() const {
 	schema_names.push_back(DEFAULT_SCHEMA);
 	schema_names.reserve(search_paths.size() + 1);
 	for (auto &entry : search_paths) {
+		if (entry.schema == DEFAULT_SCHEMA) {
+			continue;
+		}
+		schema_names.push_back(entry.schema);
+	}
+	return schema_names;
+}
+
+vector<string> ExtensionManager::GetSearchPathSchemaNames(const string &exclude) const {
+	vector<string> schema_names;
+	// if the schema to be excluded != default schema
+	if (exclude != DEFAULT_SCHEMA) {
+		// we always add the default schema first
+		schema_names.push_back(DEFAULT_SCHEMA);
+	}
+	schema_names.reserve(search_paths.size() + 1);
+	for (auto &entry : search_paths) {
+		if (entry.schema == DEFAULT_SCHEMA) {
+			continue;
+		}
+		if (entry.schema == exclude) {
+			continue;
+		}
 		schema_names.push_back(entry.schema);
 	}
 	return schema_names;

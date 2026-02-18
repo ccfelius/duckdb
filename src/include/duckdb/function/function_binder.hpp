@@ -22,6 +22,7 @@ struct FunctionBinderResult {
 	optional_idx index;
 	int64_t cost;
 	string schema;
+	ErrorData error;
 };
 
 //! The FunctionBinder class is responsible for binding functions
@@ -101,10 +102,10 @@ private:
 	                                                        const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
-	optional_idx MultipleCandidateException(const string &catalog_name, const string &schema_name, const string &name,
-	                                        FunctionSet<T> &functions,
-	                                        vector<FunctionBinderResult> &candidate_functions,
-	                                        const vector<LogicalType> &arguments, ErrorData &error);
+	FunctionBinderResult MultipleCandidateException(const string &catalog_name, const string &schema_name,
+	                                                const string &name, FunctionSet<T> &functions,
+	                                                vector<FunctionBinderResult> &candidate_functions,
+	                                                const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
 	FunctionBinderResult BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
