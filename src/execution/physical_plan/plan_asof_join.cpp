@@ -223,10 +223,10 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		auto &func = arg_min_max_entry;
 		ErrorData error;
 		auto best_function = function_binder.BindFunction(func.name, func.functions, child_types, error);
-		if (!best_function.IsValid()) {
+		if (!best_function.index.IsValid()) {
 			return nullptr;
 		}
-		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+		auto bound_function = func.functions.GetFunctionByOffset(best_function.index.GetIndex());
 		auto aggr_expr = function_binder.BindAggregateFunction(bound_function, std::move(aggr_children), nullptr,
 		                                                       AggregateType::NON_DISTINCT);
 		D_ASSERT(col_type == aggr_expr->return_type);

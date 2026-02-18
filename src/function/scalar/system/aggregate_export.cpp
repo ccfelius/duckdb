@@ -419,11 +419,11 @@ unique_ptr<FunctionData> BindAggregateState(ClientContext &context, ScalarFuncti
 	FunctionBinder function_binder(context);
 	auto best_function =
 	    function_binder.BindFunction(aggr.name, aggr.functions, state_type.bound_argument_types, error);
-	if (!best_function.IsValid()) {
+	if (!best_function.index.IsValid()) {
 		throw InternalException("Could not re-bind exported aggregate %s: %s", state_type.function_name,
 		                        error.Message());
 	}
-	auto bound_aggr = aggr.functions.GetFunctionByOffset(best_function.GetIndex());
+	auto bound_aggr = aggr.functions.GetFunctionByOffset(best_function.index.GetIndex());
 	if (bound_aggr.GetBindCallback()) {
 		// FIXME: this is really hacky
 		// but the aggregate state export needs a rework around how it handles more complex aggregates anyway

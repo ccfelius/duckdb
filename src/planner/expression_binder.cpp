@@ -386,10 +386,10 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 	// successfully bound: replace the node with a BoundExpression
 	result.expression->SetQueryLocation(query_location);
 	expr = make_uniq<BoundExpression>(std::move(result.expression));
-	auto &be = expr->Cast<BoundExpression>();
-	be.SetAlias(alias);
+	auto &bound_expression = expr->Cast<BoundExpression>();
+	bound_expression.SetAlias(alias);
 	if (!alias.empty()) {
-		be.expr->SetAlias(alias);
+		bound_expression.expr->SetAlias(alias);
 	}
 	return ErrorData();
 }

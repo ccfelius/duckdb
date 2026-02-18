@@ -50,6 +50,7 @@ public:
 
 	DUCKDB_API void CreateExtensionSchema(const string &name);
 	DUCKDB_API vector<CatalogSearchEntry> &GetExtensionSearchPaths();
+	DUCKDB_API vector<string> GetSearchPathSchemaNames() const;
 
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);

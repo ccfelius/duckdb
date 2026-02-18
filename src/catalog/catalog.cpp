@@ -497,15 +497,15 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		}
 		if (entries.empty()) {
 			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
-			// we also append extension entries here
-			auto extension_paths = search_path.GetExtensionPaths();
-			for (auto &extension_path : extension_paths) {
-				entries.emplace_back(extension_path.catalog, extension_path.schema);
-			}
 			if (catalog_entry) {
 				entries.emplace_back(catalog, catalog_entry->GetDefaultSchema());
 			} else {
 				entries.emplace_back(catalog, DEFAULT_SCHEMA);
+			}
+			// we also append extension entries here
+			auto extension_paths = search_path.GetExtensionPaths();
+			for (auto &extension_path : extension_paths) {
+				entries.emplace_back(extension_path.catalog, extension_path.schema);
 			}
 		}
 	} else {

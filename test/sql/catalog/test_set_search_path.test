@@ -86,12 +86,12 @@ SET SEARCH_PATH = '"invalid quoted string list';
 <REGEX>:Parser Error.*Unterminated quote in qualified name.*
 
 query I
-SELECT MAIN.CURRENT_SETTING('search_path');
+SELECT CORE_FUNCTIONS.CURRENT_SETTING('search_path');
 ----
 test,test2
 
 query I
-SELECT MAIN.CURRENT_SCHEMAS(false);
+SELECT CORE_FUNCTIONS.CURRENT_SCHEMAS(false);
 ----
 [test, test2]
 
@@ -104,12 +104,12 @@ statement ok
 SET SCHEMA = 'test';
 
 query I
-SELECT MAIN.CURRENT_SETTING('search_path');
+SELECT CORE_FUNCTIONS.CURRENT_SETTING('search_path');
 ----
 test
 
 query I
-SELECT MAIN.CURRENT_SCHEMA();
+SELECT CORE_FUNCTIONS.CURRENT_SCHEMA();
 ----
 test
 
@@ -126,7 +126,7 @@ test
 query I
 SELECT current_schemas(true);
 ----
-[main, test, main, main, pg_catalog]
+[main, test, core_functions, main, main, pg_catalog]
 
 query I
 SELECT current_schemas(false);
@@ -261,7 +261,7 @@ pg_catalog
 query I
 SELECT current_schemas(true);
 ----
-[main, pg_catalog, main, main, pg_catalog]
+[main, pg_catalog, core_functions, main, main, pg_catalog]
 
 query I
 SELECT current_query();

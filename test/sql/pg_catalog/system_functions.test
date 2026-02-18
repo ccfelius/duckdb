@@ -59,7 +59,7 @@ main
 query I
 SELECT current_schemas(true);
 ----
-[main, main, main, pg_catalog]
+[main, core_functions, main, main, pg_catalog]
 
 query I
 SELECT current_schemas(false);

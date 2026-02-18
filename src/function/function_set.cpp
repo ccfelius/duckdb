@@ -17,11 +17,11 @@ ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
-	if (!index.IsValid()) {
+	if (!index.index.IsValid()) {
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                        error.Message());
 	}
-	return GetFunctionByOffset(index.GetIndex());
+	return GetFunctionByOffset(index.index.GetIndex());
 }
 
 AggregateFunctionSet::AggregateFunctionSet() : FunctionSet("") {
@@ -39,7 +39,7 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
-	if (!index.IsValid()) {
+	if (!index.index.IsValid()) {
 		// check if the arguments are a prefix of any of the arguments
 		// this is used for functions such as quantile or string_agg that delete part of their arguments during bind
 		// FIXME: we should come up with a better solution here
@@ -61,7 +61,7 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                        error.Message());
 	}
-	return GetFunctionByOffset(index.GetIndex());
+	return GetFunctionByOffset(index.index.GetIndex());
 }
 
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
@@ -75,11 +75,11 @@ TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, c
 	ErrorData error;
 	FunctionBinder binder(context);
 	auto index = binder.BindFunction(name, *this, arguments, error);
-	if (!index.IsValid()) {
+	if (!index.index.IsValid()) {
 		throw InternalException("Failed to find function %s(%s)\n%s", name, StringUtil::ToString(arguments, ","),
 		                        error.Message());
 	}
-	return GetFunctionByOffset(index.GetIndex());
+	return GetFunctionByOffset(index.index.GetIndex());
 }
 
 PragmaFunctionSet::PragmaFunctionSet(string name) : FunctionSet(std::move(name)) {

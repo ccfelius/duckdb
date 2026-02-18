@@ -144,11 +144,11 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 			// Find the best matching aggregate function
 			auto best_function_idx =
 			    function_binder.BindFunction(func.name, func.functions, aggregation_input_types, error);
-			if (!best_function_idx.IsValid()) {
+			if (!best_function_idx.index.IsValid()) {
 				throw BinderException("No matching aggregate function\n%s", error.Message());
 			}
 			// Found a matching function, bind it as an aggregate
-			auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+			auto best_function = func.functions.GetFunctionByOffset(best_function_idx.index.GetIndex());
 			auto aggregate = function_binder.BindAggregateFunction(std::move(best_function), std::move(bound_children),
 			                                                       nullptr, AggregateType::NON_DISTINCT);
 

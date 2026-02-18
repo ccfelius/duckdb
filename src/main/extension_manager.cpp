@@ -86,6 +86,17 @@ vector<CatalogSearchEntry> &ExtensionManager::GetExtensionSearchPaths() {
 	return search_paths;
 }
 
+vector<string> ExtensionManager::GetSearchPathSchemaNames() const {
+	vector<string> schema_names;
+	// we always add the default schema first
+	schema_names.push_back(DEFAULT_SCHEMA);
+	schema_names.reserve(search_paths.size() + 1);
+	for (auto &entry : search_paths) {
+		schema_names.push_back(entry.schema);
+	}
+	return schema_names;
+}
+
 void ExtensionManager::AddSearchPath(DatabaseInstance &db, const CatalogSearchEntry &entry) {
 	auto &manager = Get(db);
 	manager.GetExtensionSearchPaths().push_back(entry);
