@@ -145,18 +145,6 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	auto func = BindAndQualifyFunction(function, true);
 
-#ifdef DEBUG
-	if (func) {
-		try {
-			auto &func_cast = func->Cast<ScalarFunctionCatalogEntry>();
-			if (func_cast.alias_of == "list_has_any") {
-				func = BindAndQualifyFunction(function, true);
-			}
-		} catch (...) {
-		}
-	}
-#endif
-
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
 	    (function.distinct || function.filter || !function.order_bys->orders.empty())) {
 		throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "

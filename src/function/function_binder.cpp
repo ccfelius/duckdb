@@ -580,7 +580,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(vector<string> schemas
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	// TODO; create callback func?
-	auto bound_function = BindScalarFunctionMultipleSchemas(schemas, name, children, error);
+	auto bound_function = BindScalarFunctionMultipleSchemas(std::move(schemas), name, children, error);
 
 	if (!bound_function) {
 		return nullptr;
