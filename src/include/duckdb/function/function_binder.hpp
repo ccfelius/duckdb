@@ -68,7 +68,7 @@ public:
 	                                                             vector<unique_ptr<Expression>> children,
 	                                                             bool is_operator, optional_ptr<Binder> binder);
 
-	DUCKDB_API unique_ptr<Expression> BindScalarFunction(vector<string> schemas, const string &name,
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const vector<string> &schemas, const string &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
