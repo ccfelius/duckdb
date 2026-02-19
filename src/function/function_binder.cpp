@@ -320,7 +320,7 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 
 struct ScalarBindingCandidate {
 	FunctionBinderResult result;
-	ScalarFunction bound_function;
+	 unique_ptr<ScalarFunction> bound_function;
 };
 
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
@@ -334,8 +334,8 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 
 	if (best_function.index.IsValid()) {
 		// add the function since it's valid
-		auto bound_function = func.functions.GetFunctionByOffset(best_function.index.GetIndex());
-		candidate_functions.push_back(ScalarBindingCandidate {best_function, bound_function});
+		auto bound_function =  make_uniq<ScalarFunction>(func.functions.GetFunctionByOffset(best_function.index.GetIndex()));
+		candidate_functions.push_back(ScalarBindingCandidate {best_function, std::move(bound_function)});
 	}
 
 	// we always loop through other schemas to see if more matches are found
@@ -365,8 +365,8 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 
 		// found a matching function!
 		D_ASSERT(best_function_current_scheme.schema == schema_name);
-		auto bound_function = function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex());
-		candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme, bound_function});
+		auto bound_function =  make_uniq<ScalarFunction>(function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
+		candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme, std::move(bound_function)});
 	}
 
 	if (candidate_functions.empty()) {
@@ -375,7 +375,7 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 
 	if (candidate_functions.size() == 1) {
 		// if there is only 1 entry, return this entry
-		return make_uniq<ScalarFunction>(candidate_functions[0].bound_function);
+		return std::move(candidate_functions[0].bound_function);
 	}
 
 	// Find minimum cost
@@ -388,38 +388,38 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 
 	// Collect all candidates with that minimum cost
 	vector<ScalarBindingCandidate> best_candidates;
-	for (const auto &candidate : candidate_functions) {
+	for (auto &candidate : candidate_functions) {
 		if (candidate.result.cost == min_cost) {
-			best_candidates.push_back(candidate);
+			best_candidates.push_back(std::move(candidate));
 		}
 	}
 
 	auto best_candidates_size = best_candidates.size();
 	if (best_candidates.size() > 1) {
 		// we have more then one potential candidate
-		auto potential_candidate_same_schema = best_candidates[0];
+		ScalarBindingCandidate potential_candidate_same_schema;
 		idx_t num_candidates_same_schema = 0;
 
 		// loop through the best candidates for the error
 		vector<FunctionBinderResult> error_candidate_functions;
-		for (const auto &candidate : best_candidates) {
+		for (idx_t idx = 0; idx++; idx = best_candidates.size()) {
 			// maybe change this for string compares
-			if (candidate.result.schema == initial_schema) {
+			if (best_candidates[idx].result.schema == initial_schema) {
 				num_candidates_same_schema++;
-				potential_candidate_same_schema = candidate;
+				potential_candidate_same_schema = std::move(best_candidates[idx]);
 			}
-			error_candidate_functions.push_back(candidate.result);
+			error_candidate_functions.push_back(best_candidates[idx].result);
 		}
 
 		if (num_candidates_same_schema == 0) {
-			// no function is found in the same
+			// no function is found in the same schema
 			// return the last appended function (in order of extension load)
-			return make_uniq<ScalarFunction>(best_candidates[best_candidates_size - 1].bound_function);
+			return std::move(best_candidates[best_candidates_size - 1].bound_function);
 		}
 
 		if (num_candidates_same_schema == 1) {
 			// if there is only 1 entry in the same initial schema, return this entry
-			return make_uniq<ScalarFunction>(potential_candidate_same_schema.bound_function);
+			return std::move(potential_candidate_same_schema.bound_function);
 		}
 
 		// there are multiple best functions (same costs) found in different schemas
@@ -429,7 +429,7 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 		                                         error_candidate_functions, types, error);
 		return nullptr;
 	} else {
-		return make_uniq<ScalarFunction>(best_candidates[0].bound_function);
+		return std::move(best_candidates[0].bound_function);
 	}
 }
 
