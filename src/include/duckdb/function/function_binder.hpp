@@ -22,7 +22,6 @@ struct FunctionBinderResult {
 	optional_idx index;
 	int64_t cost;
 	string schema;
-	ErrorData error;
 };
 
 //! The FunctionBinder class is responsible for binding functions

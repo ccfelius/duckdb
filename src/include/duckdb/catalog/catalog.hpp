@@ -288,8 +288,9 @@ public:
 
 	template <class T>
 	T &GetEntry(ClientContext &context, const string &schema_name, const string &name,
-	            QueryErrorContext error_context = QueryErrorContext()) {
-		auto entry = GetEntry<T>(context, schema_name, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+	            QueryErrorContext error_context = QueryErrorContext(),
+	            OnEntryNotFound if_not_found = OnEntryNotFound::THROW_EXCEPTION) {
+		auto entry = GetEntry<T>(context, schema_name, name, if_not_found, error_context);
 		return *entry;
 	}
 

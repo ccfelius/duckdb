@@ -208,8 +208,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 
 	FunctionBinder function_binder(binder);
-	auto result = function_binder.BindScalarFunction(DEFAULT_SCHEMA, func.name, std::move(children), error,
-	                                                 function.is_operator, &binder);
+	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();

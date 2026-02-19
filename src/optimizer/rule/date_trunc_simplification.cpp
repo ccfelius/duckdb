@@ -389,7 +389,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	vector<unique_ptr<Expression>> args2;
 	args2.emplace_back(rhs.Copy());
 	args2.emplace_back(std::move(interval));
-	auto add = binder.BindScalarFunction(DEFAULT_SCHEMA, "+", std::move(args2), error);
+	auto add = binder.BindScalarFunction("icu", "+", std::move(args2), error);
 
 	vector<unique_ptr<Expression>> args3;
 	args3.emplace_back(date_part.Copy());

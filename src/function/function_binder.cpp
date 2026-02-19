@@ -99,7 +99,7 @@ vector<FunctionBinderResult> FunctionBinder::BindFunctionsFromArguments(const st
 		auto cost = bind_cost.GetIndex();
 		if (cost == lowest_cost) {
 			candidate_functions.push_back(FunctionBinderResult {f_idx, static_cast<int64_t>(lowest_cost),
-			                                                    functions.functions[f_idx].schema_name, ErrorData()});
+			                                                    functions.functions[f_idx].schema_name});
 			continue;
 		}
 		if (cost > lowest_cost) {
@@ -107,8 +107,8 @@ vector<FunctionBinderResult> FunctionBinder::BindFunctionsFromArguments(const st
 		}
 		candidate_functions.clear();
 		lowest_cost = cost;
-		best_function = FunctionBinderResult {f_idx, static_cast<int64_t>(lowest_cost),
-		                                      functions.functions[f_idx].schema_name, ErrorData()};
+		best_function =
+		    FunctionBinderResult {f_idx, static_cast<int64_t>(lowest_cost), functions.functions[f_idx].schema_name};
 	}
 
 	if (!best_function.index.IsValid()) {
@@ -153,7 +153,7 @@ FunctionBinder::MultipleCandidateException(const string &catalog_name, const str
 	                       "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
 	                       call_str, candidate_str));
 
-	return FunctionBinderResult {optional_idx(), -1, INVALID_SCHEMA, error};
+	return FunctionBinderResult {optional_idx(), -1, INVALID_SCHEMA};
 }
 
 template <class T>
@@ -162,7 +162,7 @@ FunctionBinderResult FunctionBinder::BindFunctionFromArguments(const string &nam
 	auto candidate_functions = BindFunctionsFromArguments<T>(name, functions, arguments, error);
 	if (candidate_functions.empty()) {
 		// No candidates, return an empy FunctionBinderResult
-		return FunctionBinderResult();
+		return FunctionBinderResult {optional_idx(), -1, INVALID_SCHEMA};
 	}
 
 	if (candidate_functions.size() > 1) {
@@ -326,6 +326,8 @@ struct ScalarBindingCandidate {
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
                                                                              vector<unique_ptr<Expression>> &children,
                                                                              ErrorData &error) {
+	auto catalog_name = func.schema.GetInfo()->catalog;
+	auto initial_schema = func.schema.GetInfo()->schema;
 	vector<ScalarBindingCandidate> candidate_functions;
 	// first try to bind the function with the given schema
 	auto best_function = BindFunction(func.name, func.functions, children, error);
@@ -343,23 +345,15 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 	auto scalar_function_info = CreateScalarFunctionInfo(func.functions);
 
 	for (auto &schema_name : schema_names) {
-		// if schema name is main, this only errors if the schema is nowhere in the system
-		ScalarFunctionCatalogEntry *function = nullptr;
-
-		try {
-			function = &Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(context, schema_name,
-			                                                                                    func.name);
-		} catch (...) {
-			// function is not in function set for 'schema_name'
-		}
-
+		auto function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
+		    context, schema_name, func.name, OnEntryNotFound::RETURN_NULL);
 		if (!function) {
 			continue;
 		}
 
 		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		if (function->schema.GetInfo()->schema == func.schema.GetInfo()->schema) {
-			// If schema_name = main, this loops through all the schemas
+		if (function->schema.GetInfo()->schema == initial_schema) {
+			// If schema_name = DEFAULT_SCHEMA, this loops through all the schemas
 			// so it can happen that the system finds again the same function
 			continue;
 		}
@@ -368,14 +362,15 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 		if (!best_function_current_scheme.index.IsValid()) {
 			continue;
 		}
-		D_ASSERT(best_function_current_scheme.schema == schema_name);
+
 		// found a matching function!
+		D_ASSERT(best_function_current_scheme.schema == schema_name);
 		auto bound_function = function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex());
 		candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme, bound_function});
 	}
 
 	if (candidate_functions.empty()) {
-		throw InvalidConfigurationException("Scalar Function Binder Error: no candidates found!");
+		return nullptr;
 	}
 
 	if (candidate_functions.size() == 1) {
@@ -399,21 +394,40 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 		}
 	}
 
+	auto best_candidates_size = best_candidates.size();
 	if (best_candidates.size() > 1) {
-		auto catalog_name = func.schema.GetInfo()->catalog;
-		auto schema_name = func.schema.GetInfo()->schema;
+		// we have more then one potential candidate
+		auto potential_candidate_same_schema = best_candidates[0];
+		idx_t num_candidates_same_schema = 0;
+
 		// loop through the best candidates for the error
 		vector<FunctionBinderResult> error_candidate_functions;
 		for (const auto &candidate : best_candidates) {
+			// maybe change this for string compares
+			if (candidate.result.schema == initial_schema) {
+				num_candidates_same_schema++;
+				potential_candidate_same_schema = candidate;
+			}
 			error_candidate_functions.push_back(candidate.result);
 		}
-		ErrorData error_data;
-		auto result = MultipleCandidateException(catalog_name, schema_name, func.name, func.functions,
-		                                         error_candidate_functions, vector<LogicalType> {}, error_data);
-		if (result.error.HasError()) {
-			result.error.Throw();
+
+		if (num_candidates_same_schema == 0) {
+			// no function is found in the same
+			// return the last appended function (in order of extension load)
+			return make_uniq<ScalarFunction>(best_candidates[best_candidates_size - 1].bound_function);
 		}
-		throw InvalidConfigurationException("Multiple valid candidates found!");
+
+		if (num_candidates_same_schema == 1) {
+			// if there is only 1 entry in the same initial schema, return this entry
+			return make_uniq<ScalarFunction>(potential_candidate_same_schema.bound_function);
+		}
+
+		// there are multiple best functions (same costs) found in different schemas
+		ErrorData error_data;
+		auto types = GetLogicalTypesFromExpressions(children);
+		auto result = MultipleCandidateException(catalog_name, initial_schema, func.name, func.functions,
+		                                         error_candidate_functions, types, error);
+		return nullptr;
 	} else {
 		return make_uniq<ScalarFunction>(best_candidates[0].bound_function);
 	}
@@ -457,9 +471,11 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
 	D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	auto best_function = BindFunction(function.name, function.functions, children, error);
 
-	if (error.HasError()) {
-		// if the finding best function failed, we throw
-		error.Throw();
+	if (!best_function.index.IsValid()) {
+		if (error.HasError()) {
+			// if the finding best function failed, we throw
+			error.Throw();
+		}
 	}
 
 	auto bound_function = function.functions.GetFunctionByOffset(best_function.index.GetIndex());
@@ -472,6 +488,9 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
 	auto bound_function = BindScalarFunctionMultipleSchemas(func, children, error);
+	if (!bound_function) {
+		return nullptr;
+	}
 	return BindScalarFunctionInternal(std::move(bound_function), std::move(children), is_operator, binder);
 }
 
