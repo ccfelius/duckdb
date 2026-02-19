@@ -323,7 +323,8 @@ struct ScalarBindingCandidate {
 	unique_ptr<ScalarFunction> bound_function;
 };
 
-unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas, const string &name,
+unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
+                                                                             const string &name,
                                                                              vector<unique_ptr<Expression>> &children,
                                                                              ErrorData &error) {
 	vector<ScalarBindingCandidate> candidate_functions;
