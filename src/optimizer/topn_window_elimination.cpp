@@ -272,7 +272,8 @@ TopNWindowElimination::CreateAggregateOperator(LogicalWindow &window, vector<uni
 		auto &struct_pack_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_pack");
 		const auto struct_pack_fun =
 		    struct_pack_entry.functions.GetFunctionByArguments(context, ExtractReturnTypes(args));
-		auto struct_pack_expr = function_binder.BindScalarFunction(struct_pack_fun, std::move(args));
+		auto struct_pac_fun_ptr = make_uniq<ScalarFunction>(struct_pack_fun);
+		auto struct_pack_expr = function_binder.BindScalarFunction(std::move(struct_pac_fun_ptr), std::move(args));
 		aggregate_params.push_back(std::move(struct_pack_expr));
 	}
 
@@ -326,7 +327,9 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 
 	const auto array_length_fun = array_length_entry.functions.GetFunctionByArguments(
 	    context, {array_length_exprs[0]->return_type, array_length_exprs[1]->return_type});
-	auto bound_array_length_fun = function_binder.BindScalarFunction(array_length_fun, std::move(array_length_exprs));
+	auto array_length_fun_ptr = make_uniq<ScalarFunction>(array_length_fun);
+	auto bound_array_length_fun =
+	    function_binder.BindScalarFunction(std::move(array_length_fun_ptr), std::move(array_length_exprs));
 
 	// generate_series
 	auto &generate_series_entry =
@@ -338,8 +341,9 @@ TopNWindowElimination::CreateRowNumberGenerator(unique_ptr<Expression> aggregate
 
 	const auto generate_series_fun = generate_series_entry.functions.GetFunctionByArguments(
 	    context, {generate_series_exprs[0]->return_type, generate_series_exprs[1]->return_type});
+	auto generate_series_fun_ptr = make_uniq<ScalarFunction>(generate_series_fun);
 	auto bound_generate_series_fun =
-	    function_binder.BindScalarFunction(generate_series_fun, std::move(generate_series_exprs));
+	    function_binder.BindScalarFunction(std::move(generate_series_fun_ptr), std::move(generate_series_exprs));
 
 	// unnest
 	auto unnest_row_number_expr = make_uniq<BoundUnnestExpression>(LogicalType::BIGINT);
@@ -396,6 +400,7 @@ void TopNWindowElimination::AddStructExtractExprs(
 	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "struct_extract");
 	const auto struct_extract_fun =
 	    struct_extract_entry.functions.GetFunctionByArguments(context, {struct_type, LogicalType::VARCHAR});
+	auto struct_extract_fun_ptr = make_uniq<ScalarFunction>(struct_extract_fun);
 
 	const auto &child_types = StructType::GetChildTypes(struct_type);
 	for (idx_t i = 0; i < child_types.size(); i++) {
@@ -405,7 +410,8 @@ void TopNWindowElimination::AddStructExtractExprs(
 		fun_args[0] = aggregate_column_ref->Copy();
 		fun_args[1] = make_uniq<BoundConstantExpression>(alias);
 
-		auto bound_function = function_binder.BindScalarFunction(struct_extract_fun, std::move(fun_args));
+		auto bound_function =
+		    function_binder.BindScalarFunction(std::move(struct_extract_fun_ptr), std::move(fun_args));
 		bound_function->alias = alias;
 		exprs.push_back(std::move(bound_function));
 	}

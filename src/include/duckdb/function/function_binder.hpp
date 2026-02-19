@@ -80,7 +80,7 @@ public:
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
-	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunction bound_function,
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(unique_ptr<ScalarFunction> bound_function,
 	                                                     vector<unique_ptr<Expression>> children,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);

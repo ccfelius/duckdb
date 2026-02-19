@@ -61,7 +61,8 @@ bool PushVarcharCollation(ClientContext &context, unique_ptr<Expression> &source
 		children.push_back(std::move(source));
 
 		FunctionBinder function_binder(context);
-		auto function = function_binder.BindScalarFunction(collation_entry.function, std::move(children));
+		auto function = function_binder.BindScalarFunction(make_uniq<ScalarFunction>(collation_entry.function),
+		                                                   std::move(children));
 		source = std::move(function);
 	}
 	return true;
@@ -84,7 +85,7 @@ bool PushTimeTZCollation(ClientContext &context, unique_ptr<Expression> &source,
 	children.push_back(std::move(source));
 
 	FunctionBinder function_binder(context);
-	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
+	auto function = function_binder.BindScalarFunction(make_uniq<ScalarFunction>(scalar_function), std::move(children));
 	source = std::move(function);
 	return true;
 }
@@ -105,7 +106,7 @@ bool PushIntervalCollation(ClientContext &context, unique_ptr<Expression> &sourc
 	children.push_back(std::move(source));
 
 	FunctionBinder function_binder(context);
-	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
+	auto function = function_binder.BindScalarFunction(make_uniq<ScalarFunction>(scalar_function), std::move(children));
 	source = std::move(function);
 	return true;
 }
@@ -126,7 +127,7 @@ bool PushVariantCollation(ClientContext &context, unique_ptr<Expression> &source
 	children.push_back(std::move(source));
 
 	FunctionBinder function_binder(context);
-	auto function = function_binder.BindScalarFunction(scalar_function, std::move(children));
+	auto function = function_binder.BindScalarFunction(make_uniq<ScalarFunction>(scalar_function), std::move(children));
 	function->SetAlias(source_alias);
 	source = std::move(function);
 	return true;

@@ -67,7 +67,8 @@ Sort::Sort(ClientContext &context_p, const vector<BoundOrderByNode> &orders, con
 		                       make_uniq<BoundReferenceExpression>(LogicalType::BLOB, static_cast<storage_t>(0)));
 	}
 
-	decode_sort_key = binder.BindScalarFunction(DecodeSortKeyFun::GetFunction(), std::move(decode_children));
+	decode_sort_key = binder.BindScalarFunction(make_uniq<ScalarFunction>(DecodeSortKeyFun::GetFunction()),
+	                                            std::move(decode_children));
 	if (!decode_sort_key) {
 		throw InternalException("Unable to bind decode_sort_key in Sort::Sort");
 	}

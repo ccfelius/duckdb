@@ -124,7 +124,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			    Value("More than one row returned by a subquery used as an expression - scalar subqueries can only "
 			          "return a single row.\n\nUse \"SET scalar_subquery_error_on_multiple_rows=false\" to revert to "
 			          "previous behavior of returning a random row.")));
-			auto error_expr = function_binder.BindScalarFunction(ErrorFun::GetFunction(), std::move(error_children));
+			auto error_expr = function_binder.BindScalarFunction(make_uniq<ScalarFunction>(ErrorFun::GetFunction()),
+			                                                     std::move(error_children));
 			error_expr->return_type = first_ref->return_type;
 			auto case_expr =
 			    make_uniq<BoundCaseExpression>(std::move(count_check), std::move(error_expr), std::move(first_ref));
@@ -182,7 +183,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 
 			// Create a struct expression from the subquery columns using the "row" function
 			FunctionBinder function_binder(binder);
-			auto struct_expr = function_binder.BindScalarFunction(RowFun::GetFunction(), std::move(struct_children));
+			auto struct_expr = function_binder.BindScalarFunction(make_uniq<ScalarFunction>(RowFun::GetFunction()),
+			                                                      std::move(struct_children));
 
 			JoinCondition cond(std::move(expr.children[0]), std::move(struct_expr), expr.comparison_type);
 
