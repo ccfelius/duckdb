@@ -325,7 +325,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	if (!best_function.IsValid()) {
 		return nullptr;
 	}
-
+	// fake change
 	// found a matching function!
 	auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
 
