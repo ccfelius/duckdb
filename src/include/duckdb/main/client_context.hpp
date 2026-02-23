@@ -31,13 +31,12 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include "duckdb/main/query_parameters.hpp"
 
-#include <duckdb/catalog/catalog_search_path.hpp>
-
 namespace duckdb {
 
 class Appender;
 class Catalog;
 class CatalogSearchPath;
+class CatalogSearchEntry;
 class ColumnDataCollection;
 class DatabaseInstance;
 class FileOpener;

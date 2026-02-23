@@ -378,11 +378,11 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(con
 
 	auto best_candidates_size = best_candidates.size();
 	if (best_candidates.size() > 1) {
-		// we have more then one potential candidate
+		// we have more than one potential candidate
 		ScalarBindingCandidate potential_candidate_same_schema;
 		idx_t num_candidates_same_schema = 0;
 
-		// loop through the best candidates for the error
+		// loop through the best candidates for the (potential) error
 		vector<FunctionBinderResult> error_candidate_functions;
 		for (idx_t idx = 0; idx++; idx = best_candidates.size()) {
 			// maybe change this for string compares
@@ -400,17 +400,11 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(con
 		}
 
 		if (num_candidates_same_schema == 1) {
+			// the original schema (linked to the input func) wins over any other schema
 			// if there is only 1 entry in the same initial schema, we return this entry
 			return std::move(potential_candidate_same_schema.bound_function);
 		}
 
-		// there are multiple best functions (same costs) found in different schemas
-		ErrorData error_data;
-		auto empty_set = FunctionSet<ScalarFunction>("empty");
-		auto types = GetLogicalTypesFromExpressions(children);
-		auto result = MultipleCandidateException(SYSTEM_CATALOG, DEFAULT_SCHEMA, name, empty_set,
-		                                         error_candidate_functions, types, error);
-		return nullptr;
 	} else {
 		return std::move(best_candidates[0].bound_function);
 	}
@@ -430,6 +424,11 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 		auto bound_function =
 		    make_uniq<ScalarFunction>(func.functions.GetFunctionByOffset(best_function.index.GetIndex()));
 		candidate_functions.push_back(ScalarBindingCandidate {best_function, std::move(bound_function)});
+	}
+
+	if (best_function.index.IsValid() && initial_schema != DEFAULT_SCHEMA) {
+		// the initial schema belonging to 'func' is the correct one if it's not the default schema
+		return std::move(candidate_functions[0].bound_function);
 	}
 
 	// we always loop through other schemas to see if more matches are found
@@ -515,13 +514,6 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 			// if there is only 1 entry in the same initial schema, return this entry
 			return std::move(potential_candidate_same_schema.bound_function);
 		}
-
-		// there are multiple best functions (same costs) found in different schemas
-		ErrorData error_data;
-		auto types = GetLogicalTypesFromExpressions(children);
-		auto result = MultipleCandidateException(catalog_name, initial_schema, func.name, func.functions,
-		                                         error_candidate_functions, types, error);
-		return nullptr;
 	} else {
 		return std::move(best_candidates[0].bound_function);
 	}
