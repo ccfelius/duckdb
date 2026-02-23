@@ -171,6 +171,12 @@
         "test/sql/catalog/view/test_view_schema_change.test",
         "test/sql/catalog/dependencies/add_column_to_table_referenced_by_view.test"
       ]
+    },
+    {
+      "reason": "httpfs is linked in release-builds, despite disabling autoloading",
+      "paths": [
+        "test/sql/attach/attach_encryption_fallback_readonly.test"
+      ]
     }
   ]
 }
