@@ -426,7 +426,8 @@ public:
 private:
 	//! Lookup an entry in the schema, returning a lookup with the entry and schema if they exist
 	virtual CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
-	                                          const EntryLookupInfo &lookup_info, bool loop_through_extensions = true);
+	                                                  const EntryLookupInfo &lookup_info,
+	                                                  bool loop_through_extensions = true);
 	//! Calls LookupEntryInternal on the schema, trying other schemas if the schema is invalid. Sets
 	//! CatalogEntryLookup->error depending on if_not_found when no entry is found
 	CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &schema,
