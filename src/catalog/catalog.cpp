@@ -801,7 +801,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 }
 
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
-                                                   const EntryLookupInfo &lookup_info) {
+                                                   const EntryLookupInfo &lookup_info, bool loop_through_extensions) {
 	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
 		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
 	}
@@ -814,13 +814,14 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 	auto entry = schema_entry->LookupEntry(transaction, lookup_info);
 
 	if (!entry) {
-		if (schema == DEFAULT_SCHEMA) {
+		if (schema == DEFAULT_SCHEMA && loop_through_extensions) {
 			// Entry is not found in the main schema
 			// Loop through extension schema's
 			auto &manager = ExtensionManager::Get(db.GetDatabase());
 			auto extension_schema_paths = manager.GetExtensionSearchPaths();
 			for (auto &extension_path : extension_schema_paths) {
-				auto result = TryLookupEntryInternal(transaction, extension_path.schema, lookup_info);
+				auto result =
+				    TryLookupEntryInternal(transaction, extension_path.schema, lookup_info, loop_through_extensions);
 				if (result.entry) {
 					return result;
 				}
@@ -832,7 +833,8 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &schema,
-                                           const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+                                           const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
+                                           bool loop_through_extensions) {
 	auto &context = retriever.GetContext();
 	reference_set_t<SchemaCatalogEntry> schemas;
 	if (IsInvalidSchema(schema)) {
@@ -841,7 +843,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		for (auto &entry : entries) {
 			auto &candidate_schema = entry.schema;
 			auto transaction = GetCatalogTransaction(context);
-			auto result = TryLookupEntryInternal(transaction, candidate_schema, lookup_info);
+			auto result = TryLookupEntryInternal(transaction, candidate_schema, lookup_info, loop_through_extensions);
 			if (result.Found()) {
 				return result;
 			}
@@ -851,7 +853,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		}
 	} else {
 		auto transaction = GetCatalogTransaction(context);
-		auto result = TryLookupEntryInternal(transaction, schema, lookup_info);
+		auto result = TryLookupEntryInternal(transaction, schema, lookup_info, loop_through_extensions);
 		if (result.Found()) {
 			return result;
 		}
@@ -1064,14 +1066,16 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const string &schema_name,
-                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
-	auto lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found);
+                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
+                                             bool loop_through_extensions) {
+	auto lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found, loop_through_extensions);
 
 	// Try autoloading extension to resolve lookup
 	if (!lookup_entry.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
 		                                    lookup_info.GetEntryName())) {
-			lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found);
+			// here we explicitly want to loop through extensions
+			lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found, true);
 		}
 	}
 
@@ -1083,9 +1087,10 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const string &schema_name,
-                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
+                                             bool loop_through_extensions) {
 	CatalogEntryRetriever retriever(context);
-	return GetEntry(retriever, schema_name, lookup_info, if_not_found);
+	return GetEntry(retriever, schema_name, lookup_info, if_not_found, loop_through_extensions);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, const EntryLookupInfo &lookup_info) {

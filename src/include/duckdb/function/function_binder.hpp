@@ -18,6 +18,8 @@
 
 namespace duckdb {
 
+struct ScalarBindingCandidate;
+
 struct FunctionBinderResult {
 	optional_idx index;
 	int64_t cost;
@@ -56,6 +58,10 @@ public:
 	DUCKDB_API FunctionBinderResult BindFunction(const string &name, PragmaFunctionSet &functions,
 	                                             vector<Value> &parameters, ErrorData &error);
 
+	DUCKDB_API unique_ptr<ScalarFunction>
+	BindScalarFunctionMultipleSchemas(const vector<string> &schemas, const string &name,
+	                                  vector<unique_ptr<Expression>> &children, ErrorData &error,
+	                                  vector<ScalarBindingCandidate> &candidate_functions);
 	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 	                                                                        const string &name,
 	                                                                        vector<unique_ptr<Expression>> &children,

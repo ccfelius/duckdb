@@ -36,7 +36,7 @@ namespace duckdb {
 class Appender;
 class Catalog;
 class CatalogSearchPath;
-class CatalogSearchEntry;
+struct CatalogSearchEntry;
 class ColumnDataCollection;
 class DatabaseInstance;
 class FileOpener;
