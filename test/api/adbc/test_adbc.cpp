@@ -1652,25 +1652,16 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(0, 0).ToString() == "ADBC_OBJECT_DEPTH_DB_SCHEMAS"));
+
 		REQUIRE((res->GetValue(0, 1).ToString() == "system"));
 		REQUIRE((res->GetValue(0, 2).ToString() == "temp"));
-		string expected = R"([
-		    {
-		        'db_schema_name': information_schema,
-		        'db_schema_tables': []
-		    },
-		    {
-		        'db_schema_name': main,
-		        'db_schema_tables': []
-		    },
-		    {
-		        'db_schema_name': pg_catalog,
-		        'db_schema_tables': []
-		    }
-		])";
 		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]");
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "") ==
-		         StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", "")));
+		string actual = res->GetValue(1, 1).ToString();
+		// extensions are now in the system catalog, so we check for the core schemas only
+		REQUIRE(StringUtil::Contains(actual, "'db_schema_name': information_schema"));
+		REQUIRE(StringUtil::Contains(actual, "'db_schema_name': main"));
+		REQUIRE(StringUtil::Contains(actual, "'db_schema_name': pg_catalog"));
+
 		REQUIRE(res->GetValue(1, 2).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]");
 		db.Query("Drop table result;");
 
