@@ -1,0 +1,13 @@
+diff --git a/src/spatial/util/function_builder.cpp b/src/spatial/util/function_builder.cpp
+index 5bd4f95..0cffc63 100644
+--- a/src/spatial/util/function_builder.cpp
++++ b/src/spatial/util/function_builder.cpp
+@@ -64,7 +64,7 @@ void FunctionBuilder::Register(ExtensionLoader &loader, const char *name, Scalar
+ 	// Also add the parameter names. We need to access the catalog entry for this.
+ 	auto &catalog = Catalog::GetSystemCatalog(db);
+ 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+-	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
++	auto &schema = catalog.GetSchema(transaction, loader.GetName());
+ 	auto catalog_entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, name);
+ 	if (!catalog_entry) {
+ 		// This should not happen, we just registered the function

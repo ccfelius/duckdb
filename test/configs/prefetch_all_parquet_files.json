@@ -18,6 +18,13 @@
       "paths": [
         "test/parquet/variant/variant_roundtrip.test_slow"
       ]
+    },
+    {
+      "reason": "Result depends on which extensions are loaded",
+      "paths": [
+        "test/sql/catalog/test_set_search_path.test",
+        "test/sql/pg_catalog/system_functions.test"
+      ]
     }
   ]
 }
