@@ -474,14 +474,6 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
 		}
-		if (schema == DEFAULT_SCHEMA) {
-			// when the catalog is not specified, i.e. "", and schema is "main"
-			// we append all extension schemas as candidates
-			auto extension_paths = search_path.GetExtensionPaths();
-			for (auto &extension_path : extension_paths) {
-				entries.emplace_back(extension_path.catalog, extension_path.schema);
-			}
-		}
 		if (entries.empty()) {
 			auto &default_entry = search_path.GetDefault();
 			if (!IsInvalidCatalog(default_entry.catalog)) {
@@ -501,12 +493,6 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 				entries.emplace_back(catalog, catalog_entry->GetDefaultSchema());
 			} else {
 				entries.emplace_back(catalog, DEFAULT_SCHEMA);
-			}
-			// TODO; double-check; is this necessary?
-			// we also append extension entries here if we did not find entries
-			auto extension_paths = search_path.GetExtensionPaths();
-			for (auto &extension_path : extension_paths) {
-				entries.emplace_back(extension_path.catalog, extension_path.schema);
 			}
 		}
 	} else {

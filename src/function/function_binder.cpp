@@ -371,7 +371,7 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 	vector<ScalarBindingCandidate> best_candidates;
 	best_candidates.reserve(candidate_functions.size());
 
-	idx_t min_cost = NumericLimits<idx_t>::Maximum();
+	int64_t min_cost = NumericLimits<int64_t>::Maximum();
 
 	for (auto &candidate : candidate_functions) {
 		auto cost = candidate.result.cost;
