@@ -1,5 +1,5 @@
 diff --git a/src/spatial/util/function_builder.cpp b/src/spatial/util/function_builder.cpp
-index 5bd4f95..0cffc63 100644
+index 5bd4f95..3e8c6e9 100644
 --- a/src/spatial/util/function_builder.cpp
 +++ b/src/spatial/util/function_builder.cpp
 @@ -64,7 +64,7 @@ void FunctionBuilder::Register(ExtensionLoader &loader, const char *name, Scalar
@@ -9,5 +9,33 @@ index 5bd4f95..0cffc63 100644
 -	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
 +	auto &schema = catalog.GetSchema(transaction, loader.GetName());
  	auto catalog_entry = schema.GetEntry(transaction, CatalogType::SCALAR_FUNCTION_ENTRY, name);
+ 	if (!catalog_entry) {
+ 		// This should not happen, we just registered the function
+@@ -108,7 +108,7 @@ void FunctionBuilder::Register(ExtensionLoader &loader, const char *name, Aggreg
+ 	// Also add the parameter names. We need to access the catalog entry for this.
+ 	auto &catalog = Catalog::GetSystemCatalog(db);
+ 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+-	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
++	auto &schema = catalog.GetSchema(transaction, loader.GetName());
+ 	auto catalog_entry = schema.GetEntry(transaction, CatalogType::AGGREGATE_FUNCTION_ENTRY, name);
+ 	if (!catalog_entry) {
+ 		// This should not happen, we just registered the function
+@@ -137,7 +137,8 @@ void FunctionBuilder::Register(ExtensionLoader &loader, const char *name, MacroF
+ 
+ 	for (auto &def : builder.macros) {
+ 		DefaultMacro macro = {};
+-		macro.schema = DEFAULT_SCHEMA;
++		const std::string &extension_name = loader.GetName();
++		macro.schema = extension_name.c_str();
+ 		macro.name = name;
+ 		macro.named_parameters[0].name = nullptr;
+ 		macro.named_parameters[0].default_value = nullptr;
+@@ -174,7 +175,7 @@ void FunctionBuilder::AddTableFunctionDocs(ExtensionLoader &loader, const char *
+ 	auto &db = loader.GetDatabaseInstance();
+ 	auto &catalog = Catalog::GetSystemCatalog(db);
+ 	auto transaction = CatalogTransaction::GetSystemTransaction(db);
+-	auto &schema = catalog.GetSchema(transaction, DEFAULT_SCHEMA);
++	auto &schema = catalog.GetSchema(transaction, loader.GetName());
+ 	auto catalog_entry = schema.GetEntry(transaction, CatalogType::TABLE_FUNCTION_ENTRY, name);
  	if (!catalog_entry) {
  		// This should not happen, we just registered the function
