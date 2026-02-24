@@ -334,6 +334,14 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 		original_schema = candidate_functions[0].result.schema;
 	}
 
+	// TODO: create a new method, that gives all matching functions for each given schema
+	// it returns a vector of ScalarFunctionCatalogEntries pointers
+	// then for every pointer, just create the bound function directly and order
+
+	// other thing:
+	// avoid later with getentry or lookupentry internal to loop through all entries, but give directly the right
+	// catalog thign
+
 	for (auto &schema_name : schemas) {
 		bool loop_through_extensions = false;
 		auto function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
@@ -345,7 +353,6 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 		}
 
 		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-
 		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
 		if (!best_function_current_scheme.index.IsValid()) {
 			continue;
@@ -385,11 +392,9 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 		}
 	}
 
-	const auto best_candidates_size = best_candidates.size();
-	D_ASSERT(best_candidates_size > 0);
+	D_ASSERT(!best_candidates.empty() && best_candidates.size() > 0);
 	if (best_candidates.size() > 1) {
 		// we have more than one potential candidate with equal costs
-
 		// return the candidate related to the initial schema, if any
 		if (best_candidates[0].result.schema == original_schema) {
 			return std::move(best_candidates[0].bound_function);
@@ -397,7 +402,7 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 
 		// The best candidate is not found in the initial schema
 		// We return the last appended function in order of loaded extensions
-		return std::move(best_candidates[best_candidates_size - 1].bound_function);
+		return std::move(best_candidates[best_candidates.size() - 1].bound_function);
 	}
 
 	// we should never end up here, but otherwise CI complains

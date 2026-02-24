@@ -791,31 +791,40 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
 		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
 	}
-	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, schema);
-	auto schema_entry = LookupSchema(transaction, schema_lookup, OnEntryNotFound::RETURN_NULL);
-	if (!schema_entry) {
-		// if the entry is not found, we return an invalid CatalogEntryLookup
-		return {nullptr, nullptr, ErrorData()};
-	}
-	auto entry = schema_entry->LookupEntry(transaction, lookup_info);
 
-	if (!entry) {
-		if (schema == DEFAULT_SCHEMA && loop_through_extensions) {
-			// Entry is not found in the main schema
-			// Loop through extension schema's
-			auto &manager = ExtensionManager::Get(db.GetDatabase());
-			auto extension_schema_paths = manager.GetExtensionSearchPaths();
-			for (auto &extension_path : extension_schema_paths) {
-				auto result =
-				    TryLookupEntryInternal(transaction, extension_path.schema, lookup_info, loop_through_extensions);
-				if (result.entry) {
-					return result;
-				}
+	vector<string> schemas;
+	schemas.push_back(schema);
+
+	// if we check the default schema, we also loop through the extension schema's
+	if (schema == DEFAULT_SCHEMA && loop_through_extensions) {
+		auto &manager = ExtensionManager::Get(db.GetDatabase());
+		auto extension_schema_paths = manager.GetExtensionSearchPaths();
+		for (auto &extension_path : extension_schema_paths) {
+			for (auto &path : extension_schema_paths) {
+				schemas.push_back(path.schema);
 			}
 		}
-		return {schema_entry, nullptr, ErrorData()};
 	}
-	return {schema_entry, entry, ErrorData()};
+
+	CatalogEntryLookup result {nullptr, nullptr, ErrorData()};
+	for (const auto &schema_name : schemas) {
+		auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, schema_name);
+		auto schema_entry = LookupSchema(transaction, schema_lookup, OnEntryNotFound::RETURN_NULL);
+
+		if (!schema_entry) {
+			continue;
+		}
+
+		result.schema = schema_entry;
+		auto entry = schema_entry->LookupEntry(transaction, lookup_info);
+
+		if (entry) {
+			return {schema_entry, entry, ErrorData()};
+		}
+	}
+
+	// We didn't find the entry
+	return result;
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &schema,
