@@ -800,9 +800,7 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 		auto &manager = ExtensionManager::Get(db.GetDatabase());
 		auto extension_schema_paths = manager.GetExtensionSearchPaths();
 		for (auto &extension_path : extension_schema_paths) {
-			for (auto &path : extension_schema_paths) {
-				schemas.push_back(path.schema);
-			}
+			schemas.push_back(extension_path.schema);
 		}
 	}
 
