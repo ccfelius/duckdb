@@ -327,6 +327,13 @@ unique_ptr<ScalarFunction>
 FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas, const string &name,
                                                   vector<unique_ptr<Expression>> &children, ErrorData &error,
                                                   vector<ScalarBindingCandidate> &candidate_functions) {
+	string original_schema = "";
+
+	if (!candidate_functions.empty()) {
+		// store the original schema (attribute of "function", if it was there before)
+		original_schema = candidate_functions[0].result.schema;
+	}
+
 	for (auto &schema_name : schemas) {
 		bool loop_through_extensions = false;
 		auto function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
@@ -360,48 +367,45 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 		return std::move(candidate_functions[0].bound_function);
 	}
 
-	// Find minimum cost
-	auto min_cost = candidate_functions[0].result.cost;
-	for (const auto &candidate : candidate_functions) {
-		if (candidate.result.cost < min_cost) {
-			min_cost = candidate.result.cost;
-		}
-	}
-
-	// Collect all candidates with that minimum cost
+	// find candidates with minimum costs
 	vector<ScalarBindingCandidate> best_candidates;
+	best_candidates.reserve(candidate_functions.size());
+
+	idx_t min_cost = NumericLimits<idx_t>::Maximum();
+
 	for (auto &candidate : candidate_functions) {
-		if (candidate.result.cost == min_cost) {
+		auto cost = candidate.result.cost;
+
+		if (cost < min_cost) {
+			min_cost = cost;
+			best_candidates.clear();
+			best_candidates.push_back(std::move(candidate));
+		} else if (cost == min_cost) {
 			best_candidates.push_back(std::move(candidate));
 		}
 	}
 
 	auto best_candidates_size = best_candidates.size();
 	if (best_candidates.size() > 1) {
-		// we have more than one potential candidate
-		ScalarBindingCandidate potential_candidate_same_schema;
-		idx_t num_candidates_same_schema = 0;
+		// we have more than one potential candidate with equal costs
 
-		// loop through the best candidates for the (potential) error
-		vector<FunctionBinderResult> error_candidate_functions;
-		for (idx_t idx = 0; idx++; idx = best_candidates.size()) {
-			// maybe change this for string compares
-			if (best_candidates[idx].result.schema == DEFAULT_SCHEMA) {
-				num_candidates_same_schema++;
+		ScalarBindingCandidate potential_candidate_same_schema;
+		bool candidate_original_schema = false;
+
+		// loop through the best candidates
+		for (idx_t idx = 0; idx++; idx = best_candidates_size) {
+			if (best_candidates[idx].result.schema == original_schema) {
+				candidate_original_schema = true;
 				potential_candidate_same_schema = std::move(best_candidates[idx]);
 			}
-			error_candidate_functions.push_back(best_candidates[idx].result);
 		}
 
-		if (num_candidates_same_schema == 0) {
-			// no function is found in the same schema
-			// return the last appended function (in order of extension load)
+		if (!candidate_original_schema) {
+			// The best candidate is not found in the original schema
+			// We return the last appended function in order of loaded extensions
 			return std::move(best_candidates[best_candidates_size - 1].bound_function);
-		}
-
-		if (num_candidates_same_schema == 1) {
-			// the original schema (linked to the input func) wins over any other schema
-			// if there is only 1 entry in the same initial schema, we return this entry
+		} else {
+			// There is a best candidate found in the original schema
 			return std::move(potential_candidate_same_schema.bound_function);
 		}
 
