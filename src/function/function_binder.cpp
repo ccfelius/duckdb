@@ -392,27 +392,33 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 		}
 	}
 
-	auto best_candidates_size = best_candidates.size();
-	D_ASSERT(!best_candidates.empty() && best_candidates.size() > 0);
-	ScalarBindingCandidate potential_candidate_same_schema;
-	bool candidate_original_schema = false;
+	if (best_candidates.size() > 1) {
+		// we have more than one potential candidate with equal costs
 
-	// loop through the best candidates
-	for (idx_t idx = 0; idx++; idx = best_candidates_size) {
-		if (best_candidates[idx].result.schema == original_schema) {
-			candidate_original_schema = true;
-			potential_candidate_same_schema = std::move(best_candidates[idx]);
+		auto best_candidates_size = best_candidates.size();
+		D_ASSERT(!best_candidates.empty() && best_candidates.size() > 0);
+		ScalarBindingCandidate potential_candidate_same_schema;
+		bool candidate_original_schema = false;
+
+		// loop through the best candidates
+		for (idx_t idx = 0; idx++; idx = best_candidates_size) {
+			if (best_candidates[idx].result.schema == original_schema) {
+				candidate_original_schema = true;
+				potential_candidate_same_schema = std::move(best_candidates[idx]);
+			}
 		}
+
+		if (!candidate_original_schema) {
+			// The best candidate is not found in the original schema
+			// We return the last appended function in order of loaded extensions
+			return std::move(best_candidates[best_candidates_size - 1].bound_function);
+		}
+
+		// There is a best candidate found in the original schema
+		return std::move(potential_candidate_same_schema.bound_function);
 	}
 
-	if (!candidate_original_schema) {
-		// The best candidate is not found in the original schema
-		// We return the last appended function in order of loaded extensions
-		return std::move(best_candidates[best_candidates_size - 1].bound_function);
-	}
-
-	// There is a best candidate found in the original schema
-	return std::move(potential_candidate_same_schema.bound_function);
+	return nullptr;
 }
 
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
