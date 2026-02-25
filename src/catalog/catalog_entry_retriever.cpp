@@ -97,6 +97,7 @@ void CatalogEntryRetriever::SetEntryRetrieverSearchPath(vector<CatalogSearchEntr
 	}
 
 	// push the set paths from the ClientContext behind the provided paths
+	// these are NOT extension paths
 	auto &client_search_path = *ClientData::Get(context).catalog_search_path;
 	auto &set_paths = client_search_path.GetSetPaths();
 	for (auto path : set_paths) {

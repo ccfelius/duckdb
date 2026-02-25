@@ -334,14 +334,6 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 		original_schema = candidate_functions[0].result.schema;
 	}
 
-	// TODO: create a new method, that gives all matching functions for each given schema
-	// it returns a vector of ScalarFunctionCatalogEntries pointers
-	// then for every pointer, just create the bound function directly and order
-
-	// other thing:
-	// avoid later with getentry or lookupentry internal to loop through all entries, but give directly the right
-	// catalog thign
-
 	for (auto &schema_name : schemas) {
 		bool loop_through_extensions = false;
 		auto function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
@@ -354,6 +346,7 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 
 		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
+
 		if (!best_function_current_scheme.index.IsValid()) {
 			continue;
 		}
@@ -392,32 +385,20 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 		}
 	}
 
-	if (best_candidates.size() > 1) {
-		// we have more than one potential candidate with equal costs
-
-		auto best_candidates_size = best_candidates.size();
-		D_ASSERT(!best_candidates.empty() && best_candidates.size() > 0);
-		ScalarBindingCandidate potential_candidate_same_schema;
-		bool candidate_original_schema = false;
-
-		// loop through the best candidates
-		for (idx_t idx = 0; idx++; idx = best_candidates_size) {
-			if (best_candidates[idx].result.schema == original_schema) {
-				candidate_original_schema = true;
-				potential_candidate_same_schema = std::move(best_candidates[idx]);
-			}
-		}
-
-		if (!candidate_original_schema) {
-			// The best candidate is not found in the original schema
-			// We return the last appended function in order of loaded extensions
-			return std::move(best_candidates[best_candidates_size - 1].bound_function);
-		}
-
-		// There is a best candidate found in the original schema
-		return std::move(potential_candidate_same_schema.bound_function);
+	if (best_candidates.size() == 1) {
+		return std::move(best_candidates[0].bound_function);
 	}
 
+	if (best_candidates.size() > 1) {
+		// return the function related to the original schema
+		if (!original_schema.empty() && best_candidates[0].result.schema == original_schema) {
+			return std::move(best_candidates[0].bound_function);
+		}
+		// Otherwise, use the latest loaded extension schema
+		return std::move(best_candidates.back().bound_function);
+	}
+
+	// return nullptr to avoid CI complaining
 	return nullptr;
 }
 
