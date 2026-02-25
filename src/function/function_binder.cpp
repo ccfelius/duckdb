@@ -328,9 +328,12 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
                                                   vector<unique_ptr<Expression>> &children, ErrorData &error,
                                                   vector<ScalarBindingCandidate> &candidate_functions) {
 	string original_schema = "";
+	int64_t min_cost = NumericLimits<int64_t>::Maximum();
 
 	if (!candidate_functions.empty()) {
+		D_ASSERT(candidate_functions.size() == 1);
 		// store the original schema (attribute of "function", if it was there before)
+		min_cost = candidate_functions[0].result.cost;
 		original_schema = candidate_functions[0].result.schema;
 	}
 
@@ -346,60 +349,53 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 
 		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
-
 		if (!best_function_current_scheme.index.IsValid()) {
 			continue;
 		}
 
-		// found a matching function!
-		D_ASSERT(best_function_current_scheme.schema == schema_name);
-		auto bound_function = make_uniq<ScalarFunction>(
-		    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
-		candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme, std::move(bound_function)});
+		auto current_cost = best_function_current_scheme.cost;
+		if (current_cost < min_cost) {
+			// Found a better match
+			min_cost = current_cost;
+			// Clear previous candidates
+			candidate_functions.clear();
+			auto bound_function = make_uniq<ScalarFunction>(
+			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
+			candidate_functions.push_back(
+			    ScalarBindingCandidate {best_function_current_scheme, std::move(bound_function)});
+
+		} else if (current_cost == min_cost) {
+			// Found a match with equal cost
+			auto bound_function = make_uniq<ScalarFunction>(
+			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
+			candidate_functions.push_back(
+			    ScalarBindingCandidate {best_function_current_scheme, std::move(bound_function)});
+		}
 	}
 
 	if (candidate_functions.empty()) {
+		// no candidate functions found
 		return nullptr;
 	}
 
 	if (candidate_functions.size() == 1) {
-		// if there is only 1 entry, return this entry
+		//  we found a single candidate function
 		return std::move(candidate_functions[0].bound_function);
 	}
 
-	// find candidates with minimum costs
-	vector<ScalarBindingCandidate> best_candidates;
-	best_candidates.reserve(candidate_functions.size());
+	//! multiple candidate functions are found
 
-	int64_t min_cost = NumericLimits<int64_t>::Maximum();
-
-	for (auto &candidate : candidate_functions) {
-		auto cost = candidate.result.cost;
-
-		if (cost < min_cost) {
-			min_cost = cost;
-			best_candidates.clear();
-			best_candidates.push_back(std::move(candidate));
-		} else if (cost == min_cost) {
-			best_candidates.push_back(std::move(candidate));
+	if (!original_schema.empty()) {
+		for (auto &candidate : candidate_functions) {
+			// we return the candidate function that is related to the initial schema, if any
+			if (candidate.result.schema == original_schema) {
+				return std::move(candidate.bound_function);
+			}
 		}
 	}
 
-	if (best_candidates.size() == 1) {
-		return std::move(best_candidates[0].bound_function);
-	}
-
-	if (best_candidates.size() > 1) {
-		// return the function related to the original schema
-		if (!original_schema.empty() && best_candidates[0].result.schema == original_schema) {
-			return std::move(best_candidates[0].bound_function);
-		}
-		// Otherwise, use the latest loaded extension schema
-		return std::move(best_candidates.back().bound_function);
-	}
-
-	// return nullptr to avoid CI complaining
-	return nullptr;
+	// we return the function related to the latest loaded extension
+	return std::move(candidate_functions.back().bound_function);
 }
 
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
