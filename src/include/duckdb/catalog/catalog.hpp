@@ -252,6 +252,12 @@ public:
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
 
+	// look up multiple entries in different schemas
+	DUCKDB_API vector<optional_ptr<CatalogEntry>> LookupMultipleEntries(CatalogEntryRetriever &retriever, const string &schema,
+										   const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
+	DUCKDB_API vector<optional_ptr<CatalogEntry>> GetMultipleEntries(ClientContext &context, const string &schema_name,
+											 const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
+
 	//! Gets the "schema.name" entry of the specified type, if entry does not exist behavior depends on OnEntryNotFound
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &schema,
 	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
@@ -288,6 +294,28 @@ public:
 		}
 		return &entry->template Cast<T>();
 	}
+
+	template <class T>
+	vector<optional_ptr<T>> GetEntries(ClientContext &context, const string &schema_name, const string &name,
+				 OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {
+			EntryLookupInfo lookup_info(T::Type, name, error_context);
+			auto entries = GetMultipleEntries(context, schema_name, lookup_info, if_not_found);
+			if (entries.empty()) {
+				// return an empty vector
+				return {};
+			}
+			if (entries[0]->type != T::Type) {
+				throw CatalogException(error_context, "%s is not an %s", name, T::Name);
+			}
+
+			vector<optional_ptr<T>> result;
+			for (auto &entry : entries) {
+				if (entry) {
+					result.push_back(&entry->template Cast<T>());
+				}
+			}
+			return result;
+		}
 
 	template <class T>
 	T &GetEntry(ClientContext &context, const string &schema_name, const string &name,

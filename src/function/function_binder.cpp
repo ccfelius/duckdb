@@ -337,16 +337,10 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 		original_schema = candidate_functions[0].result.schema;
 	}
 
-	for (auto &schema_name : schemas) {
-		bool loop_through_extensions = false;
-		auto function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
-		    context, schema_name, name, OnEntryNotFound::RETURN_NULL, QueryErrorContext(), loop_through_extensions);
+	auto functions = Catalog::GetSystemCatalog(context).GetEntries<ScalarFunctionCatalogEntry>(
+		    context, INVALID_SCHEMA, name, OnEntryNotFound::RETURN_NULL);
 
-		if (!function) {
-			// go to the next schema if the function is not in the current schema
-			continue;
-		}
-
+	for (auto &function : functions) {
 		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
 		if (!best_function_current_scheme.index.IsValid()) {
@@ -413,10 +407,16 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 	// first try to bind the function with the given schema
 	auto best_function = BindFunction(func.name, func.functions, children, error);
 
+	unique_ptr<ScalarFunction> bound_function;
 	if (best_function.index.IsValid()) {
+		bound_function = make_uniq<ScalarFunction>(func.functions.GetFunctionByOffset(best_function.index.GetIndex()));
+
+		if (best_function.cost == 0) {
+			// we will never find a better function, so return directly
+			return bound_function;
+		}
+
 		// add the function since it's valid
-		auto bound_function =
-		    make_uniq<ScalarFunction>(func.functions.GetFunctionByOffset(best_function.index.GetIndex()));
 		candidate_functions.push_back(ScalarBindingCandidate {best_function, std::move(bound_function)});
 	}
 

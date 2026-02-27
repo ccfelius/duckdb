@@ -1058,6 +1058,34 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type
 	return GetEntry(context, schema_name, lookup_info);
 }
 
+vector<optional_ptr<CatalogEntry>> Catalog::LookupMultipleEntries(CatalogEntryRetriever &retriever, const string &schema,
+										   const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+
+	auto &context = retriever.GetContext();
+	vector<optional_ptr<CatalogEntry>> results;
+
+	if (IsInvalidSchema(schema)) {
+		// try all schemas for this catalog
+		auto entries = GetCatalogEntries(retriever, GetName(), INVALID_SCHEMA);
+		for (auto &entry : entries) {
+			auto &candidate_schema = entry.schema;
+			auto transaction = GetCatalogTransaction(context);
+			auto result = TryLookupEntryInternal(transaction, candidate_schema, lookup_info);
+			if (result.Found()) {
+				results.push_back(result.entry.get());
+			}
+		}
+	} else {
+		auto transaction = GetCatalogTransaction(context);
+		auto result = TryLookupEntryInternal(transaction, schema, lookup_info);
+		if (result.Found()) {
+			results.push_back(result.entry.get());
+		}
+	}
+
+	return results;
+}
+
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const string &schema_name,
                                              const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
                                              bool loop_through_extensions) {
@@ -1077,6 +1105,20 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 	}
 
 	return lookup_entry.entry.get();
+}
+
+vector<optional_ptr<CatalogEntry>> Catalog::GetMultipleEntries(ClientContext &context, const string &schema_name,
+											 const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+
+	CatalogEntryRetriever retriever(context);
+	auto lookup_entries = LookupMultipleEntries(retriever, schema_name, lookup_info, if_not_found);
+
+	if (lookup_entries.empty()) {
+		// throw an error that no entries are found
+		throw CatalogException(lookup_info.GetErrorContext(), "No entries found for %s", lookup_info.GetEntryName());
+	}
+
+	return lookup_entries;
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const string &schema_name,
