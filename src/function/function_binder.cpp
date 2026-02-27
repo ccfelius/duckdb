@@ -343,6 +343,7 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 	for (auto &function : functions) {
 		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
+
 		if (!best_function_current_scheme.index.IsValid()) {
 			continue;
 		}
@@ -411,7 +412,7 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 	if (best_function.index.IsValid()) {
 		bound_function = make_uniq<ScalarFunction>(func.functions.GetFunctionByOffset(best_function.index.GetIndex()));
 
-		if (best_function.cost == 0) {
+		if (best_function.cost == 1) {
 			// we will never find a better function, so return directly
 			return bound_function;
 		}

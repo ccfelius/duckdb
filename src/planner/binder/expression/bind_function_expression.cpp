@@ -195,6 +195,10 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		children.push_back(std::move(child));
 	}
 
+	if (function.function_name == "-") {
+		auto stop = true;
+	}
+
 	FunctionBinder function_binder(binder);
 	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
