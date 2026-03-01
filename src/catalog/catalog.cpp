@@ -791,38 +791,17 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
 		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
 	}
-
-	vector<string> schemas;
-	schemas.push_back(schema);
-
-	// if we check the default schema, we also loop through the extension schema's
-	if (schema == DEFAULT_SCHEMA && loop_through_extensions) {
-		auto &manager = ExtensionManager::Get(db.GetDatabase());
-		auto extension_schema_paths = manager.GetExtensionSearchPaths();
-		for (auto &extension_path : extension_schema_paths) {
-			schemas.push_back(extension_path.schema);
-		}
+	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, schema);
+	auto schema_entry = LookupSchema(transaction, schema_lookup, OnEntryNotFound::RETURN_NULL);
+	if (!schema_entry) {
+		return {nullptr, nullptr, ErrorData()};
 	}
 
-	CatalogEntryLookup result {nullptr, nullptr, ErrorData()};
-	for (const auto &schema_name : schemas) {
-		auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, schema_name);
-		auto schema_entry = LookupSchema(transaction, schema_lookup, OnEntryNotFound::RETURN_NULL);
-
-		if (!schema_entry) {
-			continue;
-		}
-
-		result.schema = schema_entry;
-		auto entry = schema_entry->LookupEntry(transaction, lookup_info);
-
-		if (entry) {
-			return {schema_entry, entry, ErrorData()};
-		}
+	auto entry = schema_entry->LookupEntry(transaction, lookup_info);
+	if (!entry) {
+		return {schema_entry, nullptr, ErrorData()};
 	}
-
-	// We didn't find the entry
-	return result;
+	return {schema_entry, entry, ErrorData()};
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &schema,
