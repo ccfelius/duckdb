@@ -60,6 +60,11 @@ public:
 
 	DUCKDB_API unique_ptr<ScalarFunction>
 	BindScalarFunctionMultipleSchemas(const vector<string> &schemas, const string &name,
+					  vector<unique_ptr<Expression>> &children, ErrorData &error,
+					  vector<ScalarBindingCandidate> &candidate_functions);
+
+	DUCKDB_API unique_ptr<ScalarFunction>
+	BindScalarFunctionMultipleSchemas(const string &name,
 	                                  vector<unique_ptr<Expression>> &children, ErrorData &error,
 	                                  vector<ScalarBindingCandidate> &candidate_functions);
 	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
