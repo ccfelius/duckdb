@@ -482,11 +482,6 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(Sca
 	if (best_function.index.IsValid()) {
 		bound_function = make_uniq<ScalarFunction>(func.functions.GetFunctionByOffset(best_function.index.GetIndex()));
 
-		if (best_function.cost == 1) {
-			// we will never find a better function, so return directly
-			return bound_function;
-		}
-
 		// add the function since it's valid
 		candidate_functions.push_back(ScalarBindingCandidate {best_function, std::move(bound_function)});
 	}

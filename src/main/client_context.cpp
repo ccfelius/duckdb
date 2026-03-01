@@ -1215,7 +1215,7 @@ void ClientContext::DisableProfiling() {
 }
 
 void ClientContext::SyncSearchPath() const {
-	client_data->catalog_search_path->SyncExtensionPaths();
+	client_data->catalog_search_path->SyncCatalogSearchPath();
 }
 
 vector<CatalogSearchEntry> ClientContext::GetClientExtensionPaths() const {

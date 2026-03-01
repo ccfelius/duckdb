@@ -7,6 +7,7 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "re2/re2.h"
 
 namespace duckdb {
 
@@ -26,8 +27,13 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	}
 
 	auto &manager = ExtensionManager::Get(this->db);
+
+	// we add the extension entry to the catalog
 	CatalogSearchEntry entry(SYSTEM_CATALOG, extension_name);
 	manager.AddSearchPath(entry);
+
+	// sync extension paths directly
+
 
 	DUCKDB_LOG_INFO(db, extension_name);
 }

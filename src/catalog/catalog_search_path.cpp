@@ -156,16 +156,37 @@ void CatalogSearchPath::SyncExtensionPaths() {
 	auto &extension_manager = ExtensionManager::Get(context);
 	auto extensions = extension_manager.GetExtensionSearchPaths();
 
-	vector<CatalogSearchEntry> extension_entries;
-	for (auto &entry : extensions) {
-		extension_entries.emplace_back(entry);
-	}
-
-	if (extension_entries.empty()) {
+	// If sizes differ, we need to update
+	if (extensions.size() != this->extension_paths.size()) {
+		vector<CatalogSearchEntry> extension_entries;
+		for (auto &entry : extensions) {
+			extension_entries.emplace_back(entry);
+		}
+		this->extension_paths = std::move(extension_entries);
 		return;
 	}
 
-	this->extension_paths = std::move(extension_entries);
+	// Otherwise, check for actual changes before moving
+	bool is_updated = false;
+	for (idx_t i = 0; i < extensions.size(); i++) {
+		if (extensions[i].schema != this->extension_paths[i].schema) {
+			is_updated = true;
+			break;
+		}
+	}
+
+	if (is_updated) {
+		// only update if there are changes detected
+		vector<CatalogSearchEntry> extension_entries;
+		for (auto &entry : extensions) {
+			extension_entries.emplace_back(entry);
+		}
+
+		this->extension_paths.clear();
+		for (auto &entry : extensions) {
+			this->extension_paths.emplace_back(entry);
+		}
+	}
 }
 
 void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type) {
@@ -322,25 +343,26 @@ const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 }
 
 void CatalogSearchPath::SetPathsInternal() {
-	paths.clear();
-	paths.reserve(set_paths.size() + extension_paths.size() + 4);
-	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
+	vector<CatalogSearchEntry> new_paths;
+	new_paths.reserve(set_paths.size() + extension_paths.size() + 4);
+	new_paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
 
 	for (auto &path : set_paths) {
-		paths.push_back(path);
+		new_paths.push_back(path);
 	}
 
-	// also add the extension paths behind set_paths
 	for (auto &path : extension_paths) {
-		paths.push_back(path);
+		new_paths.push_back(path);
 	}
 
-	// sets the index for the default fallback schema
-	default_index = paths.size();
-	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
+	auto new_default_index = new_paths.size();
 
-	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
-	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+	new_paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
+	new_paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
+	new_paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+
+	this->paths = std::move(new_paths);
+	this->default_index = new_default_index;
 }
 
 void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
