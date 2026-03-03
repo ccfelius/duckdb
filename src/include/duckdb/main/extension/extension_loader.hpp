@@ -100,6 +100,11 @@ public:
 	DUCKDB_API void RegisterCastFunction(const LogicalType &source, const LogicalType &target, BoundCastInfo function,
 	                                     int64_t implicit_cast_cost = -1);
 
+	//! Get the extension name
+	DUCKDB_API const string &GetName() const {
+		return extension_name;
+	};
+
 private:
 	void FinalizeLoad();
 

@@ -54,6 +54,7 @@ class BufferedData;
 struct ClientData;
 class ClientContextState;
 class RegisteredStateManager;
+struct CatalogSearchEntry;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
@@ -111,6 +112,10 @@ public:
 	DUCKDB_API void EnableProfiling();
 	//! Disable query profiling
 	DUCKDB_API void DisableProfiling();
+
+	//! Sync and Get Search Path
+	DUCKDB_API void SyncSearchPath() const;
+	vector<CatalogSearchEntry> GetClientExtensionPaths() const;
 
 	//! Issue a query, returning a QueryResult. The QueryResult can be either a StreamQueryResult or a
 	//! MaterializedQueryResult. The StreamQueryResult will only be returned in the case of a successful SELECT

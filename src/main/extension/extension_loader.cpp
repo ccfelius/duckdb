@@ -57,6 +57,8 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 
 void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
+	function.schema = extension_name;
+
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);

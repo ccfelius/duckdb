@@ -413,11 +413,11 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	// select the function based on the input parameters
 	FunctionBinder function_binder(*this);
 	auto best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
-	if (!best_function_idx.IsValid()) {
+	if (!best_function_idx.index.IsValid()) {
 		error.AddQueryLocation(ref);
 		error.Throw();
 	}
-	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.index.GetIndex());
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);

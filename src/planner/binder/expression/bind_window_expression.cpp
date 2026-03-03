@@ -284,13 +284,13 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		ErrorData error_aggr;
 		FunctionBinder function_binder(context);
 		auto best_function = function_binder.BindFunction(func.name, func.functions, types, error_aggr);
-		if (!best_function.IsValid()) {
+		if (!best_function.index.IsValid()) {
 			error_aggr.AddQueryLocation(window);
 			error_aggr.Throw();
 		}
 
 		// found a matching function! bind it as an aggregate
-		auto bound_function = func.functions.GetFunctionByOffset(best_function.GetIndex());
+		auto bound_function = func.functions.GetFunctionByOffset(best_function.index.GetIndex());
 
 		if (!bound_function.CanAggregate() && bound_function.CanWindow() && !window.arg_orders.empty()) {
 			// ORDER BY in non-aggregate window functions not supported

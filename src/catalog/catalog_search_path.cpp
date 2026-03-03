@@ -9,6 +9,7 @@
 #include "duckdb/main/database_manager.hpp"
 
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/main/extension_manager.hpp"
 
 namespace duckdb {
 
@@ -128,6 +129,7 @@ vector<CatalogSearchEntry> CatalogSearchEntry::ParseList(const string &input) {
 
 CatalogSearchPath::CatalogSearchPath(ClientContext &context_p, vector<CatalogSearchEntry> entries)
     : context(context_p) {
+	SyncExtensionPaths();
 	SetPathsInternal(std::move(entries));
 }
 
@@ -148,6 +150,47 @@ string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
 	default:
 		throw InternalException("Unrecognized CatalogSetPathType");
 	}
+}
+
+void CatalogSearchPath::SyncExtensionPaths() {
+	auto &extension_manager = ExtensionManager::Get(context);
+	auto extensions = extension_manager.GetExtensionSearchPaths();
+
+	// If sizes differ, we need to update
+	if (extensions.size() != this->extension_paths.size()) {
+		vector<CatalogSearchEntry> extension_entries;
+		for (auto &entry : extensions) {
+			extension_entries.emplace_back(entry);
+		}
+		this->extension_paths = std::move(extension_entries);
+		return;
+	}
+
+	// Otherwise, check for actual changes before moving
+	bool is_updated = false;
+	for (idx_t i = 0; i < extensions.size(); i++) {
+		if (extensions[i].schema != this->extension_paths[i].schema) {
+			is_updated = true;
+			break;
+		}
+	}
+
+	if (is_updated) {
+		// only update if there are changes detected
+		vector<CatalogSearchEntry> extension_entries;
+		for (auto &entry : extensions) {
+			extension_entries.emplace_back(entry);
+		}
+
+		this->extension_paths.clear();
+		for (auto &entry : extensions) {
+			this->extension_paths.emplace_back(entry);
+		}
+	}
+}
+
+vector<CatalogSearchEntry> CatalogSearchPath::GetExtensionPaths() const {
+	return extension_paths;
 }
 
 void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type) {
@@ -278,21 +321,45 @@ vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) co
 const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 	D_ASSERT(paths.size() >= 2);
 	D_ASSERT(!paths[1].schema.empty());
-	return paths[1];
+	if (!set_paths.empty()) {
+		// we return the first entry of an explicitly set path
+		return set_paths[0];
+	}
+	return paths[default_index];
+}
+
+void CatalogSearchPath::SetPathsInternal() {
+	vector<CatalogSearchEntry> new_paths;
+	new_paths.reserve(set_paths.size() + extension_paths.size() + 4);
+	new_paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
+
+	for (auto &path : set_paths) {
+		new_paths.push_back(path);
+	}
+
+	for (auto &path : extension_paths) {
+		new_paths.push_back(path);
+	}
+
+	auto new_default_index = new_paths.size();
+	new_paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
+	new_paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
+	new_paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+
+	this->paths = std::move(new_paths);
+	this->default_index = new_default_index;
 }
 
 void CatalogSearchPath::SetPathsInternal(vector<CatalogSearchEntry> new_paths) {
 	this->set_paths = std::move(new_paths);
+	SetPathsInternal();
+}
 
-	paths.clear();
-	paths.reserve(set_paths.size() + 4);
-	paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
-	for (auto &path : set_paths) {
-		paths.push_back(path);
-	}
-	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
-	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
-	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+void CatalogSearchPath::SyncCatalogSearchPath() {
+	// Sets the extension and internal paths
+	// But keep the "set paths" instead of overwriting them
+	SyncExtensionPaths();
+	SetPathsInternal();
 }
 
 bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string &catalog_name,

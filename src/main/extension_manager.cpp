@@ -3,6 +3,11 @@
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "re2/re2.h"
 
 namespace duckdb {
 
@@ -20,6 +25,12 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	for (auto &callback : ExtensionCallback::Iterate(db)) {
 		callback->OnExtensionLoaded(db, extension_name);
 	}
+
+	auto &manager = ExtensionManager::Get(this->db);
+	// we add the extension entry to the catalog
+	CatalogSearchEntry entry(SYSTEM_CATALOG, extension_name);
+	manager.AddSearchPath(entry);
+
 	DUCKDB_LOG_INFO(db, extension_name);
 }
 
@@ -62,6 +73,69 @@ vector<string> ExtensionManager::GetExtensions() {
 	return result;
 }
 
+void ExtensionManager::CreateExtensionSchema(const string &name) {
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+
+	CreateSchemaInfo info;
+	info.schema = name;
+	info.internal = true;
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	system_catalog.CreateSchema(data, info);
+}
+
+vector<CatalogSearchEntry> &ExtensionManager::GetExtensionSearchPaths() {
+	return search_paths;
+}
+
+vector<string> ExtensionManager::GetSearchPathSchemaNames() const {
+	vector<string> schema_names;
+	// we always add the default schema first
+	schema_names.push_back(DEFAULT_SCHEMA);
+	schema_names.reserve(search_paths.size() + 1);
+	for (auto &entry : search_paths) {
+		if (entry.schema == DEFAULT_SCHEMA) {
+			continue;
+		}
+		schema_names.push_back(entry.schema);
+	}
+	return schema_names;
+}
+
+vector<string> ExtensionManager::GetSearchPathSchemaNames(const string &exclude) const {
+	vector<string> schema_names;
+	// if the schema to be excluded != default schema
+	if (exclude != DEFAULT_SCHEMA) {
+		// we always add the default schema first
+		schema_names.push_back(DEFAULT_SCHEMA);
+	}
+	schema_names.reserve(search_paths.size() + 1);
+	for (auto &entry : search_paths) {
+		if (entry.schema == DEFAULT_SCHEMA) {
+			continue;
+		}
+		if (entry.schema == exclude) {
+			continue;
+		}
+		schema_names.push_back(entry.schema);
+	}
+	return schema_names;
+}
+
+void ExtensionManager::AddSearchPath(DatabaseInstance &db, const CatalogSearchEntry &entry) {
+	auto &manager = Get(db);
+	manager.GetExtensionSearchPaths().push_back(entry);
+}
+
+void ExtensionManager::AddSearchPath(ClientContext &context, const CatalogSearchEntry &entry) {
+	auto &manager = Get(context);
+	manager.GetExtensionSearchPaths().push_back(entry);
+}
+
+void ExtensionManager::AddSearchPath(const CatalogSearchEntry &entry) {
+	this->search_paths.push_back(entry);
+}
+
 bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	auto info = GetExtensionInfo(name);
 	if (!info) {
@@ -82,6 +156,7 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 		auto extension_info = make_uniq<ExtensionInfo>();
 		info = extension_info.get();
 		loaded_extensions_info.emplace(extension_name, std::move(extension_info));
+		CreateExtensionSchema(extension_name);
 	} else {
 		// we already have an entry
 		if (entry->second->is_loaded) {

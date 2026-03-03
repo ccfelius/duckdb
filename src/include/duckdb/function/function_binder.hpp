@@ -18,6 +18,14 @@
 
 namespace duckdb {
 
+struct ScalarBindingCandidate;
+
+struct FunctionBinderResult {
+	optional_idx index;
+	int64_t cost;
+	string schema;
+};
+
 //! The FunctionBinder class is responsible for binding functions
 class FunctionBinder {
 public:
@@ -29,26 +37,51 @@ public:
 
 public:
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
-	//! returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const string &name, ScalarFunctionSet &functions,
-	                                     const vector<LogicalType> &arguments, ErrorData &error);
-	DUCKDB_API optional_idx BindFunction(const string &name, ScalarFunctionSet &functions,
-	                                     vector<unique_ptr<Expression>> &arguments, ErrorData &error);
+	//! returns FunctionBinderResult, containing optional_idx(), cost and schema and sets error if none could be found
+	DUCKDB_API FunctionBinderResult BindFunction(const string &name, ScalarFunctionSet &functions,
+	                                             const vector<LogicalType> &arguments, ErrorData &error);
+	DUCKDB_API FunctionBinderResult BindFunction(const string &name, ScalarFunctionSet &functions,
+	                                             vector<unique_ptr<Expression>> &arguments, ErrorData &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const string &name, AggregateFunctionSet &functions,
-	                                     const vector<LogicalType> &arguments, ErrorData &error);
-	DUCKDB_API optional_idx BindFunction(const string &name, AggregateFunctionSet &functions,
-	                                     vector<unique_ptr<Expression>> &arguments, ErrorData &error);
+	DUCKDB_API FunctionBinderResult BindFunction(const string &name, AggregateFunctionSet &functions,
+	                                             const vector<LogicalType> &arguments, ErrorData &error);
+	DUCKDB_API FunctionBinderResult BindFunction(const string &name, AggregateFunctionSet &functions,
+	                                             vector<unique_ptr<Expression>> &arguments, ErrorData &error);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns optional_idx() and sets error if none could be found
-	DUCKDB_API optional_idx BindFunction(const string &name, TableFunctionSet &functions,
-	                                     const vector<LogicalType> &arguments, ErrorData &error);
-	DUCKDB_API optional_idx BindFunction(const string &name, TableFunctionSet &functions,
-	                                     vector<unique_ptr<Expression>> &arguments, ErrorData &error);
+	DUCKDB_API FunctionBinderResult BindFunction(const string &name, TableFunctionSet &functions,
+	                                             const vector<LogicalType> &arguments, ErrorData &error);
+	DUCKDB_API FunctionBinderResult BindFunction(const string &name, TableFunctionSet &functions,
+	                                             vector<unique_ptr<Expression>> &arguments, ErrorData &error);
 	//! Bind a pragma function from the set of functions and input arguments
-	DUCKDB_API optional_idx BindFunction(const string &name, PragmaFunctionSet &functions, vector<Value> &parameters,
-	                                     ErrorData &error);
+	DUCKDB_API FunctionBinderResult BindFunction(const string &name, PragmaFunctionSet &functions,
+	                                             vector<Value> &parameters, ErrorData &error);
+
+	DUCKDB_API unique_ptr<ScalarFunction>
+	BindScalarFunctionMultipleSchemas(const vector<string> &schemas, const string &name,
+	                                  vector<unique_ptr<Expression>> &children, ErrorData &error,
+	                                  vector<ScalarBindingCandidate> &candidate_functions);
+
+	DUCKDB_API unique_ptr<ScalarFunction>
+	BindScalarFunctionMultipleSchemas(const string &name, vector<unique_ptr<Expression>> &children, ErrorData &error,
+	                                  vector<ScalarBindingCandidate> &candidate_functions);
+	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
+	                                                                        const string &name,
+	                                                                        vector<unique_ptr<Expression>> &children,
+	                                                                        ErrorData &error);
+	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
+	                                                                        vector<unique_ptr<Expression>> &children,
+	                                                                        ErrorData &error);
+
+	DUCKDB_API unique_ptr<Expression> BindScalarFunctionInternal(ScalarFunction bound_function,
+	                                                             vector<unique_ptr<Expression>> children,
+	                                                             bool is_operator, optional_ptr<Binder> binder);
+
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const vector<string> &schemas, const string &name,
+	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
+	                                                     bool is_operator = false,
+	                                                     optional_ptr<Binder> binder = nullptr);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const string &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
@@ -59,6 +92,7 @@ public:
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
+	// TODO; take a ScalarFunction bound_function
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunction bound_function,
 	                                                     vector<unique_ptr<Expression>> children,
 	                                                     bool is_operator = false,
@@ -85,17 +119,18 @@ private:
 	optional_idx BindFunctionCost(const SimpleFunction &func, const vector<LogicalType> &arguments);
 
 	template <class T>
-	vector<idx_t> BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,
-	                                         const vector<LogicalType> &arguments, ErrorData &error);
+	vector<FunctionBinderResult> BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,
+	                                                        const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
-	optional_idx MultipleCandidateException(const string &catalog_name, const string &schema_name, const string &name,
-	                                        FunctionSet<T> &functions, vector<idx_t> &candidate_functions,
-	                                        const vector<LogicalType> &arguments, ErrorData &error);
+	FunctionBinderResult MultipleCandidateException(const string &catalog_name, const string &schema_name,
+	                                                const string &name, FunctionSet<T> &functions,
+	                                                vector<FunctionBinderResult> &candidate_functions,
+	                                                const vector<LogicalType> &arguments, ErrorData &error);
 
 	template <class T>
-	optional_idx BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
-	                                       const vector<LogicalType> &arguments, ErrorData &error);
+	FunctionBinderResult BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
+	                                               const vector<LogicalType> &arguments, ErrorData &error);
 
 	vector<LogicalType> GetLogicalTypesFromExpressions(vector<unique_ptr<Expression>> &arguments);
 };

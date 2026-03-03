@@ -277,6 +277,29 @@ public:
 	                                         const EntryLookupInfo &lookup_info);
 
 	template <class T>
+	vector<optional_ptr<T>> GetEntries(ClientContext &context, const string &schema_name, const string &name,
+	                                   OnEntryNotFound if_not_found,
+	                                   QueryErrorContext error_context = QueryErrorContext()) {
+		EntryLookupInfo lookup_info(T::Type, name, error_context);
+		auto entries = GetMultipleEntries(context, schema_name, lookup_info, if_not_found);
+		if (entries.empty()) {
+			// return an empty vector
+			return {};
+		}
+		if (entries[0]->type != T::Type) {
+			throw CatalogException(error_context, "%s is not an %s", name, T::Name);
+		}
+
+		vector<optional_ptr<T>> result;
+		for (auto &entry : entries) {
+			if (entry) {
+				result.push_back(&entry->template Cast<T>());
+			}
+		}
+		return result;
+	}
+
+	template <class T>
 	optional_ptr<T> GetEntry(ClientContext &context, const string &schema_name, const string &name,
 	                         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {
 		EntryLookupInfo lookup_info(T::Type, name, error_context);

@@ -443,7 +443,7 @@ makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg)
 PGList *
 CoreFuncName(const char *name)
 {
-	return list_make2(makeString(CORE_FUNCTIONS), makeString(name));
+	return list_make2(makeString("core_functions"), makeString(name));
 }
 
 /* SystemFuncName()

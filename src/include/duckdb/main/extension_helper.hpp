@@ -96,6 +96,17 @@ public:
 	static void LoadAllExtensions(DuckDB &db);
 	static vector<string> LoadedExtensionTestPaths();
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension,
+	                                         shared_ptr<ClientContext> &context) {
+		auto result = LoadExtension(db, extension);
+
+		// add extension to catalog search path
+		if (context && result == ExtensionLoadResult::LOADED_EXTENSION) {
+			context->SyncSearchPath();
+		}
+
+		return result;
+	}
 
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,

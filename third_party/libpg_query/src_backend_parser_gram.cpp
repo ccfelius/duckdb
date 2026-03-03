@@ -33643,12 +33643,12 @@ makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg)
 }
 
 /* CoreFuncName()
- * Build a properly-qualified reference to a built-in function.
+ * Build a properly-qualified reference to a core_functions function
  */
 PGList *
 CoreFuncName(const char *name)
 {
-	return list_make2(makeString(CORE_FUNCTIONS), makeString(name));
+	return list_make2(makeString("core_functions"), makeString(name));
 }
 
 /* SystemFuncName()

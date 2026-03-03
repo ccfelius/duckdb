@@ -119,7 +119,8 @@ void SQLLogicTestRunner::EndLoop() {
 	}
 }
 
-ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension) {
+ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::string &extension,
+                                                      shared_ptr<ClientContext> context) {
 	auto &test_config = TestConfiguration::Get();
 	if (test_config.GetExtensionAutoLoadingMode() != TestConfiguration::ExtensionAutoLoadingMode::NONE) {
 		// try LOAD extension
@@ -129,7 +130,7 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 			return ExtensionLoadResult::LOADED_EXTENSION;
 		}
 	}
-	return ExtensionHelper::LoadExtension(db, extension);
+	return ExtensionHelper::LoadExtension(db, extension, context);
 }
 
 void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
@@ -159,7 +160,11 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath, bool load_extensions) {
 	// load any previously loaded extensions again
 	if (load_extensions) {
 		for (auto &extension : extensions) {
-			SQLLogicTestRunner::LoadExtension(*db, extension);
+			shared_ptr<ClientContext> context = nullptr;
+			if (con) {
+				context = con->context;
+			}
+			SQLLogicTestRunner::LoadExtension(*db, extension, context);
 		}
 	}
 }
