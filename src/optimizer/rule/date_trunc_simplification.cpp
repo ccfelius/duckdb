@@ -381,7 +381,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	vector<unique_ptr<Expression>> args1;
 	auto constant_param = make_uniq<BoundConstantExpression>(Value::INTEGER(1));
 	args1.emplace_back(std::move(constant_param));
-	auto interval = binder.BindScalarFunction(DEFAULT_SCHEMA, interval_func_name, std::move(args1), error);
+	auto interval = binder.BindScalarFunction(CORE_FUNCTIONS, interval_func_name, std::move(args1), error);
 	if (!interval) {
 		return nullptr; // Something wrong---just don't do the optimization.
 	}
@@ -389,7 +389,13 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	vector<unique_ptr<Expression>> args2;
 	args2.emplace_back(rhs.Copy());
 	args2.emplace_back(std::move(interval));
-	auto add = binder.BindScalarFunction(DEFAULT_SCHEMA, "+", std::move(args2), error);
+
+	// "+" can be both the main schema and ICU
+	vector<string> schemas;
+	schemas.push_back(DEFAULT_SCHEMA);
+	// but maybe ICU is not loaded...
+	schemas.push_back("icu");
+	auto add = binder.BindScalarFunction(schemas, "+", std::move(args2), error);
 
 	vector<unique_ptr<Expression>> args3;
 	args3.emplace_back(date_part.Copy());

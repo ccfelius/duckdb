@@ -470,12 +470,12 @@ unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFuncti
 
 	FunctionBinder function_binder(context);
 	auto best_function_idx = function_binder.BindFunction(func.name, func.functions, types, error);
-	if (!best_function_idx.IsValid()) {
+	if (!best_function_idx.index.IsValid()) {
 		throw BinderException("No matching aggregate function\n%s", error.Message());
 	}
 
 	// found a matching function, bind it as an aggregate
-	auto best_function = func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	auto best_function = func.functions.GetFunctionByOffset(best_function_idx.index.GetIndex());
 	if (IS_AGGR) {
 		bound_function.SetErrorMode(best_function.GetErrorMode());
 		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);

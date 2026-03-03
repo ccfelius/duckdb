@@ -75,7 +75,7 @@ bool PushTimeTZCollation(ClientContext &context, unique_ptr<Expression> &source,
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	auto &function_entry =
-	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "timetz_byte_comparable");
+	    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, CORE_FUNCTIONS, "timetz_byte_comparable");
 	if (function_entry.functions.Size() != 1) {
 		throw InternalException("timetz_byte_comparable should only have a single overload");
 	}
@@ -96,7 +96,7 @@ bool PushIntervalCollation(ClientContext &context, unique_ptr<Expression> &sourc
 	}
 
 	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "normalized_interval");
+	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, CORE_FUNCTIONS, "normalized_interval");
 	if (function_entry.functions.Size() != 1) {
 		throw InternalException("normalized_interval should only have a single overload");
 	}

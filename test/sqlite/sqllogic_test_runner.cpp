@@ -620,7 +620,11 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	if (!Settings::Get<AutoloadKnownExtensionsSetting>(*config)) {
 		auto result = ExtensionLoadResult::NOT_LOADED;
 		try {
-			result = SQLLogicTestRunner::LoadExtension(*db, param);
+			shared_ptr<ClientContext> context = nullptr;
+			if (con) {
+				context = con->context;
+			}
+			result = SQLLogicTestRunner::LoadExtension(*db, param, context);
 		} catch (std::exception &ex) {
 			ErrorData error_data(ex);
 			parser.Fail("extension '%s' load threw an exception: %s", param, error_data.Message());

@@ -171,10 +171,10 @@ struct ICUDateTrunc : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type}, LogicalType::TIMESTAMP_TZ, ICUDateTruncFunction<TA>, Bind);
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader) {
+	static void AddBinaryTimestampFunction(const string &name, ExtensionLoader &loader, const string &schema = DEFAULT_SCHEMA) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateTruncFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		loader.RegisterFunction(set);
+		loader.RegisterFunction(set, schema);
 	}
 };
 
@@ -229,8 +229,9 @@ timestamp_t ICUDateFunc::CurrentMidnight(icu::Calendar *calendar, ExpressionStat
 }
 
 void RegisterICUDateTruncFunctions(ExtensionLoader &loader) {
-	ICUDateTrunc::AddBinaryTimestampFunction("date_trunc", loader);
-	ICUDateTrunc::AddBinaryTimestampFunction("datetrunc", loader);
+	// date_trunc overloads core functions
+	ICUDateTrunc::AddBinaryTimestampFunction("date_trunc", loader, CORE_FUNCTIONS);
+	ICUDateTrunc::AddBinaryTimestampFunction("datetrunc", loader, CORE_FUNCTIONS);
 }
 
 } // namespace duckdb

@@ -273,7 +273,8 @@ struct ICUDateAdd : public ICUDateFunc {
 		                                                                            LogicalType::INTERVAL));
 		set.AddFunction(GetDateAddFunction<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
 		                                                                            LogicalType::TIMESTAMP_TZ));
-		loader.RegisterFunction(set);
+		// we overload these functions in the default schema
+		loader.RegisterFunction(set, DEFAULT_SCHEMA);
 	}
 
 	template <typename TA, typename OP>

@@ -84,8 +84,10 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
 	auto func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
+
 	if (!func) {
 		// function was not found - check if we this is a table function
+		// and then later throw an error message
 		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.function_name, error_context);
 		auto table_func =
 		    GetCatalogEntry(function.catalog, function.schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);

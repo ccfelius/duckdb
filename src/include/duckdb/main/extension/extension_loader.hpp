@@ -45,6 +45,8 @@ public:
 	DUCKDB_API void RegisterFunction(ScalarFunction function);
 	DUCKDB_API void RegisterFunction(ScalarFunctionSet function);
 	DUCKDB_API void RegisterFunction(CreateScalarFunctionInfo info);
+	DUCKDB_API void RegisterFunction(CreateScalarFunctionInfo info, const string &schema);
+	DUCKDB_API void RegisterFunction(ScalarFunctionSet function, const string &schema);
 
 	//! Register a new aggregate function - merge overloads if the function already exists
 	DUCKDB_API void RegisterFunction(AggregateFunction function);

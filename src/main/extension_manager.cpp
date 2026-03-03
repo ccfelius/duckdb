@@ -31,6 +31,10 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	CatalogSearchEntry entry(SYSTEM_CATALOG, extension_name);
 	manager.AddSearchPath(entry);
 
+	if (extension_name == "icu") {
+		DUCKDB_LOG_INFO(db, extension_name);
+	}
+
 	DUCKDB_LOG_INFO(db, extension_name);
 }
 

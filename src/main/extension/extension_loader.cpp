@@ -55,13 +55,32 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 	RegisterFunction(std::move(info));
 }
 
-void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
-	D_ASSERT(!function.functions.name.empty());
-	function.schema = extension_name;
+void ExtensionLoader::RegisterFunction(ScalarFunctionSet function, const string &schema) {
+	CreateScalarFunctionInfo info(std::move(function));
+	info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+	RegisterFunction(std::move(info), schema);
+}
 
+void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo info, const string &schema) {
+	D_ASSERT(!info.functions.name.empty());
+	info.schema = schema;
+	// we overload / replace
+	RegisterFunction(info);
+
+	// we register the function twice
+	// once in 'schema' and once in the dedicated extension schema
+	if (schema != extension_name) {
+		info.schema = extension_name;
+		RegisterFunction(info);
+	}
+}
+
+void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo info) {
+	D_ASSERT(!info.functions.name.empty());
+	info.schema = extension_name;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
-	system_catalog.CreateFunction(data, function);
+	system_catalog.CreateFunction(data, info);
 }
 
 void ExtensionLoader::RegisterFunction(AggregateFunction function) {
@@ -182,6 +201,7 @@ static optional_ptr<CatalogEntry> TryGetEntry(DatabaseInstance &db, const string
 	D_ASSERT(!name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
+	// TODO change this to invalid schema
 	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
 	return schema.GetEntry(data, type, name);
 }
