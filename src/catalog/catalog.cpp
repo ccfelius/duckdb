@@ -957,6 +957,35 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	}
 }
 
+vector<optional_ptr<CatalogEntry>> Catalog::LookupMultipleEntries(CatalogEntryRetriever &retriever,
+                                                                  const string &schema,
+                                                                  const EntryLookupInfo &lookup_info,
+                                                                  OnEntryNotFound if_not_found) {
+	auto &context = retriever.GetContext();
+	vector<optional_ptr<CatalogEntry>> results;
+
+	if (IsInvalidSchema(schema)) {
+		// try all schemas for this catalog
+		auto entries = GetCatalogEntries(retriever, GetName(), INVALID_SCHEMA);
+		for (auto &entry : entries) {
+			auto &candidate_schema = entry.schema;
+			auto transaction = GetCatalogTransaction(context);
+			auto result = TryLookupEntryInternal(transaction, candidate_schema, lookup_info);
+			if (result.Found()) {
+				results.push_back(result.entry.get());
+			}
+		}
+	} else {
+		auto transaction = GetCatalogTransaction(context);
+		auto result = TryLookupEntryInternal(transaction, schema, lookup_info);
+		if (result.Found()) {
+			results.push_back(result.entry.get());
+		}
+	}
+
+	return results;
+}
+
 CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
                                                   bool allow_ignore_at_clause) {
 	auto catalog_by_name = GetCatalogEntry(retriever, lookup_info.GetEntryName());
@@ -1015,6 +1044,20 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	bool allow_default_table_lookup = catalog.empty() && schema.empty();
 
 	return TryLookupEntry(retriever, lookups, lookup_info, if_not_found, allow_default_table_lookup);
+}
+
+vector<optional_ptr<CatalogEntry>> Catalog::GetMultipleEntries(ClientContext &context, const string &schema_name,
+                                                               const EntryLookupInfo &lookup_info,
+                                                               OnEntryNotFound if_not_found) {
+	CatalogEntryRetriever retriever(context);
+	auto lookup_entries = LookupMultipleEntries(retriever, schema_name, lookup_info, if_not_found);
+
+	if (lookup_entries.empty()) {
+		// throw an error that no entries are found
+		throw CatalogException(lookup_info.GetErrorContext(), "No entries found for %s", lookup_info.GetEntryName());
+	}
+
+	return lookup_entries;
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &catalog_name,

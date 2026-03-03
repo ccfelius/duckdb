@@ -2272,7 +2272,7 @@ a_expr:		c_expr									{ $$ = $1; }
 				}
 			| a_expr AT TIME ZONE a_expr			%prec AT
 				{
-					$$ = (PGNode *) makeFuncCall(SystemFuncName("timezone"),
+					$$ = (PGNode *) makeFuncCall(CoreFuncName("timezone"),
 											   list_make2($5, $1),
 											   @2);
 				}
@@ -3099,7 +3099,7 @@ func_expr_common_subexpr:
 				{ $$ = makeTypeCast($3, $5, 1, @1); }
 			| EXTRACT '(' extract_list ')'
 				{
-					$$ = (PGNode *) makeFuncCall(SystemFuncName("date_part"), $3, @1);
+					$$ = (PGNode *) makeFuncCall(CoreFuncName("date_part"), $3, @1);
 				}
 			| OVERLAY '(' overlay_list ')'
 				{

@@ -28453,7 +28453,7 @@ yyreduce:
   case 991:
 #line 2274 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("timezone"),
+					(yyval.node) = (PGNode *) makeFuncCall(CoreFuncName("timezone"),
 											   list_make2((yyvsp[(5) - (5)].node), (yyvsp[(1) - (5)].node)),
 											   (yylsp[(2) - (5)]));
 				;}
@@ -29573,7 +29573,7 @@ yyreduce:
   case 1127:
 #line 3101 "third_party/libpg_query/grammar/statements/select.y"
     {
-					(yyval.node) = (PGNode *) makeFuncCall(SystemFuncName("date_part"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
+					(yyval.node) = (PGNode *) makeFuncCall(CoreFuncName("date_part"), (yyvsp[(3) - (4)].list), (yylsp[(1) - (4)]));
 				;}
     break;
 
@@ -33640,6 +33640,15 @@ makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg)
 	n->larg = larg;
 	n->rarg = rarg;
 	return (PGNode *) n;
+}
+
+/* CoreFuncName()
+ * Build a properly-qualified reference to a built-in function.
+ */
+PGList *
+CoreFuncName(const char *name)
+{
+	return list_make2(makeString(CORE_FUNCTIONS), makeString(name));
 }
 
 /* SystemFuncName()

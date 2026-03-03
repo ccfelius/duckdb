@@ -252,6 +252,10 @@ public:
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
 
+	DUCKDB_API vector<optional_ptr<CatalogEntry>> GetMultipleEntries(ClientContext &context, const string &schema_name,
+	                                                                 const EntryLookupInfo &lookup_info,
+	                                                                 OnEntryNotFound if_not_found);
+
 	//! Gets the "schema.name" entry of the specified type, if entry does not exist behavior depends on OnEntryNotFound
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &schema,
 	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
@@ -433,6 +437,12 @@ private:
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
 	                                         const string &schema, const EntryLookupInfo &lookup_info,
 	                                         OnEntryNotFound if_not_found);
+
+	//! Lookup an entry in multiple schemas, returning a vector with lookups containing the entry and schema if they
+	//! exist
+	vector<optional_ptr<CatalogEntry>> LookupMultipleEntries(CatalogEntryRetriever &retriever, const string &schema,
+	                                                         const EntryLookupInfo &lookup_info,
+	                                                         OnEntryNotFound if_not_found);
 
 	//! Looks for a Catalog with a DefaultTable that matches the lookup
 	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever,

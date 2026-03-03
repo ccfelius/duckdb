@@ -34,6 +34,7 @@ using std::move;
 #define SYSTEM_CATALOG  "system"
 #define TEMP_CATALOG    "temp"
 #define IN_MEMORY_PATH  ":memory:"
+#define CORE_FUNCTIONS  "core_functions"
 
 DUCKDB_API bool IsInvalidSchema(const string &str);
 DUCKDB_API bool IsInvalidCatalog(const string &str);

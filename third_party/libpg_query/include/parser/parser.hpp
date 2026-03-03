@@ -34,6 +34,7 @@ std::vector<PGKeyword> keyword_list();
 std::vector<PGSimplifiedToken> tokenize(const char *str);
 
 /* Utility functions exported by gram.y (perhaps these should be elsewhere) */
+PGList *CoreFuncName(const char *name);
 PGList *SystemFuncName(const char *name);
 PGTypeName *SystemTypeName(const char *name);
 
