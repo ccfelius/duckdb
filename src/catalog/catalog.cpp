@@ -1037,9 +1037,10 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type
 	return GetEntry(context, schema_name, lookup_info);
 }
 
-vector<optional_ptr<CatalogEntry>> Catalog::LookupMultipleEntries(CatalogEntryRetriever &retriever, const string &schema,
-										   const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
-
+vector<optional_ptr<CatalogEntry>> Catalog::LookupMultipleEntries(CatalogEntryRetriever &retriever,
+                                                                  const string &schema,
+                                                                  const EntryLookupInfo &lookup_info,
+                                                                  OnEntryNotFound if_not_found) {
 	auto &context = retriever.GetContext();
 	vector<optional_ptr<CatalogEntry>> results;
 
@@ -1087,8 +1088,8 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 }
 
 vector<optional_ptr<CatalogEntry>> Catalog::GetMultipleEntries(ClientContext &context, const string &schema_name,
-											 const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
-
+                                                               const EntryLookupInfo &lookup_info,
+                                                               OnEntryNotFound if_not_found) {
 	CatalogEntryRetriever retriever(context);
 	auto lookup_entries = LookupMultipleEntries(retriever, schema_name, lookup_info, if_not_found);
 

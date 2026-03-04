@@ -130,6 +130,12 @@ string Function::CallToString(const string &catalog_name, const string &schema_n
 	if (RequiresCatalogAndSchemaNamePrefix(catalog_name, schema_name)) {
 		result += catalog_name + "." + schema_name + ".";
 	}
+
+	return CallToString(result, name, arguments, varargs);
+}
+
+string Function::CallToString(string result, const string &name, const vector<LogicalType> &arguments,
+                              const LogicalType &varargs) {
 	result += name + "(";
 	vector<string> string_arguments;
 	for (auto &arg : arguments) {

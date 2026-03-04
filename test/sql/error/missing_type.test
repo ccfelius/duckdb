@@ -5,4 +5,4 @@
 statement error
 SELECT ''::blobb
 ----
-Did you mean "main.blob or memory.blob"?
+Did you mean "blob"?

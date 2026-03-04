@@ -125,6 +125,8 @@ public:
 	DUCKDB_API static string CallToString(const string &catalog_name, const string &schema_name, const string &name,
 	                                      const vector<LogicalType> &arguments,
 	                                      const named_parameter_type_map_t &named_parameters);
+	DUCKDB_API static string CallToString(string result, const string &name, const vector<LogicalType> &arguments,
+	                                      const LogicalType &varargs = LogicalType::INVALID);
 
 	//! Used in the bind to erase an argument from a function
 	DUCKDB_API static void EraseArgument(SimpleFunction &bound_function, vector<unique_ptr<Expression>> &arguments,

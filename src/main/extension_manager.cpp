@@ -29,12 +29,12 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	auto &manager = ExtensionManager::Get(this->db);
 
 	// we add the extension entry to the catalog
-	CatalogSearchEntry entry(SYSTEM_CATALOG, extension_name);
-	manager.AddSearchPath(entry);
+	if (extension_name != CORE_FUNCTIONS) {
+		CatalogSearchEntry entry(SYSTEM_CATALOG, extension_name);
+		manager.AddSearchPath(entry);
+	}
 
 	// sync extension paths directly
-
-
 	DUCKDB_LOG_INFO(db, extension_name);
 }
 
@@ -150,7 +150,6 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
-
 	unique_lock<mutex> extension_list_lock(lock);
 
 	optional_ptr<ExtensionInfo> info;
@@ -160,7 +159,9 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 		auto extension_info = make_uniq<ExtensionInfo>();
 		info = extension_info.get();
 		loaded_extensions_info.emplace(extension_name, std::move(extension_info));
-		CreateExtensionSchema(extension_name);
+		if (extension_name != CORE_FUNCTIONS) {
+			CreateExtensionSchema(extension_name);
+		}
 	} else {
 		// we already have an entry
 		if (entry->second->is_loaded) {

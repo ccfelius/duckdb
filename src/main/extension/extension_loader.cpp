@@ -59,6 +59,11 @@ void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
 	function.schema = extension_name;
 
+	if (extension_name == CORE_FUNCTIONS) {
+		// we register core functions in the default schema
+		function.schema = DEFAULT_SCHEMA;
+	}
+
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);

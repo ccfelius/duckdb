@@ -18,6 +18,14 @@
 #include "duckdb/main/extension_manager.hpp"
 
 namespace duckdb {
+
+struct ScalarBindingCandidate {
+	FunctionBinderResult result;
+	unique_ptr<ScalarFunction> bound_function;
+	//! corresponding scalar function set
+	unique_ptr<ScalarFunctionSet> function_set;
+};
+
 FunctionBinder::FunctionBinder(ClientContext &context_p) : binder(nullptr), context(context_p) {
 }
 FunctionBinder::FunctionBinder(Binder &binder_p) : binder(&binder_p), context(binder_p.context) {
@@ -82,8 +90,8 @@ optional_idx FunctionBinder::BindFunctionCost(const SimpleFunction &func, const 
 template <class T>
 // FunctionBinderResult
 vector<FunctionBinderResult> FunctionBinder::BindFunctionsFromArguments(const string &name, FunctionSet<T> &functions,
-																		const vector<LogicalType> &arguments,
-																		ErrorData &error) {
+                                                                        const vector<LogicalType> &arguments,
+                                                                        ErrorData &error) {
 	FunctionBinderResult best_function;
 	idx_t lowest_cost = NumericLimits<idx_t>::Maximum();
 	vector<FunctionBinderResult> candidate_functions;
@@ -98,7 +106,7 @@ vector<FunctionBinderResult> FunctionBinder::BindFunctionsFromArguments(const st
 		auto cost = bind_cost.GetIndex();
 		if (cost == lowest_cost) {
 			candidate_functions.push_back(FunctionBinderResult {f_idx, static_cast<int64_t>(lowest_cost),
-																functions.functions[f_idx].schema_name});
+			                                                    functions.functions[f_idx].schema_name});
 			continue;
 		}
 		if (cost > lowest_cost) {
@@ -107,7 +115,7 @@ vector<FunctionBinderResult> FunctionBinder::BindFunctionsFromArguments(const st
 		candidate_functions.clear();
 		lowest_cost = cost;
 		best_function =
-			FunctionBinderResult {f_idx, static_cast<int64_t>(lowest_cost), functions.functions[f_idx].schema_name};
+		    FunctionBinderResult {f_idx, static_cast<int64_t>(lowest_cost), functions.functions[f_idx].schema_name};
 	}
 
 	if (!best_function.index.IsValid()) {
@@ -135,8 +143,8 @@ vector<FunctionBinderResult> FunctionBinder::BindFunctionsFromArguments(const st
 template <class T>
 FunctionBinderResult
 FunctionBinder::MultipleCandidateException(const string &catalog_name, const string &schema_name, const string &name,
-										   FunctionSet<T> &functions, vector<FunctionBinderResult> &candidate_functions,
-										   const vector<LogicalType> &arguments, ErrorData &error) {
+                                           FunctionSet<T> &functions, vector<FunctionBinderResult> &candidate_functions,
+                                           const vector<LogicalType> &arguments, ErrorData &error) {
 	D_ASSERT(functions.functions.size() > 1);
 	// there are multiple possible function definitions
 	// throw an exception explaining which overloads are there
@@ -147,17 +155,39 @@ FunctionBinder::MultipleCandidateException(const string &catalog_name, const str
 		candidate_str += "\t" + f.ToString() + "\n";
 	}
 	error = ErrorData(
-		ExceptionType::BINDER,
-		StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
-						   "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
-						   call_str, candidate_str));
+	    ExceptionType::BINDER,
+	    StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
+	                       "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
+	                       call_str, candidate_str));
+
+	return FunctionBinderResult {optional_idx(), -1, INVALID_SCHEMA};
+}
+
+FunctionBinderResult FunctionBinder::MultipleCandidateException(const string &name,
+                                                                vector<ScalarBindingCandidate> &candidate_functions,
+                                                                const vector<LogicalType> &arguments,
+                                                                ErrorData &error) {
+	// there are multiple possible function definitions
+	// throw an exception explaining which overloads are there
+	string result;
+	string call_str = Function::CallToString(result, name, arguments);
+	string candidate_str;
+	for (auto &conf : candidate_functions) {
+		ScalarFunction f = conf.function_set->GetFunctionByOffset(conf.result.index.GetIndex());
+		candidate_str += "\t" + f.ToString() + "\n";
+	}
+	error = ErrorData(
+	    ExceptionType::BINDER,
+	    StringUtil::Format("Could not choose a best candidate function for the function call \"%s\". In order to "
+	                       "select one, please add explicit type casts.\n\tCandidate functions:\n%s",
+	                       call_str, candidate_str));
 
 	return FunctionBinderResult {optional_idx(), -1, INVALID_SCHEMA};
 }
 
 template <class T>
 FunctionBinderResult FunctionBinder::BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
-															   const vector<LogicalType> &arguments, ErrorData &error) {
+                                                               const vector<LogicalType> &arguments, ErrorData &error) {
 	auto candidate_functions = BindFunctionsFromArguments<T>(name, functions, arguments, error);
 	if (candidate_functions.empty()) {
 		// No candidates, return an empy FunctionBinderResult
@@ -175,29 +205,29 @@ FunctionBinderResult FunctionBinder::BindFunctionFromArguments(const string &nam
 		auto catalog_name = functions.functions.size() > 0 ? functions.functions[0].catalog_name : "";
 		auto schema_name = functions.functions.size() > 0 ? functions.functions[0].schema_name : "";
 		auto exception = MultipleCandidateException(catalog_name, schema_name, name, functions, candidate_functions,
-													arguments, error);
+		                                            arguments, error);
 		return exception;
 	}
 	return candidate_functions[0];
 }
 
 FunctionBinderResult FunctionBinder::BindFunction(const string &name, ScalarFunctionSet &functions,
-												  const vector<LogicalType> &arguments, ErrorData &error) {
+                                                  const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 FunctionBinderResult FunctionBinder::BindFunction(const string &name, AggregateFunctionSet &functions,
-												  const vector<LogicalType> &arguments, ErrorData &error) {
+                                                  const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 FunctionBinderResult FunctionBinder::BindFunction(const string &name, TableFunctionSet &functions,
-												  const vector<LogicalType> &arguments, ErrorData &error) {
+                                                  const vector<LogicalType> &arguments, ErrorData &error) {
 	return BindFunctionFromArguments(name, functions, arguments, error);
 }
 
 FunctionBinderResult FunctionBinder::BindFunction(const string &name, PragmaFunctionSet &functions,
-												  vector<Value> &parameters, ErrorData &error) {
+                                                  vector<Value> &parameters, ErrorData &error) {
 	vector<LogicalType> types;
 	for (auto &value : parameters) {
 		types.push_back(value.type());
@@ -210,7 +240,7 @@ FunctionBinderResult FunctionBinder::BindFunction(const string &name, PragmaFunc
 	// cast the input parameters
 	for (idx_t i = 0; i < parameters.size(); i++) {
 		auto target_type =
-			i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
+		    i < candidate_function.arguments.size() ? candidate_function.arguments[i] : candidate_function.varargs;
 		parameters[i] = parameters[i].CastAs(context, target_type);
 	}
 	return entry;
@@ -226,19 +256,19 @@ vector<LogicalType> FunctionBinder::GetLogicalTypesFromExpressions(vector<unique
 }
 
 FunctionBinderResult FunctionBinder::BindFunction(const string &name, ScalarFunctionSet &functions,
-												  vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
+                                                  vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return BindFunction(name, functions, types, error);
 }
 
 FunctionBinderResult FunctionBinder::BindFunction(const string &name, AggregateFunctionSet &functions,
-												  vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
+                                                  vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return BindFunction(name, functions, types, error);
 }
 
 FunctionBinderResult FunctionBinder::BindFunction(const string &name, TableFunctionSet &functions,
-												  vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
+                                                  vector<unique_ptr<Expression>> &arguments, ErrorData &error) {
 	auto types = GetLogicalTypesFromExpressions(arguments);
 	return BindFunction(name, functions, types, error);
 }
@@ -298,8 +328,8 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 		auto target_type = i < function.arguments.size() ? function.arguments[i] : function.varargs;
 		if (target_type.id() == LogicalTypeId::STRING_LITERAL || target_type.id() == LogicalTypeId::INTEGER_LITERAL) {
 			throw InternalException(
-				"Function %s returned a STRING_LITERAL or INTEGER_LITERAL type - return an explicit type instead",
-				function.name);
+			    "Function %s returned a STRING_LITERAL or INTEGER_LITERAL type - return an explicit type instead",
+			    function.name);
 		}
 		target_type.Verify();
 		// don't cast lambda children, they get removed before execution
@@ -317,28 +347,14 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 	}
 }
 
-struct ScalarBindingCandidate {
-	FunctionBinderResult result;
-	unique_ptr<ScalarFunction> bound_function;
-};
-
-unique_ptr<ScalarFunction>
-FunctionBinder::BindScalarFunctionMultipleSchemas(const string &name,
-												  vector<unique_ptr<Expression>> &children, ErrorData &error,
-												  vector<ScalarBindingCandidate> &candidate_functions) {
-	string original_schema = "";
-	int64_t min_cost = NumericLimits<int64_t>::Maximum();
-
-	if (!candidate_functions.empty()) {
-		D_ASSERT(candidate_functions.size() == 1);
-		// store the original schema (attribute of "function", if it was there before)
-		min_cost = candidate_functions[0].result.cost;
-		original_schema = candidate_functions[0].result.schema;
-	}
-
+unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(const string &name,
+                                                                             vector<unique_ptr<Expression>> &children,
+                                                                             ErrorData &error) {
+	auto min_cost = NumericLimits<int64_t>::Maximum();
 	auto functions = Catalog::GetSystemCatalog(context).GetEntries<ScalarFunctionCatalogEntry>(
-			context, INVALID_SCHEMA, name, OnEntryNotFound::RETURN_NULL);
+	    context, INVALID_SCHEMA, name, OnEntryNotFound::RETURN_NULL);
 
+	vector<ScalarBindingCandidate> candidate_functions;
 	for (auto &function : functions) {
 		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
 		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
@@ -354,16 +370,18 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const string &name,
 			// Clear previous candidates
 			candidate_functions.clear();
 			auto bound_function = make_uniq<ScalarFunction>(
-				function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
-			candidate_functions.push_back(
-				ScalarBindingCandidate {best_function_current_scheme, std::move(bound_function)});
+			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
+			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
+			                                                      std::move(bound_function),
+			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
 
 		} else if (current_cost == min_cost) {
 			// Found a match with equal cost
 			auto bound_function = make_uniq<ScalarFunction>(
-				function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
-			candidate_functions.push_back(
-				ScalarBindingCandidate {best_function_current_scheme, std::move(bound_function)});
+			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
+			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
+			                                                      std::move(bound_function),
+			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
 		}
 	}
 
@@ -378,24 +396,23 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const string &name,
 	}
 
 	//! multiple candidate functions are found
+	// we return an error
+	auto types = GetLogicalTypesFromExpressions(children);
+	auto exception = MultipleCandidateException(name, candidate_functions, types, error);
 
-	if (!original_schema.empty()) {
-		for (auto &candidate : candidate_functions) {
-			// we return the candidate function that is related to the initial schema, if any
-			if (candidate.result.schema == original_schema) {
-				return std::move(candidate.bound_function);
-			}
-		}
+	if (error.HasError()) {
+		error.Throw();
 	}
 
 	// we return the function related to the latest loaded extension
+	// keep CI happy
 	return std::move(candidate_functions.back().bound_function);
 }
 
 unique_ptr<ScalarFunction>
 FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas, const string &name,
-												  vector<unique_ptr<Expression>> &children, ErrorData &error,
-												  vector<ScalarBindingCandidate> &candidate_functions) {
+                                                  vector<unique_ptr<Expression>> &children, ErrorData &error,
+                                                  vector<ScalarBindingCandidate> &candidate_functions) {
 	// todo only loop through this schema
 	string original_schema = "";
 	int64_t min_cost = NumericLimits<int64_t>::Maximum();
@@ -408,7 +425,7 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 	}
 
 	auto functions = Catalog::GetSystemCatalog(context).GetEntries<ScalarFunctionCatalogEntry>(
-			context, INVALID_SCHEMA, name, OnEntryNotFound::RETURN_NULL);
+	    context, INVALID_SCHEMA, name, OnEntryNotFound::RETURN_NULL);
 
 	for (auto &function : functions) {
 		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
@@ -425,16 +442,18 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 			// Clear previous candidates
 			candidate_functions.clear();
 			auto bound_function = make_uniq<ScalarFunction>(
-				function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
-			candidate_functions.push_back(
-				ScalarBindingCandidate {best_function_current_scheme, std::move(bound_function)});
+			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
+			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
+			                                                      std::move(bound_function),
+			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
 
 		} else if (current_cost == min_cost) {
 			// Found a match with equal cost
 			auto bound_function = make_uniq<ScalarFunction>(
-				function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
-			candidate_functions.push_back(
-				ScalarBindingCandidate {best_function_current_scheme, std::move(bound_function)});
+			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
+			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
+			                                                      std::move(bound_function),
+			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
 		}
 	}
 
@@ -464,43 +483,37 @@ FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 }
 
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
-																			 const string &name,
-																			 vector<unique_ptr<Expression>> &children,
-																			 ErrorData &error) {
+                                                                             const string &name,
+                                                                             vector<unique_ptr<Expression>> &children,
+                                                                             ErrorData &error) {
 	vector<ScalarBindingCandidate> candidate_functions;
 	return BindScalarFunctionMultipleSchemas(schemas, name, children, error, candidate_functions);
 }
 
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
-																			 vector<unique_ptr<Expression>> &children,
-																			 ErrorData &error) {
-	vector<ScalarBindingCandidate> candidate_functions;
+                                                                             vector<unique_ptr<Expression>> &children,
+                                                                             ErrorData &error) {
+	// vector<ScalarBindingCandidate> candidate_functions;
 	// first try to bind the function with the given schema
 	auto best_function = BindFunction(func.name, func.functions, children, error);
 
-	unique_ptr<ScalarFunction> bound_function;
-	if (best_function.index.IsValid()) {
-		bound_function = make_uniq<ScalarFunction>(func.functions.GetFunctionByOffset(best_function.index.GetIndex()));
-
-		// add the function since it's valid
-		candidate_functions.push_back(ScalarBindingCandidate {best_function, std::move(bound_function)});
+	if (!best_function.index.IsValid()) {
+		return nullptr;
 	}
 
-	// we always loop through other schemas to see if more matches are found
-	// because there might be a better match with lower costs
-	return BindScalarFunctionMultipleSchemas(func.name, children, error, candidate_functions);
+	return make_uniq<ScalarFunction>(func.functions.GetFunctionByOffset(best_function.index.GetIndex()));
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunctionInternal(unique_ptr<ScalarFunction> bound_function,
-																  vector<unique_ptr<Expression>> children,
-																  bool is_operator, optional_ptr<Binder> binder) {
+                                                                  vector<unique_ptr<Expression>> children,
+                                                                  bool is_operator, optional_ptr<Binder> binder) {
 	// If any of the parameters are NULL, the function will just be replaced with a NULL constant.
 	// We try to give the NULL constant the correct type, but we have to do this without binding the function,
 	// because functions with DEFAULT_NULL_HANDLING should not have to deal with NULL inputs in their bind code.
 	// Some functions may have an invalid default return type, as they must be bound to infer the return type.
 	// In those cases, we default to SQLNULL.
 	const auto return_type_if_null =
-		bound_function->GetReturnType().IsComplete() ? bound_function->GetReturnType() : LogicalType::SQLNULL;
+	    bound_function->GetReturnType().IsComplete() ? bound_function->GetReturnType() : LogicalType::SQLNULL;
 	if (bound_function->GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
@@ -522,38 +535,37 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunctionInternal(unique_ptr<Sca
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, const string &name,
-														  vector<unique_ptr<Expression>> children, ErrorData &error,
-														  bool is_operator, optional_ptr<Binder> binder) {
-	if (schema == DEFAULT_SCHEMA) {
-		// for the default schema, we loop through all schemas
-		vector<ScalarBindingCandidate> candidate_functions;
-		auto bound_function = BindScalarFunctionMultipleSchemas(name, children, error, candidate_functions);
-		return BindScalarFunctionInternal(std::move(bound_function), std::move(children), is_operator,
-								  binder);
-	}
+                                                          vector<unique_ptr<Expression>> children, ErrorData &error,
+                                                          bool is_operator, optional_ptr<Binder> binder) {
+	unique_ptr<ScalarFunction> bound_function;
 
-	// schema is (1) explicitly given and (2) is not the default schema
-	auto function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
-		context, schema, name, OnEntryNotFound::THROW_EXCEPTION);
+	if (!schema.empty()) {
+		// schema is explicitly given
+		auto function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
+		    context, schema, name, OnEntryNotFound::THROW_EXCEPTION);
 
-	D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-	auto best_function = BindFunction(function->name, function->functions, children, error);
+		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
+		auto best_function = BindFunction(function->name, function->functions, children, error);
 
-	if (!best_function.index.IsValid()) {
-		if (error.HasError()) {
-			// if the finding best function failed, we throw
-			error.Throw();
+		if (!best_function.index.IsValid()) {
+			if (error.HasError()) {
+				// if the finding best function failed, we throw
+				error.Throw();
+			}
 		}
+
+		bound_function =
+		    make_uniq<ScalarFunction>(function->functions.GetFunctionByOffset(best_function.index.GetIndex()));
+	} else {
+		bound_function = BindScalarFunctionMultipleSchemas(name, children, error);
 	}
 
-	auto bound_function = function->functions.GetFunctionByOffset(best_function.index.GetIndex());
-	return BindScalarFunctionInternal(make_uniq<ScalarFunction>(bound_function), std::move(children), is_operator,
-									  binder);
+	return BindScalarFunctionInternal(std::move(bound_function), std::move(children), is_operator, binder);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const vector<string> &schemas, const string &name,
-														  vector<unique_ptr<Expression>> children, ErrorData &error,
-														  bool is_operator, optional_ptr<Binder> binder) {
+                                                          vector<unique_ptr<Expression>> children, ErrorData &error,
+                                                          bool is_operator, optional_ptr<Binder> binder) {
 	auto bound_function = BindScalarFunctionMultipleSchemas(schemas, name, children, error);
 
 	if (!bound_function) {
@@ -564,8 +576,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const vector<string> &
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogEntry &func,
-														  vector<unique_ptr<Expression>> children, ErrorData &error,
-														  bool is_operator, optional_ptr<Binder> binder) {
+                                                          vector<unique_ptr<Expression>> children, ErrorData &error,
+                                                          bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
 	auto bound_function = BindScalarFunctionMultipleSchemas(func, children, error);
 	if (!bound_function) {
@@ -596,7 +608,7 @@ static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 }
 
 static void PropagateCollations(ClientContext &, ScalarFunction &bound_function,
-								vector<unique_ptr<Expression>> &children) {
+                                vector<unique_ptr<Expression>> &children) {
 	if (!RequiresCollationPropagation(bound_function.GetReturnType())) {
 		// we only need to propagate if the function returns a varchar
 		return;
@@ -612,7 +624,7 @@ static void PropagateCollations(ClientContext &, ScalarFunction &bound_function,
 }
 
 static void PushCollations(ClientContext &context, ScalarFunction &bound_function,
-						   vector<unique_ptr<Expression>> &children, CollationType type) {
+                           vector<unique_ptr<Expression>> &children, CollationType type) {
 	auto collation = ExtractCollation(children);
 	if (collation.empty()) {
 		// no collation to push
@@ -635,7 +647,7 @@ static void PushCollations(ClientContext &context, ScalarFunction &bound_functio
 }
 
 static void HandleCollations(ClientContext &context, ScalarFunction &bound_function,
-							 vector<unique_ptr<Expression>> &children) {
+                             vector<unique_ptr<Expression>> &children) {
 	switch (bound_function.GetCollationHandling()) {
 	case FunctionCollationHandling::IGNORE_COLLATIONS:
 		// explicitly ignoring collation handling
@@ -653,8 +665,8 @@ static void HandleCollations(ClientContext &context, ScalarFunction &bound_funct
 }
 
 static void InferTemplateType(ClientContext &context, const LogicalType &source, const LogicalType &target,
-							  case_insensitive_map_t<vector<LogicalType>> &bindings, const Expression &current_expr,
-							  const BaseScalarFunction &function) {
+                              case_insensitive_map_t<vector<LogicalType>> &bindings, const Expression &current_expr,
+                              const BaseScalarFunction &function) {
 	if (target.id() == LogicalTypeId::UNKNOWN || target.id() == LogicalTypeId::SQLNULL) {
 		// If the actual type is unknown, we cannot infer anything more.
 		// Therefore, we map all remaining templates in the source to UNKNOWN or SQLNULL, if not already inferred to
@@ -706,8 +718,8 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 
 		// If we reach here, it means the types are incompatible
 		string msg =
-			StringUtil::Format("Cannot deduce template type '%s' in function: '%s'\nType '%s' was inferred to be:\n",
-							   TemplateType::GetName(source), function.ToString(), TemplateType::GetName(source));
+		    StringUtil::Format("Cannot deduce template type '%s' in function: '%s'\nType '%s' was inferred to be:\n",
+		                       TemplateType::GetName(source), function.ToString(), TemplateType::GetName(source));
 		const auto &steps = it->second;
 
 		for (idx_t i = 0; i < steps.size(); i += 2) {
@@ -716,7 +728,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 				msg += StringUtil::Format(" - '%s', from first occurrence\n", steps[i].ToString());
 			} else {
 				msg += StringUtil::Format(" - '%s', by promoting '%s' + '%s'\n", steps[i].ToString(),
-										  steps[i - 2].ToString(), steps[i - 1]);
+				                          steps[i - 2].ToString(), steps[i - 1]);
 			}
 		}
 		msg += StringUtil::Format(" - '%s', which is incompatible with previously inferred type!", target.ToString());
@@ -734,13 +746,13 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::ARRAY: {
 		if ((source.id() == LogicalTypeId::ARRAY || source.id() == LogicalTypeId::LIST) &&
-			(target.id() == LogicalTypeId::LIST || target.id() == LogicalTypeId::ARRAY)) {
+		    (target.id() == LogicalTypeId::LIST || target.id() == LogicalTypeId::ARRAY)) {
 			const auto &source_child =
-				source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
+			    source.id() == LogicalTypeId::LIST ? ListType::GetChildType(source) : ArrayType::GetChildType(source);
 			const auto &target_child =
-				target.id() == LogicalTypeId::LIST ? ListType::GetChildType(target) : ArrayType::GetChildType(target);
+			    target.id() == LogicalTypeId::LIST ? ListType::GetChildType(target) : ArrayType::GetChildType(target);
 			InferTemplateType(context, source_child, target_child, bindings, current_expr, function);
-			}
+		}
 	} break;
 	case LogicalTypeId::MAP: {
 		// Map is only implicitly castable to map, so we only need to handle this case here/
@@ -781,7 +793,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 }
 
 static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vector<LogicalType>> &bindings,
-								   const string &function_name) {
+                                   const string &function_name) {
 	// Replace all template types in with their bound concrete types.
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &t) -> LogicalType {
 		if (t.id() == LogicalTypeId::TEMPLATE) {
@@ -802,7 +814,7 @@ static void SubstituteTemplateType(LogicalType &type, case_insensitive_map_t<vec
 }
 
 void FunctionBinder::ResolveTemplateTypes(BaseScalarFunction &bound_function,
-										  const vector<unique_ptr<Expression>> &children) {
+                                          const vector<unique_ptr<Expression>> &children) {
 	case_insensitive_map_t<vector<LogicalType>> bindings;
 	vector<reference<LogicalType>> to_substitute;
 
@@ -844,7 +856,7 @@ static void VerifyTemplateType(const LogicalType &type, const string &function_n
 	TypeVisitor::Contains(type, [&](const LogicalType &type) {
 		if (type.id() == LogicalTypeId::TEMPLATE) {
 			const auto msg =
-				"Function '%s' has a template parameter type '%s' that could not be resolved to a concrete type";
+			    "Function '%s' has a template parameter type '%s' that could not be resolved to a concrete type";
 			throw BinderException(msg, function_name, TemplateType::GetName(type));
 		}
 		return false; // continue visiting
@@ -861,8 +873,8 @@ void FunctionBinder::CheckTemplateTypesResolved(const BaseScalarFunction &bound_
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(unique_ptr<ScalarFunction> bound_function,
-														  vector<unique_ptr<Expression>> children, bool is_operator,
-														  optional_ptr<Binder> binder) {
+                                                          vector<unique_ptr<Expression>> children, bool is_operator,
+                                                          optional_ptr<Binder> binder) {
 	// Attempt to resolve template types, before we call the "Bind" callback.
 	ResolveTemplateTypes(*bound_function, children);
 
@@ -873,8 +885,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(unique_ptr<ScalarFunct
 	} else if (bound_function->HasBindExtendedCallback()) {
 		if (!binder) {
 			throw InternalException("Function '%s' has a 'bind_extended' but the FunctionBinder was created without "
-									"a reference to a Binder",
-									bound_function->name);
+			                        "a reference to a Binder",
+			                        bound_function->name);
 		}
 		ScalarFunctionBindInput bind_input(*binder);
 		bind_info = bound_function->GetBindExtendedCallback()(bind_input, *bound_function, children);
@@ -897,7 +909,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(unique_ptr<ScalarFunct
 	auto return_type = bound_function->GetReturnType();
 	unique_ptr<Expression> result;
 	auto result_func = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(*bound_function),
-														  std::move(children), std::move(bind_info), is_operator);
+	                                                      std::move(children), std::move(bind_info), is_operator);
 	if (result_func->function.HasBindExpressionCallback()) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression
 		FunctionBindExpressionInput input(context, result_func->bind_info.get(), result_func->children);
@@ -910,9 +922,9 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(unique_ptr<ScalarFunct
 }
 
 unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(AggregateFunction bound_function,
-																		   vector<unique_ptr<Expression>> children,
-																		   unique_ptr<Expression> filter,
-																		   AggregateType aggr_type) {
+                                                                           vector<unique_ptr<Expression>> children,
+                                                                           unique_ptr<Expression> filter,
+                                                                           AggregateType aggr_type) {
 	ResolveTemplateTypes(bound_function, children);
 
 	unique_ptr<FunctionData> bind_info;
@@ -928,7 +940,7 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 	CastToFunctionArguments(bound_function, children);
 
 	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
-											   std::move(bind_info), aggr_type);
+	                                           std::move(bind_info), aggr_type);
 }
 
-}// namespace duckdb
+} // namespace duckdb

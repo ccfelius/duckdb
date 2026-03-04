@@ -701,6 +701,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
 	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension);
+	// sync the search path after loading the extension
+	context.SyncSearchPath();
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

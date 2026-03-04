@@ -60,13 +60,11 @@ public:
 
 	DUCKDB_API unique_ptr<ScalarFunction>
 	BindScalarFunctionMultipleSchemas(const vector<string> &schemas, const string &name,
-					  vector<unique_ptr<Expression>> &children, ErrorData &error,
-					  vector<ScalarBindingCandidate> &candidate_functions);
-
-	DUCKDB_API unique_ptr<ScalarFunction>
-	BindScalarFunctionMultipleSchemas(const string &name,
 	                                  vector<unique_ptr<Expression>> &children, ErrorData &error,
 	                                  vector<ScalarBindingCandidate> &candidate_functions);
+
+	DUCKDB_API unique_ptr<ScalarFunction>
+	BindScalarFunctionMultipleSchemas(const string &name, vector<unique_ptr<Expression>> &children, ErrorData &error);
 	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
 	                                                                        const string &name,
 	                                                                        vector<unique_ptr<Expression>> &children,
@@ -126,7 +124,9 @@ private:
 	                                                const string &name, FunctionSet<T> &functions,
 	                                                vector<FunctionBinderResult> &candidate_functions,
 	                                                const vector<LogicalType> &arguments, ErrorData &error);
-
+	FunctionBinderResult MultipleCandidateException(const string &name,
+	                                                vector<ScalarBindingCandidate> &candidate_functions,
+	                                                const vector<LogicalType> &arguments, ErrorData &error);
 	template <class T>
 	FunctionBinderResult BindFunctionFromArguments(const string &name, FunctionSet<T> &functions,
 	                                               const vector<LogicalType> &arguments, ErrorData &error);
