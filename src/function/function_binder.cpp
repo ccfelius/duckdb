@@ -323,16 +323,15 @@ unique_ptr<ScalarFunction>
 FunctionBinder::BindScalarFunctionMultipleSchemas(const string &name, vector<unique_ptr<Expression>> &children,
                                                   ErrorData &error,
                                                   vector<ScalarBindingCandidate> &candidate_functions) {
+	string original_schema = INVALID_SCHEMA;
+	int64_t min_cost = NumericLimits<int64_t>::Maximum();
 
-		string original_schema = INVALID_SCHEMA;
-		int64_t min_cost = NumericLimits<int64_t>::Maximum();
-
-		if (!candidate_functions.empty()) {
-			D_ASSERT(candidate_functions.size() == 1);
-			// store the original schema (attribute of "function", if it was there before)
-			min_cost = candidate_functions[0].result.cost;
-			original_schema = candidate_functions[0].result.schema;
-		}
+	if (!candidate_functions.empty()) {
+		D_ASSERT(candidate_functions.size() == 1);
+		// store the original schema (attribute of "function", if it was there before)
+		min_cost = candidate_functions[0].result.cost;
+		original_schema = candidate_functions[0].result.schema;
+	}
 
 	auto functions = Catalog::GetSystemCatalog(context).GetEntries<ScalarFunctionCatalogEntry>(
 	    context, INVALID_SCHEMA, name, OnEntryNotFound::RETURN_NULL);
@@ -523,7 +522,6 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunctionInternal(ScalarFunction
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, const string &name,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
-
 	// schema is (1) explicitly given and (2) is not the default schema
 	auto function = Catalog::GetSystemCatalog(context).GetEntry<ScalarFunctionCatalogEntry>(
 	    context, schema, name, OnEntryNotFound::THROW_EXCEPTION);
