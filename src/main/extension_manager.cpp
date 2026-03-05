@@ -126,18 +126,10 @@ vector<string> ExtensionManager::GetSearchPathSchemaNames(const string &exclude)
 	return schema_names;
 }
 
-void ExtensionManager::AddSearchPath(DatabaseInstance &db, const CatalogSearchEntry &entry) {
-	auto &manager = Get(db);
-	manager.GetExtensionSearchPaths().push_back(entry);
-}
-
-void ExtensionManager::AddSearchPath(ClientContext &context, const CatalogSearchEntry &entry) {
-	auto &manager = Get(context);
-	manager.GetExtensionSearchPaths().push_back(entry);
-}
-
 void ExtensionManager::AddSearchPath(const CatalogSearchEntry &entry) {
-	this->search_paths.push_back(entry);
+	// insert search path at the start
+	// extensions that are loaded later have priority
+	this->search_paths.insert(this->search_paths.begin(), entry);
 }
 
 bool ExtensionManager::ExtensionIsLoaded(const string &name) {

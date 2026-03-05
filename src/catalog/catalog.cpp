@@ -787,7 +787,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 }
 
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
-                                                   const EntryLookupInfo &lookup_info, bool loop_through_extensions) {
+                                                   const EntryLookupInfo &lookup_info) {
 	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
 		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
 	}
@@ -805,8 +805,7 @@ CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transactio
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &schema,
-                                           const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-                                           bool loop_through_extensions) {
+                                           const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	auto &context = retriever.GetContext();
 	reference_set_t<SchemaCatalogEntry> schemas;
 	if (IsInvalidSchema(schema)) {
@@ -815,7 +814,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		for (auto &entry : entries) {
 			auto &candidate_schema = entry.schema;
 			auto transaction = GetCatalogTransaction(context);
-			auto result = TryLookupEntryInternal(transaction, candidate_schema, lookup_info, loop_through_extensions);
+			auto result = TryLookupEntryInternal(transaction, candidate_schema, lookup_info);
 			if (result.Found()) {
 				return result;
 			}
@@ -825,7 +824,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		}
 	} else {
 		auto transaction = GetCatalogTransaction(context);
-		auto result = TryLookupEntryInternal(transaction, schema, lookup_info, loop_through_extensions);
+		auto result = TryLookupEntryInternal(transaction, schema, lookup_info);
 		if (result.Found()) {
 			return result;
 		}
@@ -1067,16 +1066,15 @@ vector<optional_ptr<CatalogEntry>> Catalog::LookupMultipleEntries(CatalogEntryRe
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const string &schema_name,
-                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-                                             bool loop_through_extensions) {
-	auto lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found, loop_through_extensions);
+                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+	auto lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found);
 
 	// Try autoloading extension to resolve lookup
 	if (!lookup_entry.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
 		                                    lookup_info.GetEntryName())) {
 			// here we explicitly want to loop through extensions
-			lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found, true);
+			lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found);
 		}
 	}
 
@@ -1102,10 +1100,9 @@ vector<optional_ptr<CatalogEntry>> Catalog::GetMultipleEntries(ClientContext &co
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const string &schema_name,
-                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-                                             bool loop_through_extensions) {
+                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	CatalogEntryRetriever retriever(context);
-	return GetEntry(retriever, schema_name, lookup_info, if_not_found, loop_through_extensions);
+	return GetEntry(retriever, schema_name, lookup_info, if_not_found);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, const EntryLookupInfo &lookup_info) {

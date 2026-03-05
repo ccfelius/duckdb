@@ -263,14 +263,12 @@ public:
 
 	//! Gets the "schema.name" entry of the specified type, if entry does not exist behavior depends on OnEntryNotFound
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &schema,
-	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-	                                               bool loop_through_extensions = true);
+	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, CatalogType catalog_type,
 	                                               const string &schema, const string &name,
 	                                               OnEntryNotFound if_not_found);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const string &schema,
-	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-	                                               bool loop_through_extensions = true);
+	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	DUCKDB_API CatalogEntry &GetEntry(ClientContext &context, const string &schema, const EntryLookupInfo &lookup_info);
 	//! Gets the "catalog.schema.name" entry of the specified type, if entry does not exist behavior depends on
 	//! OnEntryNotFound
@@ -285,10 +283,9 @@ public:
 
 	template <class T>
 	optional_ptr<T> GetEntry(ClientContext &context, const string &schema_name, const string &name,
-	                         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext(),
-	                         bool loop_through_extensions = true) {
+	                         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {
 		EntryLookupInfo lookup_info(T::Type, name, error_context);
-		auto entry = GetEntry(context, schema_name, lookup_info, if_not_found, loop_through_extensions);
+		auto entry = GetEntry(context, schema_name, lookup_info, if_not_found);
 		if (!entry) {
 			return nullptr;
 		}
@@ -324,8 +321,8 @@ public:
 	template <class T>
 	T &GetEntry(ClientContext &context, const string &schema_name, const string &name,
 	            QueryErrorContext error_context = QueryErrorContext(),
-	            OnEntryNotFound if_not_found = OnEntryNotFound::THROW_EXCEPTION, bool loop_through_extensions = true) {
-		auto entry = GetEntry<T>(context, schema_name, name, if_not_found, error_context, loop_through_extensions);
+	            OnEntryNotFound if_not_found = OnEntryNotFound::THROW_EXCEPTION) {
+		auto entry = GetEntry<T>(context, schema_name, name, if_not_found, error_context);
 		return *entry;
 	}
 
@@ -458,13 +455,11 @@ public:
 private:
 	//! Lookup an entry in the schema, returning a lookup with the entry and schema if they exist
 	virtual CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
-	                                                  const EntryLookupInfo &lookup_info,
-	                                                  bool loop_through_extensions = true);
+	                                                  const EntryLookupInfo &lookup_info);
 	//! Calls LookupEntryInternal on the schema, trying other schemas if the schema is invalid. Sets
 	//! CatalogEntryLookup->error depending on if_not_found when no entry is found
 	CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &schema,
-	                                  const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-	                                  bool loop_through_extensions = true);
+	                                  const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
 	                                         const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
 	                                         bool allow_default_table_lookup);
