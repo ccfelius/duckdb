@@ -390,10 +390,7 @@ unique_ptr<Expression> DateTruncSimplificationRule::CreateTruncAdd(const BoundCo
 	args2.emplace_back(rhs.Copy());
 	args2.emplace_back(std::move(interval));
 
-	vector<string> schema_names;
-	schema_names.push_back(DEFAULT_SCHEMA);
-	schema_names.push_back("icu");
-	auto add = binder.BindScalarFunction(schema_names, "+", std::move(args2), error);
+	auto add = binder.BindScalarFunction(DEFAULT_SCHEMA, "+", std::move(args2), error);
 
 	vector<unique_ptr<Expression>> args3;
 	args3.emplace_back(date_part.Copy());

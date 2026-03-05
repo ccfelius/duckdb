@@ -50,7 +50,8 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 void ShellExtension::Load(ExtensionLoader &loader) {
 	loader.SetDescription("Adds CLI-specific support and functionalities");
 	loader.RegisterFunction(
-	    ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind));
+	    ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind),
+	    DEFAULT_SCHEMA);
 
 	auto &config = duckdb::DBConfig::GetConfig(loader.GetDatabaseInstance());
 	config.SetOptionByName("duckdb_api", DUCKDB_API_CLI);

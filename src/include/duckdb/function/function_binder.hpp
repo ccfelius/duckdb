@@ -57,30 +57,15 @@ public:
 	//! Bind a pragma function from the set of functions and input arguments
 	DUCKDB_API FunctionBinderResult BindFunction(const string &name, PragmaFunctionSet &functions,
 	                                             vector<Value> &parameters, ErrorData &error);
-
-	DUCKDB_API unique_ptr<ScalarFunction>
-	BindScalarFunctionMultipleSchemas(const vector<string> &schemas, const string &name,
-	                                  vector<unique_ptr<Expression>> &children, ErrorData &error,
-	                                  vector<ScalarBindingCandidate> &candidate_functions);
-
 	DUCKDB_API unique_ptr<ScalarFunction>
 	BindScalarFunctionMultipleSchemas(const string &name, vector<unique_ptr<Expression>> &children, ErrorData &error);
-	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionMultipleSchemas(const vector<string> &schemas,
-	                                                                        const string &name,
-	                                                                        vector<unique_ptr<Expression>> &children,
-	                                                                        ErrorData &error);
 	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
 	                                                                        vector<unique_ptr<Expression>> &children,
 	                                                                        ErrorData &error);
 
-	DUCKDB_API unique_ptr<Expression> BindScalarFunctionInternal(unique_ptr<ScalarFunction> bound_function,
+	DUCKDB_API unique_ptr<Expression> BindScalarFunctionInternal(ScalarFunction bound_function,
 	                                                             vector<unique_ptr<Expression>> children,
 	                                                             bool is_operator, optional_ptr<Binder> binder);
-
-	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const vector<string> &schemas, const string &name,
-	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
-	                                                     bool is_operator = false,
-	                                                     optional_ptr<Binder> binder = nullptr);
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const string &schema, const string &name,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
 	                                                     bool is_operator = false,
@@ -90,7 +75,7 @@ public:
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
-	DUCKDB_API unique_ptr<Expression> BindScalarFunction(unique_ptr<ScalarFunction> bound_function,
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunction bound_function,
 	                                                     vector<unique_ptr<Expression>> children,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);

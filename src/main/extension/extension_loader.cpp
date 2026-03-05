@@ -49,6 +49,12 @@ void ExtensionLoader::RegisterFunction(ScalarFunction function) {
 	RegisterFunction(std::move(set));
 }
 
+void ExtensionLoader::RegisterFunction(ScalarFunction function, const string &schema) {
+	ScalarFunctionSet set(function.name);
+	set.AddFunction(std::move(function));
+	RegisterFunction(std::move(set), schema);
+}
+
 void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 	CreateScalarFunctionInfo info(std::move(function));
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
