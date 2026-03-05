@@ -351,15 +351,15 @@ void CatalogSearchPath::SetPathsInternal() {
 		new_paths.push_back(path);
 	}
 
-	for (auto &path : extension_paths) {
-		new_paths.push_back(path);
-	}
-
 	auto new_default_index = new_paths.size();
 
 	new_paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	new_paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
 	new_paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+
+	for (auto &path : extension_paths) {
+		new_paths.push_back(path);
+	}
 
 	this->paths = std::move(new_paths);
 	this->default_index = new_default_index;

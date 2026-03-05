@@ -273,7 +273,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		                                                                            LogicalType::INTERVAL));
 		set.AddFunction(GetDateAddFunction<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
 		                                                                            LogicalType::TIMESTAMP_TZ));
-		loader.RegisterFunction(set);
+		loader.RegisterFunction(set, DEFAULT_SCHEMA);
 	}
 
 	template <typename TA, typename OP>
@@ -295,7 +295,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		//	temporal - temporal
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
-		loader.RegisterFunction(set);
+		loader.RegisterFunction(set, DEFAULT_SCHEMA);
 	}
 
 	static void AddDateAgeFunctions(const string &name, ExtensionLoader &loader) {
@@ -304,7 +304,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetUnaryAgeFunction<timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
-		loader.RegisterFunction(set);
+		loader.RegisterFunction(set, DEFAULT_SCHEMA);
 	}
 };
 

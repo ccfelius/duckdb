@@ -493,8 +493,11 @@ unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(con
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
                                                                              vector<unique_ptr<Expression>> &children,
                                                                              ErrorData &error) {
-	// vector<ScalarBindingCandidate> candidate_functions;
-	// first try to bind the function with the given schema
+	if (func.schema.name.empty()) {
+		// if the given schema is INVALID_SCHEMA
+		return BindScalarFunctionMultipleSchemas(func.name, children, error);
+	}
+
 	auto best_function = BindFunction(func.name, func.functions, children, error);
 
 	if (!best_function.index.IsValid()) {

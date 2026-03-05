@@ -462,7 +462,7 @@ struct ICUStrftime : public ICUDateFunc {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction, Bind));
-		loader.RegisterFunction(set);
+		loader.RegisterFunction(set, DEFAULT_SCHEMA);
 	}
 
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {

@@ -55,9 +55,25 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 	RegisterFunction(std::move(info));
 }
 
+void ExtensionLoader::RegisterFunction(ScalarFunctionSet function, const string &schema) {
+	CreateScalarFunctionInfo info(std::move(function));
+	info.on_conflict = OnCreateConflict ::ALTER_ON_CONFLICT;
+	// register the function twice
+	auto main_schema_info = info;
+	RegisterFunction(std::move(main_schema_info), schema);
+	if (schema != extension_name) {
+		RegisterFunction(std::move(info), extension_name);
+	}
+}
+
 void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
-	function.schema = extension_name;
+	RegisterFunction(std::move(function), extension_name);
+}
+
+void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function, const string &schema) {
+	D_ASSERT(!function.functions.name.empty());
+	function.schema = schema;
 
 	if (extension_name == CORE_FUNCTIONS) {
 		// we register core functions in the default schema
