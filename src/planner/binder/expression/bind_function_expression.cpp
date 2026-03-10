@@ -145,9 +145,9 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 //! - If you find an entry that could match, keep it, and keep going
 //!   - If you find another entry in another schema - check that it is the same type!
 //!     -If it is same type, keep it as a candidate.
-//!     -If it is not, then ignore it, dont collect it.
+//!     -If it is not, then ignore it, don't collect it.
 
-{ vector<CatalogEntries>; }
+// { vector<CatalogEntries>; }
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
