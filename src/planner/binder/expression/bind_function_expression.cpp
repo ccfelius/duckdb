@@ -76,7 +76,8 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	                  json_bind_result.error.RawMessage());
 }
 
-optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpression &function, bool allow_throw) {
+vector<optional_ptr<CatalogEntry>> ExpressionBinder::BindAndQualifyFunction(FunctionExpression &function,
+                                                                            bool allow_throw) {
 	D_ASSERT(!IsUnnestFunction(function.function_name));
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
@@ -90,7 +91,7 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 		    GetCatalogEntry(function.catalog, function.schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			if (!allow_throw) {
-				return func;
+				return {};
 			}
 			throw BinderException(function,
 			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
@@ -116,7 +117,7 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 					// could not find the column - try to qualify the alias
 					if (!DoesColumnAliasExist(*colref)) {
 						if (!allow_throw) {
-							return func;
+							return {};
 						}
 						// no alias found either - throw
 						error.Throw();
@@ -137,64 +138,59 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 		}
 	}
 
-	return func;
+	if (!func) {
+		return {};
+	}
+
+	// For scalar functions with no explicit schema, look up all matching entries across schemas
+	// to allow cross-schema overload resolution.
+	if (function.schema.empty() && func->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
+		auto entries = Catalog::GetSystemCatalog(context).GetEntries<ScalarFunctionCatalogEntry>(
+		    context, INVALID_SCHEMA, function.function_name, OnEntryNotFound::RETURN_NULL);
+		if (!entries.empty()) {
+			vector<optional_ptr<CatalogEntry>> result;
+			for (auto &entry : entries) {
+				result.push_back(optional_ptr<CatalogEntry>(entry.get()));
+			}
+			return result;
+		}
+	}
+
+	return {func};
 }
-
-
-//! Look through in order
-//! - If you find an entry that could match, keep it, and keep going
-//!   - If you find another entry in another schema - check that it is the same type!
-//!     -If it is same type, keep it as a candidate.
-//!     -If it is not, then ignore it, dont collect it.
-
-{ vector<CatalogEntries>; }
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
-	//
-	// vector<CatalogEntry> entries;
-	// if (entries.empty()) {
-	// 	// error!
-	// }
-	//
-	// auto type = entries[0].type;
-	// if (type == CatalogType::SCALAR_FUNCTION_ENTRY) {
-	// 	ScalarFunctionSet combined_set;
-	//
-	// 	for (auto &entry : entries) {
-	// 		auto &func_entry = entry.Cast<ScalarFunctionCatalogEntry>();
-	// 		combined_set.MergeFunctionSet(func_entry.functions);
-	// 	}
-	//
-	// 	FunctionBinder func_binder(binder);
-	// 	return func_binder.BindFunction(combined_set);
-	// }
-	//
+	auto entries = BindAndQualifyFunction(function, true);
+	auto &func = *entries[0];
 
-	auto func = BindAndQualifyFunction(function, true);
-
-	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
+	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
 	    (function.distinct || function.filter || !function.order_bys->orders.empty())) {
 		throw InvalidInputException("Function \"%s\" is a %s. \"DISTINCT\", \"FILTER\", and \"ORDER BY\" are only "
 		                            "applicable to aggregate functions.",
-		                            function.function_name, CatalogTypeToString(func->type));
+		                            function.function_name, CatalogTypeToString(func.type));
 	}
 
-	switch (func->type) {
+	switch (func.type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
 		auto child = function.IsLambdaFunction();
 		if (child) {
 			auto syntax_type = child->Cast<LambdaExpression>().syntax_type;
-			return TryBindLambdaOrJson(function, depth, *func, syntax_type);
+			return TryBindLambdaOrJson(function, depth, func, syntax_type);
 		}
-		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
+		// Build a combined function set from all entries across schemas and bind against it
+		ScalarFunctionSet combined_set(function.function_name);
+		for (auto &entry : entries) {
+			combined_set.MergeFunctionSet(entry->Cast<ScalarFunctionCatalogEntry>().functions, true);
+		}
+		return BindFunction(function, combined_set, depth);
 	}
 	case CatalogType::MACRO_ENTRY:
 		// macro function
-		return BindMacro(function, func->Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
+		return BindMacro(function, func.Cast<ScalarMacroCatalogEntry>(), depth, expr_ptr);
 	default:
 		// aggregate function
-		return BindAggregate(function, func->Cast<AggregateFunctionCatalogEntry>(), depth);
+		return BindAggregate(function, func.Cast<AggregateFunctionCatalogEntry>(), depth);
 	}
 }
 
@@ -225,6 +221,46 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 
 	FunctionBinder function_binder(binder);
 	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
+	if (!result) {
+		error.AddQueryLocation(function);
+		error.Throw();
+	}
+	if (result->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
+		auto &bound_function = result->Cast<BoundFunctionExpression>();
+		if (bound_function.function.GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
+			binder.SetAlwaysRequireRebind();
+		}
+	}
+	return BindResult(std::move(result));
+}
+
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFunctionSet &func_set, idx_t depth) {
+	// bind the children of the function expression
+	ErrorData error;
+
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		BindChild(function.children[i], depth, error);
+	}
+
+	if (error.HasError()) {
+		return BindResult(std::move(error));
+	}
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
+	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+	}
+
+	// all children bound successfully
+	// extract the children and types
+	vector<unique_ptr<Expression>> children;
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		auto &child = BoundExpression::GetExpression(*function.children[i]);
+		children.push_back(std::move(child));
+	}
+
+	FunctionBinder function_binder(binder);
+	auto result =
+	    function_binder.BindScalarFunction(func_set, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();

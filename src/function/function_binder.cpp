@@ -499,6 +499,17 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	return BindScalarFunctionInternal(std::move(*bound_function), std::move(children), is_operator, binder);
 }
 
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionSet &func_set,
+                                                          vector<unique_ptr<Expression>> children, ErrorData &error,
+                                                          bool is_operator, optional_ptr<Binder> binder) {
+	auto best_function = BindFunction(func_set.name, func_set, children, error);
+	if (!best_function.index.IsValid()) {
+		return nullptr;
+	}
+	auto bound_function = func_set.GetFunctionByOffset(best_function.index.GetIndex());
+	return BindScalarFunctionInternal(std::move(bound_function), std::move(children), is_operator, binder);
+}
+
 static bool RequiresCollationPropagation(const LogicalType &type) {
 	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias();
 }

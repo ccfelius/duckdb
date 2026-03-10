@@ -74,6 +74,10 @@ public:
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunctionSet &function_set,
+	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
+	                                                     bool is_operator = false,
+	                                                     optional_ptr<Binder> binder = nullptr);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunction bound_function,
 	                                                     vector<unique_ptr<Expression>> children,

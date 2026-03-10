@@ -50,16 +50,17 @@ static void FinishLoad(ExtensionLoader &loader) {
 
 static void LoadInternalFirst(ExtensionLoader &loader) {
 	// Register a scalar function
-	auto simple_scalar_function = ScalarFunction("simple", {LogicalType::VARCHAR}, LogicalType::VARCHAR, SimpleScalarFunFirst);
+	auto simple_scalar_function =
+	    ScalarFunction("simple", {LogicalType::VARCHAR}, LogicalType::VARCHAR, SimpleScalarFunFirst);
 	loader.RegisterFunction(simple_scalar_function);
 }
 
 static void LoadInternalSecond(ExtensionLoader &loader) {
 	// Register a scalar function
-	auto simple_scalar_function = ScalarFunction("simple", {LogicalType::VARCHAR}, LogicalType::VARCHAR, SimpleScalarFunSecond);
+	auto simple_scalar_function =
+	    ScalarFunction("simple", {LogicalType::VARCHAR}, LogicalType::VARCHAR, SimpleScalarFunSecond);
 	loader.RegisterFunction(simple_scalar_function);
 }
-
 
 void CreateExtensionSchema(const string &name, DatabaseInstance &db) {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
@@ -99,7 +100,6 @@ DUCKDB_CPP_EXTENSION_ENTRY(second_extension, loader) {
 	LoadInternalSecond(loader);
 	FinishLoad(loader);
 }
-
 }
 
 TEST_CASE("Test overlapping extension functions", "[extension_schema]") {
@@ -137,5 +137,5 @@ TEST_CASE("Test overlapping extension functions", "[extension_schema]") {
 	auto result3 = con.Query("SELECT first_extension.simple('test')");
 	std::cout << result3->ToString() << std::endl;
 
-	//TODO test with create schema
+	// TODO test with create schema
 }

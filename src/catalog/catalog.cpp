@@ -1116,7 +1116,6 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, co
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                              const string &schema, const EntryLookupInfo &lookup_info,
                                              OnEntryNotFound if_not_found) {
-
 	if (catalog == "" && schema == "tpch" && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
 		auto catalog_name = "memory";
 	}
