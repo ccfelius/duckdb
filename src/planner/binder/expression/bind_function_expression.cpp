@@ -80,7 +80,6 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 	D_ASSERT(!IsUnnestFunction(function.function_name));
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
-	binder.BindSchemaOrCatalog(function.catalog, function.schema);
 
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
 	auto func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
@@ -141,8 +140,37 @@ optional_ptr<CatalogEntry> ExpressionBinder::BindAndQualifyFunction(FunctionExpr
 	return func;
 }
 
+
+//! Look through in order
+//! - If you find an entry that could match, keep it, and keep going
+//!   - If you find another entry in another schema - check that it is the same type!
+//!     -If it is same type, keep it as a candidate.
+//!     -If it is not, then ignore it, dont collect it.
+
+{ vector<CatalogEntries>; }
+
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
+	//
+	// vector<CatalogEntry> entries;
+	// if (entries.empty()) {
+	// 	// error!
+	// }
+	//
+	// auto type = entries[0].type;
+	// if (type == CatalogType::SCALAR_FUNCTION_ENTRY) {
+	// 	ScalarFunctionSet combined_set;
+	//
+	// 	for (auto &entry : entries) {
+	// 		auto &func_entry = entry.Cast<ScalarFunctionCatalogEntry>();
+	// 		combined_set.MergeFunctionSet(func_entry.functions);
+	// 	}
+	//
+	// 	FunctionBinder func_binder(binder);
+	// 	return func_binder.BindFunction(combined_set);
+	// }
+	//
+
 	auto func = BindAndQualifyFunction(function, true);
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&

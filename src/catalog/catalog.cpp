@@ -471,14 +471,18 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		entries = search_path.Get();
 	} else if (IsInvalidCatalog(catalog)) {
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
+		// because it can be a table function, also add non-system catalogs
+		entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
 		}
+
 		if (entries.empty()) {
 			auto &default_entry = search_path.GetDefault();
 			if (!IsInvalidCatalog(default_entry.catalog)) {
 				entries.emplace_back(default_entry.catalog, schema);
 			} else {
+				// here it adds "memory" or any other attached database
 				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 			}
 		}
@@ -1112,6 +1116,11 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, co
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                              const string &schema, const EntryLookupInfo &lookup_info,
                                              OnEntryNotFound if_not_found) {
+
+	if (catalog == "" && schema == "tpch" && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
+		auto catalog_name = "memory";
+	}
+
 	auto result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
 
 	// Try autoloading extension to resolve lookup
