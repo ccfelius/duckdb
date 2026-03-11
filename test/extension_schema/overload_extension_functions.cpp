@@ -132,10 +132,8 @@ TEST_CASE("Test overlapping extension functions", "[extension_schema]") {
 	// we now get the output of the last loaded extension
 	auto result2 = con.Query("SELECT simple('test')");
 	std::cout << result2->ToString() << std::endl;
-	REQUIRE_FALSE(result->HasError());
+	REQUIRE(result2->HasError());
 
 	auto result3 = con.Query("SELECT first_extension.simple('test')");
 	std::cout << result3->ToString() << std::endl;
-
-	// TODO test with create schema
 }

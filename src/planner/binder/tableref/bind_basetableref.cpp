@@ -155,10 +155,6 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 	auto entry_at_clause = at_clause ? at_clause.get() : entry_retriever.GetAtClause();
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name, entry_at_clause, error_context);
 	BindSchemaOrCatalog(entry_retriever, ref.catalog_name, ref.schema_name);
-	if (ref.schema_name == "tpch" && ref.table_name == "lineitem") {
-		auto stop = false;
-
-	}
 	auto table_or_view =
 	    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table

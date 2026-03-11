@@ -37,6 +37,7 @@ using std::move;
 
 // special case: core_functions
 #define CORE_FUNCTIONS "core_functions"
+#define ICU_EXTENSION  "icu"
 
 DUCKDB_API bool IsInvalidSchema(const string &str);
 DUCKDB_API bool IsInvalidCatalog(const string &str);

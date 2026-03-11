@@ -393,6 +393,13 @@ FunctionBinder::BindScalarFunctionMultiple(vector<optional_ptr<ScalarFunctionCat
 	}
 
 	//! multiple candidate functions are found
+
+	if (candidate_functions.back().result.schema == ICU_EXTENSION) {
+		// ICU functions are registered both in main and icu schema
+		// So we make an exception
+		return std::move(candidate_functions.back().bound_function);
+	}
+
 	// we return an error
 	auto types = GetLogicalTypesFromExpressions(children);
 	auto exception = MultipleCandidateException(functions[0]->name, candidate_functions, types, error);
@@ -401,7 +408,6 @@ FunctionBinder::BindScalarFunctionMultiple(vector<optional_ptr<ScalarFunctionCat
 		error.Throw();
 	}
 
-	// we return the function related to the latest loaded extension
 	// keep CI happy
 	return std::move(candidate_functions.back().bound_function);
 }
