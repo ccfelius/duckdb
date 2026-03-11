@@ -62,6 +62,9 @@ public:
 	DUCKDB_API unique_ptr<ScalarFunction> BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
 	                                                                        vector<unique_ptr<Expression>> &children,
 	                                                                        ErrorData &error);
+	DUCKDB_API unique_ptr<ScalarFunction>
+	BindScalarFunctionMultiple(vector<optional_ptr<ScalarFunctionCatalogEntry>> &functions,
+	                           vector<unique_ptr<Expression>> &children, ErrorData &error);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunctionInternal(ScalarFunction bound_function,
 	                                                             vector<unique_ptr<Expression>> children,
@@ -74,7 +77,9 @@ public:
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
-
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(vector<optional_ptr<ScalarFunctionCatalogEntry>> &func,
+	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
+	                                                     bool is_operator, optional_ptr<Binder> binder);
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(ScalarFunction bound_function,
 	                                                     vector<unique_ptr<Expression>> children,
 	                                                     bool is_operator = false,

@@ -213,6 +213,8 @@ protected:
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
 	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindFunction(FunctionExpression &expr,
+	                                vector<optional_ptr<ScalarFunctionCatalogEntry>> &functions, idx_t depth);
 	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression);
@@ -226,8 +228,8 @@ protected:
 	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 	vector<optional_ptr<CatalogEntry>> GetCatalogEntries(const string &catalog, const string &schema,
-															 const EntryLookupInfo &lookup_info,
-															 OnEntryNotFound on_entry_not_found);
+	                                                     const EntryLookupInfo &lookup_info,
+	                                                     OnEntryNotFound on_entry_not_found);
 
 	Binder &binder;
 	ClientContext &context;

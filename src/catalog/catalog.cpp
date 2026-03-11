@@ -470,9 +470,6 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		// no catalog or schema provided - scan the entire search path
 		entries = search_path.Get();
 	} else if (IsInvalidCatalog(catalog)) {
-		if (schema == "db1") {
-			bool is_bd1 = true;
-		}
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
@@ -1023,9 +1020,10 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	return TryLookupEntry(retriever, lookups, lookup_info, if_not_found, allow_default_table_lookup);
 }
 
-vector<CatalogEntryLookup> Catalog::TryLookupEntries(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
-                                           const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
-                                           bool allow_default_table_lookup) {
+vector<CatalogEntryLookup> Catalog::TryLookupEntries(CatalogEntryRetriever &retriever,
+                                                     const vector<CatalogLookup> &lookups,
+                                                     const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
+                                                     bool allow_default_table_lookup) {
 	auto &context = retriever.GetContext();
 	reference_set_t<SchemaCatalogEntry> schemas;
 	bool all_errors = true;
@@ -1105,9 +1103,8 @@ vector<CatalogEntryLookup> Catalog::TryLookupEntries(CatalogEntryRetriever &retr
 }
 
 vector<CatalogEntryLookup> Catalog::TryLookupMultipleEntries(CatalogEntryRetriever &retriever, const string &catalog,
-										   const string &schema, const EntryLookupInfo &lookup_info,
-										   OnEntryNotFound if_not_found) {
-
+                                                             const string &schema, const EntryLookupInfo &lookup_info,
+                                                             OnEntryNotFound if_not_found) {
 	auto entries = GetCatalogEntries(retriever, catalog, schema);
 	vector<CatalogLookup> lookups;
 	vector<CatalogLookup> final_lookups;
@@ -1139,7 +1136,6 @@ vector<CatalogEntryLookup> Catalog::TryLookupMultipleEntries(CatalogEntryRetriev
 
 	return TryLookupEntries(retriever, lookups, lookup_info, if_not_found, allow_default_table_lookup);
 }
-
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
                                 const string &schema_name, const string &name) {
@@ -1257,16 +1253,17 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 }
 
 vector<optional_ptr<CatalogEntry>> Catalog::GetMultipleEntries(CatalogEntryRetriever &retriever, const string &catalog,
-											 const string &schema, const EntryLookupInfo &lookup_info,
-											 OnEntryNotFound if_not_found) {
+                                                               const string &schema, const EntryLookupInfo &lookup_info,
+                                                               OnEntryNotFound if_not_found) {
 	CatalogEntryLookup result;
 	auto results = TryLookupMultipleEntries(retriever, catalog, schema, lookup_info, if_not_found);
 
 	// Try autoloading extension to resolve lookup
 	if (results.empty()) {
 		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
-											lookup_info.GetEntryName())) {
-			result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);}
+		                                    lookup_info.GetEntryName())) {
+			result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
+		}
 
 		if (result.error.HasError()) {
 			result.error.Throw();

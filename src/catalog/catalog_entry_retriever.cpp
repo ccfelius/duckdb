@@ -40,9 +40,8 @@ optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const string &catalog
 }
 
 vector<optional_ptr<CatalogEntry>> CatalogEntryRetriever::GetEntries(const string &catalog, const string &schema,
-														   const EntryLookupInfo &lookup_info,
-														   OnEntryNotFound on_entry_not_found) {
-
+                                                                     const EntryLookupInfo &lookup_info,
+                                                                     OnEntryNotFound on_entry_not_found) {
 	return ReturnAndCallback(Catalog::GetMultipleEntries(*this, catalog, schema, lookup_info, on_entry_not_found));
 }
 
@@ -78,7 +77,8 @@ optional_ptr<CatalogEntry> CatalogEntryRetriever::ReturnAndCallback(optional_ptr
 	return result;
 }
 
-vector<optional_ptr<CatalogEntry>> CatalogEntryRetriever::ReturnAndCallback(vector<optional_ptr<CatalogEntry>> results) {
+vector<optional_ptr<CatalogEntry>>
+CatalogEntryRetriever::ReturnAndCallback(vector<optional_ptr<CatalogEntry>> results) {
 	if (results.empty()) {
 		return {};
 	}

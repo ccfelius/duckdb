@@ -199,7 +199,7 @@ FunctionBinderResult FunctionBinder::BindFunctionFromArguments(const string &nam
 		for (auto &arg_type : arguments) {
 			if (arg_type.IsUnknown()) {
 				// We cannot resolve the parameters to a function.
- 				throw ParameterNotResolvedException();
+				throw ParameterNotResolvedException();
 			}
 		}
 		auto catalog_name = functions.functions.size() > 0 ? functions.functions[0].catalog_name : "";
@@ -347,6 +347,64 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 	}
 }
 
+unique_ptr<ScalarFunction>
+FunctionBinder::BindScalarFunctionMultiple(vector<optional_ptr<ScalarFunctionCatalogEntry>> &functions,
+                                           vector<unique_ptr<Expression>> &children, ErrorData &error) {
+	auto min_cost = NumericLimits<int64_t>::Maximum();
+	vector<ScalarBindingCandidate> candidate_functions;
+	for (auto &function : functions) {
+		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
+		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
+
+		if (!best_function_current_scheme.index.IsValid()) {
+			continue;
+		}
+
+		auto current_cost = best_function_current_scheme.cost;
+		if (current_cost < min_cost) {
+			// Found a better match
+			min_cost = current_cost;
+			// Clear previous candidates
+			candidate_functions.clear();
+			auto bound_function = make_uniq<ScalarFunction>(
+			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
+			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
+			                                                      std::move(bound_function),
+			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
+
+		} else if (current_cost == min_cost) {
+			// Found a match with equal cost
+			auto bound_function = make_uniq<ScalarFunction>(
+			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
+			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
+			                                                      std::move(bound_function),
+			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
+		}
+	}
+
+	if (candidate_functions.empty()) {
+		// no candidate functions found
+		return nullptr;
+	}
+
+	if (candidate_functions.size() == 1) {
+		//  we found a single candidate function
+		return std::move(candidate_functions[0].bound_function);
+	}
+
+	//! multiple candidate functions are found
+	// we return an error
+	auto types = GetLogicalTypesFromExpressions(children);
+	auto exception = MultipleCandidateException(functions[0]->name, candidate_functions, types, error);
+
+	if (error.HasError()) {
+		error.Throw();
+	}
+
+	// we return the function related to the latest loaded extension
+	// keep CI happy
+	return std::move(candidate_functions.back().bound_function);
+}
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(const string &name,
                                                                              vector<unique_ptr<Expression>> &children,
                                                                              ErrorData &error) {
@@ -493,6 +551,17 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
                                                           bool is_operator, optional_ptr<Binder> binder) {
 	// bind the function
 	auto bound_function = BindScalarFunctionMultipleSchemas(func, children, error);
+	if (!bound_function) {
+		return nullptr;
+	}
+	return BindScalarFunctionInternal(std::move(*bound_function), std::move(children), is_operator, binder);
+}
+
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(vector<optional_ptr<ScalarFunctionCatalogEntry>> &functions,
+                                                          vector<unique_ptr<Expression>> children, ErrorData &error,
+                                                          bool is_operator, optional_ptr<Binder> binder) {
+	// bind the function
+	auto bound_function = BindScalarFunctionMultiple(functions, children, error);
 	if (!bound_function) {
 		return nullptr;
 	}

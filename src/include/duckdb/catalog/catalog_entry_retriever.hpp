@@ -46,8 +46,8 @@ public:
 	optional_ptr<CatalogEntry> GetEntry(Catalog &catalog, const string &schema, const EntryLookupInfo &lookup_info,
 	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 	vector<optional_ptr<CatalogEntry>> GetEntries(const string &catalog, const string &schema,
-														   const EntryLookupInfo &lookup_info,
-														   OnEntryNotFound on_entry_not_found);
+	                                              const EntryLookupInfo &lookup_info,
+	                                              OnEntryNotFound on_entry_not_found);
 
 	LogicalType GetType(const string &catalog, const string &schema, const string &name,
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);

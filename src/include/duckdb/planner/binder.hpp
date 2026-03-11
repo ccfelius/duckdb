@@ -264,8 +264,8 @@ public:
 	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 	vector<optional_ptr<CatalogEntry>> GetCatalogEntries(const string &catalog, const string &schema,
-												   const EntryLookupInfo &lookup_info,
-												   OnEntryNotFound on_entry_not_found);
+	                                                     const EntryLookupInfo &lookup_info,
+	                                                     OnEntryNotFound on_entry_not_found);
 
 	//! Find all candidate common table expression by name; returns empty vector if none exists
 	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &name);

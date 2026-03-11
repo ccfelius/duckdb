@@ -76,24 +76,16 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 	                  json_bind_result.error.RawMessage());
 }
 
-vector<optional_ptr<CatalogEntry>> ExpressionBinder::BindAndQualifyFunction(FunctionExpression &function, bool allow_throw) {
+vector<optional_ptr<CatalogEntry>> ExpressionBinder::BindAndQualifyFunction(FunctionExpression &function,
+                                                                            bool allow_throw) {
 	D_ASSERT(!IsUnnestFunction(function.function_name));
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
+	binder.BindSchemaOrCatalog(function.catalog, function.schema);
 
 	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
 	vector<optional_ptr<CatalogEntry>> functions;
-	if (function.catalog.empty() && function.schema.empty()) {
-		functions = GetCatalogEntries(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
-	} else {
-		if (function.schema == "db1"){
-			auto stop = true;
-		}
-		auto func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
-		if (func) {
-			functions.push_back(func);
-		}
-	}
+	functions = GetCatalogEntries(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
 
 	if (functions.empty()) {
 		// function was not found - check if we this is a table function
@@ -113,7 +105,8 @@ vector<optional_ptr<CatalogEntry>> ExpressionBinder::BindAndQualifyFunction(Func
 		if (!function.schema.empty()) {
 			// the schema is set - check if we can turn this the schema into a column ref
 			// does this function exist in the system catalog?
-			auto func = GetCatalogEntries(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
+			auto func =
+			    GetCatalogEntries(INVALID_CATALOG, INVALID_SCHEMA, function_lookup, OnEntryNotFound::RETURN_NULL);
 			if (!func.empty()) {
 				// the function exists in the system catalog - turn this into a dot call
 				ErrorData error;
@@ -156,27 +149,20 @@ vector<optional_ptr<CatalogEntry>> ExpressionBinder::BindAndQualifyFunction(Func
 
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
-
 	auto functions = BindAndQualifyFunction(function, true);
 	optional_ptr<CatalogEntry> func;
 	vector<optional_ptr<CatalogEntry>> candidates;
-
-	if (functions.size() == 1) {
-		func = functions[0];
-	} else {
+	func = functions[0];
+	if (functions.size() > 1) {
 		//! More then 1 function found
 		//! Look through in order
 		auto first_entry = functions[0];
+		candidates.push_back(first_entry);
 		for (auto entry : functions) {
-			if (entry->type == first_entry->type) {
+			if (entry != first_entry && entry->type == first_entry->type) {
 				candidates.push_back(entry);
 			}
 		}
-	}
-
-	if (candidates.size() > 1){
-		throw BinderException(function, "Ambiguous function name \"%s\". Please qualify the function name.",
-		                      function.function_name);
 	}
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
@@ -192,6 +178,13 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 		if (child) {
 			auto syntax_type = child->Cast<LambdaExpression>().syntax_type;
 			return TryBindLambdaOrJson(function, depth, *func, syntax_type);
+		}
+		if (candidates.size() > 1) {
+			vector<optional_ptr<ScalarFunctionCatalogEntry>> final_candidates;
+			for (auto &candidate : candidates) {
+				final_candidates.push_back(candidate->Cast<ScalarFunctionCatalogEntry>());
+			}
+			return BindFunction(function, final_candidates, depth);
 		}
 		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
 	}
@@ -230,7 +223,52 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	}
 
 	FunctionBinder function_binder(binder);
-	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
+	unique_ptr<Expression> result =
+	    function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
+
+	if (!result) {
+		error.AddQueryLocation(function);
+		error.Throw();
+	}
+
+	if (result->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
+		auto &bound_function = result->Cast<BoundFunctionExpression>();
+		if (bound_function.function.GetStability() == FunctionStability::CONSISTENT_WITHIN_QUERY) {
+			binder.SetAlwaysRequireRebind();
+		}
+	}
+	return BindResult(std::move(result));
+}
+
+BindResult ExpressionBinder::BindFunction(FunctionExpression &function,
+                                          vector<optional_ptr<ScalarFunctionCatalogEntry>> &functions, idx_t depth) {
+	// bind the children of the function expression
+	ErrorData error;
+
+	// bind of each child
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		BindChild(function.children[i], depth, error);
+	}
+
+	if (error.HasError()) {
+		return BindResult(std::move(error));
+	}
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES ||
+	    binder.GetBindingMode() == BindingMode::EXTRACT_QUALIFIED_NAMES) {
+		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+	}
+
+	// all children bound successfully
+	// extract the children and types
+	vector<unique_ptr<Expression>> children;
+	for (idx_t i = 0; i < function.children.size(); i++) {
+		auto &child = BoundExpression::GetExpression(*function.children[i]);
+		children.push_back(std::move(child));
+	}
+
+	FunctionBinder function_binder(binder);
+	unique_ptr<Expression> result =
+	    function_binder.BindScalarFunction(functions, std::move(children), error, function.is_operator, &binder);
 
 	if (!result) {
 		error.AddQueryLocation(function);
@@ -395,10 +433,9 @@ optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const string &catal
 }
 
 vector<optional_ptr<CatalogEntry>> ExpressionBinder::GetCatalogEntries(const string &catalog, const string &schema,
-															 const EntryLookupInfo &lookup_info,
-															 OnEntryNotFound on_entry_not_found) {
+                                                                       const EntryLookupInfo &lookup_info,
+                                                                       OnEntryNotFound on_entry_not_found) {
 	return binder.GetCatalogEntries(catalog, schema, lookup_info, on_entry_not_found);
 }
-
 
 } // namespace duckdb

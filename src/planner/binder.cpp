@@ -563,8 +563,8 @@ optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const 
 }
 
 vector<optional_ptr<CatalogEntry>> Binder::GetCatalogEntries(const string &catalog, const string &schema,
-												   const EntryLookupInfo &lookup_info,
-												   OnEntryNotFound on_entry_not_found) {
+                                                             const EntryLookupInfo &lookup_info,
+                                                             OnEntryNotFound on_entry_not_found) {
 	return entry_retriever.GetEntries(catalog, schema, lookup_info, on_entry_not_found);
 }
 
