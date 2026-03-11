@@ -150,9 +150,8 @@ vector<optional_ptr<CatalogEntry>> ExpressionBinder::BindAndQualifyFunction(Func
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	auto functions = BindAndQualifyFunction(function, true);
-	optional_ptr<CatalogEntry> func;
 	vector<optional_ptr<CatalogEntry>> candidates;
-	func = functions[0];
+	auto func = functions[0];
 	if (functions.size() > 1) {
 		//! More then 1 function found
 		//! Look through in order

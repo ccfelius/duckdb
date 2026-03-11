@@ -474,16 +474,15 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
 		}
-
 		if (entries.empty()) {
 			auto &default_entry = search_path.GetDefault();
 			if (!IsInvalidCatalog(default_entry.catalog)) {
 				entries.emplace_back(default_entry.catalog, schema);
-			} else {
-				// here it adds "memory" or any other attached database
-				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 			}
 		}
+		// a schema and a table name could have the same name
+		// so we always add the "memory" catalog at last
+		entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 	} else if (IsInvalidSchema(schema)) {
 		auto schemas = search_path.GetSchemasForCatalog(catalog);
 		for (auto &schema_name : schemas) {
