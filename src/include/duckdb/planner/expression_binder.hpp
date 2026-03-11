@@ -208,7 +208,7 @@ protected:
 
 	BindResult BindUnsupportedExpression(ParsedExpression &expr, idx_t depth, const string &message);
 
-	optional_ptr<CatalogEntry> BindAndQualifyFunction(FunctionExpression &function, bool allow_throw);
+	vector<optional_ptr<CatalogEntry>> BindAndQualifyFunction(FunctionExpression &function, bool allow_throw);
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
@@ -225,6 +225,9 @@ protected:
 	virtual string UnsupportedUnnestMessage();
 	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
+	vector<optional_ptr<CatalogEntry>> GetCatalogEntries(const string &catalog, const string &schema,
+															 const EntryLookupInfo &lookup_info,
+															 OnEntryNotFound on_entry_not_found);
 
 	Binder &binder;
 	ClientContext &context;

@@ -15,9 +15,6 @@ namespace duckdb {
 
 CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p)
     : catalog(std::move(catalog_p)), schema(std::move(schema_p)) {
-	if (schema_p == "tpch") {
-		auto schema = "tpch";
-	}
 }
 
 string CatalogSearchEntry::ToString() const {

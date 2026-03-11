@@ -24,6 +24,7 @@ class Catalog;
 class CatalogEntry;
 
 using catalog_entry_callback_t = std::function<void(CatalogEntry &)>;
+using catalog_multiple_entries_callback_t = std::function<void(vector<optional_ptr<CatalogEntry>> &)>;
 
 // Wraps the Catalog::GetEntry method
 class CatalogEntryRetriever {
@@ -44,6 +45,9 @@ public:
 
 	optional_ptr<CatalogEntry> GetEntry(Catalog &catalog, const string &schema, const EntryLookupInfo &lookup_info,
 	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
+	vector<optional_ptr<CatalogEntry>> GetEntries(const string &catalog, const string &schema,
+														   const EntryLookupInfo &lookup_info,
+														   OnEntryNotFound on_entry_not_found);
 
 	LogicalType GetType(const string &catalog, const string &schema, const string &name,
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
@@ -64,10 +68,12 @@ public:
 
 private:
 	optional_ptr<CatalogEntry> ReturnAndCallback(optional_ptr<CatalogEntry> result);
+	vector<optional_ptr<CatalogEntry>> ReturnAndCallback(vector<optional_ptr<CatalogEntry>> results);
 
 private:
 	//! (optional) callback, called on every successful entry retrieval
 	catalog_entry_callback_t callback = nullptr;
+	catalog_multiple_entries_callback_t mp_callback = nullptr;
 	ClientContext &context;
 	shared_ptr<CatalogSearchPath> search_path;
 	optional_ptr<BoundAtClause> at_clause;

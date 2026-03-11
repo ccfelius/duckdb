@@ -470,9 +470,10 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		// no catalog or schema provided - scan the entire search path
 		entries = search_path.Get();
 	} else if (IsInvalidCatalog(catalog)) {
+		if (schema == "db1") {
+			bool is_bd1 = true;
+		}
 		auto catalogs = search_path.GetCatalogsForSchema(schema);
-		// because it can be a table function, also add non-system catalogs
-		entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 		for (auto &catalog_name : catalogs) {
 			entries.emplace_back(catalog_name, schema);
 		}
@@ -1022,6 +1023,124 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	return TryLookupEntry(retriever, lookups, lookup_info, if_not_found, allow_default_table_lookup);
 }
 
+vector<CatalogEntryLookup> Catalog::TryLookupEntries(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
+                                           const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
+                                           bool allow_default_table_lookup) {
+	auto &context = retriever.GetContext();
+	reference_set_t<SchemaCatalogEntry> schemas;
+	bool all_errors = true;
+	ErrorData error_data;
+	vector<CatalogEntryLookup> results;
+	for (auto &lookup : lookups) {
+		auto transaction = lookup.catalog.GetCatalogTransaction(context);
+		auto result = lookup.catalog.TryLookupEntryInternal(transaction, lookup.schema, lookup.lookup_info);
+		if (result.Found()) {
+			results.push_back(result);
+		}
+		if (result.schema) {
+			schemas.insert(*result.schema);
+		}
+		if (!result.error.HasError()) {
+			all_errors = false;
+		} else {
+			error_data = std::move(result.error);
+		}
+	}
+
+	// Special case for tables: we do a second lookup searching for catalogs with default tables that also match this
+	// lookup
+	if (lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY && allow_default_table_lookup) {
+		if (results.empty()) {
+			auto result = TryLookupDefaultTable(retriever, lookup_info, false);
+			if (result.error.HasError()) {
+				error_data = std::move(result.error);
+			}
+		} else {
+			// allow_ignore_at_clause set to true to ensure `FROM <table_name> AT <version>` is considered
+			// ambiguous with a default table lookup in a catalog that does not support time travel
+			auto ambiguity_lookup = TryLookupDefaultTable(retriever, lookup_info, true);
+			if (ambiguity_lookup.Found()) {
+				ThrowDefaultTableAmbiguityException(results[0], ambiguity_lookup, lookup_info.GetEntryName());
+			}
+		}
+	}
+
+	if (!results.empty()) {
+		return results;
+	}
+
+	if (all_errors && error_data.HasError()) {
+		error_data.Throw();
+	}
+
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		return {};
+	}
+
+	// If we have a specific schema name and no schemas were found, the schema doesn't exist.
+	// Throw an error about the schema instead of the table
+	if (schemas.empty() && !lookups.empty() && lookup_info.GetCatalogType() == CatalogType::TABLE_ENTRY) {
+		string schema_name = lookups[0].schema;
+		if (!IsInvalidSchema(schema_name)) {
+			EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, schema_name, lookup_info.GetErrorContext());
+			string relation_name = schema_name + "." + lookup_info.GetEntryName();
+			auto except =
+			    CatalogException(schema_lookup.GetErrorContext(),
+			                     "Table with name \"%s\" does not exist because schema \"%s\" does not exist.",
+			                     relation_name, schema_name);
+			return {};
+		}
+	}
+
+	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
+	// otherwise.
+	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {
+		auto except = CatalogException("%s with name %s does not exist!",
+		                               CatalogTypeToString(lookup_info.GetCatalogType()), lookup_info.GetEntryName());
+		return {};
+	} else {
+		auto except = CreateMissingEntryException(retriever, lookup_info, schemas);
+		return {};
+	}
+}
+
+vector<CatalogEntryLookup> Catalog::TryLookupMultipleEntries(CatalogEntryRetriever &retriever, const string &catalog,
+										   const string &schema, const EntryLookupInfo &lookup_info,
+										   OnEntryNotFound if_not_found) {
+
+	auto entries = GetCatalogEntries(retriever, catalog, schema);
+	vector<CatalogLookup> lookups;
+	vector<CatalogLookup> final_lookups;
+	lookups.reserve(entries.size());
+	for (auto &entry : entries) {
+		optional_ptr<Catalog> catalog_entry;
+		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+			catalog_entry = Catalog::GetCatalogEntry(retriever, entry.catalog);
+		} else {
+			catalog_entry = &Catalog::GetCatalog(retriever, entry.catalog);
+		}
+		if (!catalog_entry) {
+			return {};
+		}
+		D_ASSERT(catalog_entry);
+		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(lookup_info.GetCatalogType());
+		if (lookup_behavior == CatalogLookupBehavior::STANDARD) {
+			lookups.emplace_back(*catalog_entry, entry.schema, lookup_info);
+		} else if (lookup_behavior == CatalogLookupBehavior::LOWER_PRIORITY) {
+			final_lookups.emplace_back(*catalog_entry, entry.schema, lookup_info);
+		}
+	}
+
+	for (auto &lookup : final_lookups) {
+		lookups.emplace_back(std::move(lookup));
+	}
+
+	bool allow_default_table_lookup = catalog.empty() && schema.empty();
+
+	return TryLookupEntries(retriever, lookups, lookup_info, if_not_found, allow_default_table_lookup);
+}
+
+
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
                                 const string &schema_name, const string &name) {
 	EntryLookupInfo lookup_info(catalog_type, name);
@@ -1136,6 +1255,38 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 	}
 	return result.entry.get();
 }
+
+vector<optional_ptr<CatalogEntry>> Catalog::GetMultipleEntries(CatalogEntryRetriever &retriever, const string &catalog,
+											 const string &schema, const EntryLookupInfo &lookup_info,
+											 OnEntryNotFound if_not_found) {
+	CatalogEntryLookup result;
+	auto results = TryLookupMultipleEntries(retriever, catalog, schema, lookup_info, if_not_found);
+
+	// Try autoloading extension to resolve lookup
+	if (results.empty()) {
+		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
+											lookup_info.GetEntryName())) {
+			result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);}
+
+		if (result.error.HasError()) {
+			result.error.Throw();
+		}
+
+		if (!result.Found()) {
+			D_ASSERT(if_not_found == OnEntryNotFound::RETURN_NULL);
+			return {};
+		}
+
+		results.push_back(result);
+	}
+
+	vector<optional_ptr<CatalogEntry>> entries;
+	for (auto &entry : results) {
+		entries.push_back(entry.entry);
+	}
+	return entries;
+}
+
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const string &catalog, const string &schema,
                                              const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	CatalogEntryRetriever retriever(context);

@@ -278,6 +278,11 @@ public:
 	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const string &catalog,
 	                                                      const string &schema, const EntryLookupInfo &lookup_info,
 	                                                      OnEntryNotFound if_not_found);
+
+	DUCKDB_API static vector<optional_ptr<CatalogEntry>> GetMultipleEntries(CatalogEntryRetriever &retriever, const string &catalog,
+											 const string &schema, const EntryLookupInfo &lookup_info,
+											 OnEntryNotFound if_not_found);
+
 	DUCKDB_API static CatalogEntry &GetEntry(ClientContext &context, const string &catalog, const string &schema,
 	                                         const EntryLookupInfo &lookup_info);
 
@@ -466,6 +471,12 @@ private:
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
 	                                         const string &schema, const EntryLookupInfo &lookup_info,
 	                                         OnEntryNotFound if_not_found);
+	static vector<CatalogEntryLookup> TryLookupMultipleEntries(CatalogEntryRetriever &retriever, const string &catalog,
+										   const string &schema, const EntryLookupInfo &lookup_info,
+										   OnEntryNotFound if_not_found);
+	static vector<CatalogEntryLookup> TryLookupEntries(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
+					   const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found,
+					   bool allow_default_table_lookup);
 
 	//! Looks for a Catalog with a DefaultTable that matches the lookup
 	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever,

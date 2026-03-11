@@ -199,7 +199,7 @@ FunctionBinderResult FunctionBinder::BindFunctionFromArguments(const string &nam
 		for (auto &arg_type : arguments) {
 			if (arg_type.IsUnknown()) {
 				// We cannot resolve the parameters to a function.
-				throw ParameterNotResolvedException();
+ 				throw ParameterNotResolvedException();
 			}
 		}
 		auto catalog_name = functions.functions.size() > 0 ? functions.functions[0].catalog_name : "";
