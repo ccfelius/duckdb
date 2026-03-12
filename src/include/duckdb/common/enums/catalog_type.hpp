@@ -52,6 +52,7 @@ enum class CatalogType : uint8_t {
 };
 
 DUCKDB_API string CatalogTypeToString(CatalogType type);
+DUCKDB_API bool IsCatalogTypeFunction(CatalogType type);
 CatalogType CatalogTypeFromString(const string &type);
 
 } // namespace duckdb

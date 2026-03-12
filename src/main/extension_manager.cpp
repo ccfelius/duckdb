@@ -30,7 +30,7 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 
 	// we add the extension entry to the catalog
 	if (extension_name != CORE_FUNCTIONS) {
-		CatalogSearchEntry entry(SYSTEM_CATALOG, extension_name);
+		CatalogSearchEntry entry(SYSTEM_CATALOG, extension_name, EXTENSION_PATH);
 		manager.AddSearchPath(entry);
 	}
 

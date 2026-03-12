@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
 
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
@@ -463,6 +464,7 @@ vector<SimilarCatalogEntry> Catalog::SimilarEntriesInSchemas(ClientContext &cont
 
 vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog,
                                              const string &schema) {
+
 	auto &context = retriever.GetContext();
 	vector<CatalogSearchEntry> entries;
 	auto &search_path = retriever.GetSearchPath();
@@ -470,23 +472,23 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 		// no catalog or schema provided - scan the entire search path
 		entries = search_path.Get();
 	} else if (IsInvalidCatalog(catalog)) {
-		auto catalogs = search_path.GetCatalogsForSchema(schema);
-		for (auto &catalog_name : catalogs) {
-			entries.emplace_back(catalog_name, schema);
+		auto catalogs = search_path.GetCatalogEntriesForSchema(schema);
+		for (auto &catalog_entry : catalogs) {
+			entries.emplace_back(catalog_entry.catalog, schema, catalog_entry.type);
 		}
 		if (entries.empty()) {
 			auto &default_entry = search_path.GetDefault();
 			if (!IsInvalidCatalog(default_entry.catalog)) {
-				entries.emplace_back(default_entry.catalog, schema);
+				entries.emplace_back(default_entry.catalog, schema, default_entry.type);
+			} else {
+				// we add the "memory" catalog at last
+				entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema, DEFAULT_DB);
 			}
 		}
-		// a schema and a table name could have the same name
-		// so we always add the "memory" catalog at last
-		entries.emplace_back(DatabaseManager::GetDefaultDatabase(context), schema);
 	} else if (IsInvalidSchema(schema)) {
-		auto schemas = search_path.GetSchemasForCatalog(catalog);
+		auto schemas = search_path.GetSchemaEntriesForCatalog(catalog);
 		for (auto &schema_name : schemas) {
-			entries.emplace_back(catalog, schema_name);
+			entries.emplace_back(catalog, schema_name.schema, schema_name.type);
 		}
 		if (entries.empty()) {
 			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
@@ -987,11 +989,38 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                            const string &schema, const EntryLookupInfo &lookup_info,
                                            OnEntryNotFound if_not_found) {
+
+	if (schema == "tpch") {
+		auto stop = true;
+	}
+
 	auto entries = GetCatalogEntries(retriever, catalog, schema);
+	vector<CatalogSearchEntry> search_entries;
+
+	if (schema == "tpch") {
+		auto stop = true;
+	}
+
+	// check whether we are looking for functions
+	if (!IsCatalogTypeFunction(lookup_info.GetCatalogType())) {
+		for (auto &entry : entries) {
+			// ignore extension paths if we are not looking for any functions
+			if (entry.type == EXTENSION_PATH) {
+				continue;
+			}
+			search_entries.emplace_back(entry.catalog, entry.schema, entry.type);
+		}
+		if (search_entries.empty()) {
+			search_entries.emplace_back(DatabaseManager::GetDefaultDatabase(retriever.GetContext()), schema, DEFAULT_DB);
+		}
+	} else {
+		search_entries = entries;
+	}
+
 	vector<CatalogLookup> lookups;
 	vector<CatalogLookup> final_lookups;
 	lookups.reserve(entries.size());
-	for (auto &entry : entries) {
+	for (auto &entry : search_entries) {
 		optional_ptr<Catalog> catalog_entry;
 		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 			catalog_entry = Catalog::GetCatalogEntry(retriever, entry.catalog);
@@ -1235,9 +1264,9 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
-		                                    lookup_info.GetEntryName())) {
+											lookup_info.GetEntryName())) {
 			result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
-		}
+											}
 	}
 
 	if (result.error.HasError()) {

@@ -13,8 +13,8 @@
 
 namespace duckdb {
 
-CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p)
-    : catalog(std::move(catalog_p)), schema(std::move(schema_p)) {
+CatalogSearchEntry::CatalogSearchEntry(string catalog_p, string schema_p, CatalogSearchEntryType type_p)
+    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), type(type_p) {
 }
 
 string CatalogSearchEntry::ToString() const {
@@ -315,11 +315,36 @@ vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) con
 	return catalogs;
 }
 
+vector<CatalogSearchEntry> CatalogSearchPath::GetCatalogEntriesForSchema(const string &schema) const {
+	vector<CatalogSearchEntry> catalogs;
+	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
+		catalogs.emplace_back(SYSTEM_CATALOG, schema, MAIN_PATH);
+	} else {
+		for (auto &path : paths) {
+			// also add if schema is main
+			if (StringUtil::CIEquals(path.schema, schema) || path.schema.empty()) {
+				catalogs.push_back(path);
+			}
+		}
+	}
+	return catalogs;
+}
+
 vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) const {
 	vector<string> schemas;
 	for (auto &path : paths) {
 		if (!path.schema.empty() && StringUtil::CIEquals(path.catalog, catalog)) {
 			schemas.push_back(path.schema);
+		}
+	}
+	return schemas;
+}
+
+vector<CatalogSearchEntry> CatalogSearchPath::GetSchemaEntriesForCatalog(const string &catalog) const {
+	vector<CatalogSearchEntry> schemas;
+	for (auto &path : paths) {
+		if (!path.schema.empty() && StringUtil::CIEquals(path.catalog, catalog)) {
+			schemas.emplace_back(catalog, path.schema, path.type);
 		}
 	}
 	return schemas;
@@ -345,20 +370,20 @@ const CatalogSearchEntry &CatalogSearchPath::GetDefault() const {
 void CatalogSearchPath::SetPathsInternal() {
 	vector<CatalogSearchEntry> new_paths;
 	new_paths.reserve(set_paths.size() + extension_paths.size() + 4);
-	new_paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA);
+	new_paths.emplace_back(TEMP_CATALOG, DEFAULT_SCHEMA, MAIN_PATH);
 
 	for (auto &path : set_paths) {
-		new_paths.push_back(path);
+		new_paths.emplace_back(path.catalog, path.schema, SET_PATH);
 	}
 
 	auto new_default_index = new_paths.size();
 
-	new_paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
-	new_paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
-	new_paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+	new_paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA, MAIN_PATH);
+	new_paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA, MAIN_PATH);
+	new_paths.emplace_back(SYSTEM_CATALOG, "pg_catalog", MAIN_PATH);
 
 	for (auto &path : extension_paths) {
-		new_paths.push_back(path);
+		new_paths.emplace_back(path.catalog, path.schema, EXTENSION_PATH);
 	}
 
 	this->paths = std::move(new_paths);

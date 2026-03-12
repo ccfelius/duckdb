@@ -18,11 +18,17 @@ namespace duckdb {
 
 class ClientContext;
 
+enum CatalogSearchEntryType {
+	MAIN_PATH, SET_PATH, EXTENSION_PATH, DEFAULT_DB
+};
+
 struct CatalogSearchEntry {
-	CatalogSearchEntry(string catalog, string schema);
+	CatalogSearchEntry(string catalog, string schema, CatalogSearchEntryType type = MAIN_PATH);
 
 	string catalog;
 	string schema;
+	// something like type
+	CatalogSearchEntryType type;
 
 public:
 	string ToString() const;
@@ -63,7 +69,9 @@ public:
 	DUCKDB_API string GetDefaultCatalog(const string &schema) const;
 
 	DUCKDB_API vector<string> GetSchemasForCatalog(const string &catalog) const;
+	DUCKDB_API vector<CatalogSearchEntry> GetSchemaEntriesForCatalog(const string &catalog) const;
 	DUCKDB_API vector<string> GetCatalogsForSchema(const string &schema) const;
+	DUCKDB_API vector<CatalogSearchEntry> GetCatalogEntriesForSchema(const string &schema) const;
 
 	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const string &catalog_name,
 	                                   const string &schema_name) const;

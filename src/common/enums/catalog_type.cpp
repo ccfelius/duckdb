@@ -114,6 +114,22 @@ CatalogType CatalogTypeFromString(const string &type) {
 	throw InternalException("Unrecognized CatalogType '%s'", type);
 }
 
+bool IsCatalogTypeFunction(CatalogType type) {
+	switch (type) {
+	case CatalogType::SCALAR_FUNCTION_ENTRY:
+	case CatalogType::TABLE_FUNCTION_ENTRY:
+	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
+	case CatalogType::PRAGMA_FUNCTION_ENTRY:
+	case CatalogType::COPY_FUNCTION_ENTRY:
+	case CatalogType::MACRO_ENTRY:
+	case CatalogType::TABLE_MACRO_ENTRY:
+	case CatalogType::SECRET_FUNCTION_ENTRY:
+		return true;
+	default:
+		return false;
+	}
+}
+
 // LCOV_EXCL_STOP
 
 } // namespace duckdb
