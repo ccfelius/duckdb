@@ -347,131 +347,73 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 	}
 }
 
+static vector<ScalarBindingCandidate>
+SelectCandidateFunctions(FunctionBinder &function_binder, vector<optional_ptr<ScalarFunctionCatalogEntry>> &functions,
+                         vector<unique_ptr<Expression>> &children, ErrorData &error) {
+	auto min_cost = NumericLimits<int64_t>::Maximum();
+	vector<ScalarBindingCandidate> candidates;
+	for (auto &function : functions) {
+		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
+		auto best = function_binder.BindFunction(function->name, function->functions, children, error);
+		if (!best.index.IsValid()) {
+			continue;
+		}
+		auto current_cost = best.cost;
+		auto bound_function = make_uniq<ScalarFunction>(function->functions.GetFunctionByOffset(best.index.GetIndex()));
+		if (current_cost < min_cost) {
+			min_cost = current_cost;
+			candidates.clear();
+			candidates.push_back(ScalarBindingCandidate {best, std::move(bound_function),
+			                                             make_uniq<ScalarFunctionSet>(function->functions)});
+		} else if (current_cost == min_cost) {
+			candidates.push_back(ScalarBindingCandidate {best, std::move(bound_function),
+			                                             make_uniq<ScalarFunctionSet>(function->functions)});
+		}
+	}
+	return candidates;
+}
+
 unique_ptr<ScalarFunction>
 FunctionBinder::BindScalarFunctionMultiple(vector<optional_ptr<ScalarFunctionCatalogEntry>> &functions,
                                            vector<unique_ptr<Expression>> &children, ErrorData &error) {
-	auto min_cost = NumericLimits<int64_t>::Maximum();
-	vector<ScalarBindingCandidate> candidate_functions;
-	for (auto &function : functions) {
-		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
-
-		if (!best_function_current_scheme.index.IsValid()) {
-			continue;
-		}
-
-		auto current_cost = best_function_current_scheme.cost;
-		if (current_cost < min_cost) {
-			// Found a better match
-			min_cost = current_cost;
-			// Clear previous candidates
-			candidate_functions.clear();
-			auto bound_function = make_uniq<ScalarFunction>(
-			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
-			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
-			                                                      std::move(bound_function),
-			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
-
-		} else if (current_cost == min_cost) {
-			// Found a match with equal cost
-			auto bound_function = make_uniq<ScalarFunction>(
-			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
-			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
-			                                                      std::move(bound_function),
-			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
-		}
-	}
-
-	if (candidate_functions.empty()) {
-		// no candidate functions found
+	auto candidates = SelectCandidateFunctions(*this, functions, children, error);
+	if (candidates.empty()) {
 		return nullptr;
 	}
-
-	if (candidate_functions.size() == 1) {
-		//  we found a single candidate function
-		return std::move(candidate_functions[0].bound_function);
+	if (candidates.size() == 1) {
+		return std::move(candidates[0].bound_function);
 	}
-
-	//! multiple candidate functions are found
-
-	if (candidate_functions.back().result.schema == ICU_EXTENSION) {
-		// ICU functions are registered both in main and icu schema
-		// So we make an exception
-		return std::move(candidate_functions.back().bound_function);
+	if (candidates.back().result.schema == ICU_EXTENSION) {
+		// ICU functions are registered both in main and icu schema, so we make an exception
+		return std::move(candidates.back().bound_function);
 	}
-
-	// we return an error
 	auto types = GetLogicalTypesFromExpressions(children);
-	auto exception = MultipleCandidateException(functions[0]->name, candidate_functions, types, error);
-
+	MultipleCandidateException(functions[0]->name, candidates, types, error);
 	if (error.HasError()) {
 		error.Throw();
 	}
-
-	// keep CI happy
-	return std::move(candidate_functions.back().bound_function);
+	return std::move(candidates.back().bound_function); // keep CI happy
 }
+
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(const string &name,
                                                                              vector<unique_ptr<Expression>> &children,
                                                                              ErrorData &error) {
-	auto min_cost = NumericLimits<int64_t>::Maximum();
 	// INVALID_SCHEMA triggers a loop through all available schemas
 	auto functions = Catalog::GetSystemCatalog(context).GetEntries<ScalarFunctionCatalogEntry>(
 	    context, INVALID_SCHEMA, name, OnEntryNotFound::RETURN_NULL);
-
-	vector<ScalarBindingCandidate> candidate_functions;
-	for (auto &function : functions) {
-		D_ASSERT(function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto best_function_current_scheme = BindFunction(function->name, function->functions, children, error);
-
-		if (!best_function_current_scheme.index.IsValid()) {
-			continue;
-		}
-
-		auto current_cost = best_function_current_scheme.cost;
-		if (current_cost < min_cost) {
-			// Found a better match
-			min_cost = current_cost;
-			// Clear previous candidates
-			candidate_functions.clear();
-			auto bound_function = make_uniq<ScalarFunction>(
-			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
-			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
-			                                                      std::move(bound_function),
-			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
-
-		} else if (current_cost == min_cost) {
-			// Found a match with equal cost
-			auto bound_function = make_uniq<ScalarFunction>(
-			    function->functions.GetFunctionByOffset(best_function_current_scheme.index.GetIndex()));
-			candidate_functions.push_back(ScalarBindingCandidate {best_function_current_scheme,
-			                                                      std::move(bound_function),
-			                                                      make_uniq<ScalarFunctionSet>(function->functions)});
-		}
-	}
-
-	if (candidate_functions.empty()) {
-		// no candidate functions found
+	auto candidates = SelectCandidateFunctions(*this, functions, children, error);
+	if (candidates.empty()) {
 		return nullptr;
 	}
-
-	if (candidate_functions.size() == 1) {
-		//  we found a single candidate function
-		return std::move(candidate_functions[0].bound_function);
+	if (candidates.size() == 1) {
+		return std::move(candidates[0].bound_function);
 	}
-
-	//! multiple candidate functions are found
-	// we return an error
 	auto types = GetLogicalTypesFromExpressions(children);
-	auto exception = MultipleCandidateException(name, candidate_functions, types, error);
-
+	MultipleCandidateException(name, candidates, types, error);
 	if (error.HasError()) {
 		error.Throw();
 	}
-
-	// we return the function related to the latest loaded extension
-	// keep CI happy
-	return std::move(candidate_functions.back().bound_function);
+	return std::move(candidates.back().bound_function); // keep CI happy
 }
 
 unique_ptr<ScalarFunction> FunctionBinder::BindScalarFunctionMultipleSchemas(ScalarFunctionCatalogEntry &func,
