@@ -121,7 +121,6 @@ TEST_CASE("Test overlapping extension functions", "[extension_schema]") {
 	SyncExtensions(con);
 
 	auto result = con.Query("SELECT simple('test')");
-	std::cout << result->ToString() << std::endl;
 	REQUIRE_FALSE(result->HasError());
 
 	// add the second extension
@@ -129,11 +128,34 @@ TEST_CASE("Test overlapping extension functions", "[extension_schema]") {
 	second_extension_duckdb_cpp_init(second_loader);
 	SyncExtensions(con);
 
-	// we now get the output of the last loaded extension
-	auto result2 = con.Query("SELECT simple('test')");
-	std::cout << result2->ToString() << std::endl;
-	REQUIRE(result2->HasError());
+	// this throws an error, because we don't know which function to elect
+	auto error_result = con.Query("SELECT simple('test')");
+	REQUIRE(error_result->HasError());
 
-	auto result3 = con.Query("SELECT first_extension.simple('test')");
-	std::cout << result3->ToString() << std::endl;
+	auto result_2 = con.Query("SELECT first_extension.simple('test')");
+	REQUIRE_FALSE(result_2->HasError());
+}
+
+TEST_CASE("Test overlapping schema and extension names", "[extension_schema]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	// first simulate the creation of extension schemas
+	CreateExtensionSchema("first_extension", *db.instance);
+	CreateExtensionSchema("second_extension", *db.instance);
+
+	// Create a loader pointing to our database instance
+	ExtensionLoader first_loader(*db.instance, "first_extension");
+	ExtensionLoader second_loader(*db.instance, "second_extension");
+	first_extension_duckdb_cpp_init(first_loader);
+	second_extension_duckdb_cpp_init(second_loader);
+
+	// sync extensions
+	SyncExtensions(con);
+
+	con.Query("SET schema = 'first_extension'");
+	auto search_path = con.Query("SELECT CURRENT_SETTING('search_path')");
+	std::cout << search_path->GetValue(0, 0).ToString() << std::endl;
+
+	// Now 'simple' should resolve to first_extension without explicit qualification
+	// auto result2 = con.Query("SELECT simple('test')");
 }
