@@ -988,16 +988,8 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                            const string &schema, const EntryLookupInfo &lookup_info,
                                            OnEntryNotFound if_not_found) {
-	if (schema == "tpch") {
-		auto stop = true;
-	}
-
 	auto entries = GetCatalogEntries(retriever, catalog, schema);
 	vector<CatalogSearchEntry> search_entries;
-
-	if (schema == "tpch") {
-		auto stop = true;
-	}
 
 	// check whether we are looking for functions
 	if (!IsCatalogTypeFunction(lookup_info.GetCatalogType())) {
