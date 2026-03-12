@@ -18,9 +18,7 @@ namespace duckdb {
 
 class ClientContext;
 
-enum CatalogSearchEntryType {
-	MAIN_PATH, SET_PATH, EXTENSION_PATH, DEFAULT_DB
-};
+enum CatalogSearchEntryType { MAIN_PATH, SET_PATH, EXTENSION_PATH, DEFAULT_DB };
 
 struct CatalogSearchEntry {
 	CatalogSearchEntry(string catalog, string schema, CatalogSearchEntryType type = MAIN_PATH);

@@ -86,6 +86,14 @@ CatalogEntryRetriever::ReturnAndCallback(vector<optional_ptr<CatalogEntry>> resu
 		// Call the callback if it's set
 		mp_callback(results);
 	}
+	if (callback) {
+		// Also fire the single-entry callback for each result (e.g., for dependency tracking)
+		for (auto &result : results) {
+			if (result) {
+				callback(*result);
+			}
+		}
+	}
 	return results;
 }
 

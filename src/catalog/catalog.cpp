@@ -464,7 +464,6 @@ vector<SimilarCatalogEntry> Catalog::SimilarEntriesInSchemas(ClientContext &cont
 
 vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, const string &catalog,
                                              const string &schema) {
-
 	auto &context = retriever.GetContext();
 	vector<CatalogSearchEntry> entries;
 	auto &search_path = retriever.GetSearchPath();
@@ -989,7 +988,6 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
                                            const string &schema, const EntryLookupInfo &lookup_info,
                                            OnEntryNotFound if_not_found) {
-
 	if (schema == "tpch") {
 		auto stop = true;
 	}
@@ -1011,7 +1009,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 			search_entries.emplace_back(entry.catalog, entry.schema, entry.type);
 		}
 		if (search_entries.empty()) {
-			search_entries.emplace_back(DatabaseManager::GetDefaultDatabase(retriever.GetContext()), schema, DEFAULT_DB);
+			search_entries.emplace_back(DatabaseManager::GetDefaultDatabase(retriever.GetContext()), schema,
+			                            DEFAULT_DB);
 		}
 	} else {
 		search_entries = entries;
@@ -1264,9 +1263,9 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
-											lookup_info.GetEntryName())) {
+		                                    lookup_info.GetEntryName())) {
 			result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
-											}
+		}
 	}
 
 	if (result.error.HasError()) {
