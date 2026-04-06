@@ -1,3 +1,4 @@
+#include "duckdb/function/table/orchestrate.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "duckdb/function/table/summary.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -429,6 +430,7 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	ReadBlobFunction::RegisterFunction(*this);
 	ReadTextFunction::RegisterFunction(*this);
 	QueryTableFunction::RegisterFunction(*this);
+	OrchestrateTableFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb

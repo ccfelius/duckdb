@@ -73,7 +73,9 @@ public:
 	bool autoinstall_is_checked;
 
 	// If these error msgs occur in a test, the test will abort but still count as passed
-	unordered_set<string> ignore_error_messages = {"HTTP", "Unable to connect"};
+	// "HTTP", "Unable to connect"
+	unordered_set<string> ignore_error_message = {};
+
 	// If these error msgs occur a statement that is expected to fail, the test will fail
 	unordered_set<string> always_fail_error_messages = {"differs from original result!", "INTERNAL"};
 

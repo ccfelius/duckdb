@@ -755,9 +755,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		DeleteDatabase(dbpath);
 	}
 
-	ignore_error_messages.clear();
+	ignore_error_message.clear();
 	for (auto ignore : test_config.ErrorMessagesToBeSkipped()) {
-		ignore_error_messages.insert(ignore);
+		ignore_error_message.insert(ignore);
 	}
 
 	// initialize the database with the default dbpath
@@ -975,7 +975,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			if (token.parameters[0] == "ignore_error_messages" || token.parameters[0] == "always_fail_error_messages") {
 				unordered_set<string> *string_set;
 				if (token.parameters[0] == "ignore_error_messages") {
-					string_set = &ignore_error_messages;
+					string_set = &ignore_error_message;
 				} else {
 					string_set = &always_fail_error_messages;
 				}

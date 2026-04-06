@@ -1,6 +1,9 @@
 add_subdirectory(system)
 add_subdirectory(version)
 add_subdirectory(arrow)
+
+include_directories(../../../third_party/httplib)
+
 add_library_unity(
   duckdb_func_table
   OBJECT
@@ -9,6 +12,7 @@ add_library_unity(
   checkpoint.cpp
   direct_file_reader.cpp
   glob.cpp
+  orchestrate.cpp
   query_function.cpp
   range.cpp
   repeat.cpp

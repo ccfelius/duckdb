@@ -1,0 +1,9 @@
+# name: test/sql/poc/test_go_server.test
+# description: testing go server poc
+# group: [poc]
+
+require httpfs
+
+# select the location of where to save the http logging output (instead of printing to stdout)
+statement ok
+FROM orchestrate("client_id", "SELECT * FROM tbl", "http://localhost:8080/worker");
