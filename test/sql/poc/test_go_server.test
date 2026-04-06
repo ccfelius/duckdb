@@ -4,6 +4,8 @@
 
 require httpfs
 
-# select the location of where to save the http logging output (instead of printing to stdout)
+# hardcoded the worker address
+# orchestrate sends an http request
+
 statement ok
 FROM orchestrate("client_id", "SELECT * FROM tbl", "http://localhost:8080/worker");

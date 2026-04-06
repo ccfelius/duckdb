@@ -1,0 +1,20 @@
+# name: test/sql/copy/parquet/encryption/parquet_no_enc_alg.test
+# description: Test Parquet encryption
+# group: [encryption]
+
+require parquet
+
+# parquet keys are not persisted across restarts
+require noforcestorage
+
+# # writing encrypted parquet requires httpfs to be loaded
+# require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+# AES key must have one of the three specified lengths or be valid Base64
+statement ok
+from read_parquet('20260225_bf708f.parquet', filename=my_cool_f~lename);
+
+

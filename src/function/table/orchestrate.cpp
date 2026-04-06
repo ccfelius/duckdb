@@ -18,19 +18,19 @@
 
 namespace duckdb {
 
+// this can be omitted, just the format of worker address needs to be changed
 static string FetchWorkerAddress(const string &orchestrator_address, const string &client_id) {
 	auto scheme_end = orchestrator_address.find("://");
 
 	auto host_start = (scheme_end != string::npos) ? scheme_end + 3 : 0;
-	auto slash_pos  = orchestrator_address.find('/', host_start);
+	auto slash_pos = orchestrator_address.find('/', host_start);
 
-	string proto_host_port = (slash_pos != string::npos)
-	                             ? orchestrator_address.substr(0, slash_pos)
-	                             : orchestrator_address;
+	string proto_host_port =
+	    (slash_pos != string::npos) ? orchestrator_address.substr(0, slash_pos) : orchestrator_address;
 
-	string endpoint_path   = (slash_pos != string::npos && slash_pos + 1 < orchestrator_address.size())
-	                             ? orchestrator_address.substr(slash_pos)
-	                             : "/worker";
+	string endpoint_path = (slash_pos != string::npos && slash_pos + 1 < orchestrator_address.size())
+	                           ? orchestrator_address.substr(slash_pos)
+	                           : "/worker";
 
 	duckdb_httplib::Client client(proto_host_port);
 	client.set_connection_timeout(10);
@@ -59,23 +59,19 @@ static unique_ptr<TableRef> OrchestrateBind(ClientContext &context, TableFunctio
 		throw BinderException("orchestrate(): arguments cannot be NULL");
 	}
 
-	auto client_id           = input.inputs[0].GetValue<string>();
-	auto sql_query           = input.inputs[1].GetValue<string>();
+	auto client_id = input.inputs[0].GetValue<string>();
+	auto sql_query = input.inputs[1].GetValue<string>();
 	auto orchestrator_address = input.inputs[2].GetValue<string>();
 
-	// Contact the Go orchestrator to resolve the worker address.
 	auto worker_address = FetchWorkerAddress(orchestrator_address, client_id);
 
-	// Build: SELECT * FROM rpc_call('<worker_address>', '<sql_query>')
-	auto rewritten = "SELECT * FROM rpc_call(" +
-	                 KeywordHelper::WriteQuoted(worker_address, '\'') + ", " +
+	auto rewritten = "SELECT * FROM rpc_call(" + KeywordHelper::WriteQuoted(worker_address, '\'') + ", " +
 	                 KeywordHelper::WriteQuoted(sql_query, '\'') + ")";
 
 	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(rewritten);
 
-	if (parser.statements.size() != 1 ||
-	    parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw InternalException("orchestrate(): failed to construct rpc_call query");
 	}
 
@@ -88,9 +84,8 @@ static unique_ptr<TableRef> OrchestrateBind(ClientContext &context, TableFunctio
 //===--------------------------------------------------------------------===//
 
 void OrchestrateTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction func("orchestrate",
-	                   {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
-	                   nullptr, nullptr);
+	TableFunction func("orchestrate", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, nullptr,
+	                   nullptr);
 	func.bind_replace = OrchestrateBind;
 	set.AddFunction(func);
 }
