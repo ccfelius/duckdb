@@ -36,7 +36,7 @@ static string FetchWorkerAddress(const string &orchestrator_address, const strin
 	client.set_connection_timeout(10);
 	client.set_read_timeout(30);
 
-	// POST client_id in the request body; Go handler reads it from the body.
+	//
 	auto res = client.Post(endpoint_path, client_id, "text/plain");
 
 	if (!res) {
@@ -65,6 +65,8 @@ static unique_ptr<TableRef> OrchestrateBind(ClientContext &context, TableFunctio
 
 	auto worker_address = FetchWorkerAddress(orchestrator_address, client_id);
 
+	// we rewrite the string here
+	// now it's hardcoded
 	auto rewritten = "SELECT * FROM rpc_call(" + KeywordHelper::WriteQuoted(worker_address, '\'') + ", " +
 	                 KeywordHelper::WriteQuoted(sql_query, '\'') + ")";
 

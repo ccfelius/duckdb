@@ -4,8 +4,70 @@
 
 require httpfs
 
+require rpc
+
+require tpch
+
 # hardcoded the worker address
 # orchestrate sends an http request
 
-statement ok
+# table loaded on RPC extension side:
+
+# CREATE TABLE tbl (
+#     val INTEGER
+# );
+# INSERT INTO tbl (val) VALUES (1), (2);
+# SELECT * FROM tbl;
+
+query I
 FROM orchestrate("client_id", "SELECT * FROM tbl", "http://localhost:8080/worker");
+----
+1
+2
+
+# tbl_2 does not exist
+statement error
+FROM orchestrate("client_id", "SELECT * FROM tbl_2", "http://localhost:8080/worker");
+----
+Table with name
+
+# we can insert tpch data ourself
+# statement ok
+# FROM rpc_call("remote", "CALL dbgen(sf=0.1)");
+
+# tpch sf1 is loaded
+query I
+FROM orchestrate("client_id", "show tables", "http://localhost:8080/worker");
+----
+customer
+lineitem
+nation
+orders
+part
+partsupp
+region
+supplier
+tbl
+
+query IIIIIIIIII
+FROM orchestrate("client_id", "SELECT
+                                   l_returnflag,
+                                   l_linestatus,
+                                   sum(l_quantity) AS sum_qty,
+                                   sum(l_extendedprice) AS sum_base_price,
+                                   sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+                                   sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+                                   avg(l_quantity) AS avg_qty,
+                                   avg(l_extendedprice) AS avg_price,
+                                   avg(l_discount) AS avg_disc,
+                                   count(*) AS count_order
+                               FROM lineitem
+                               WHERE l_shipdate <= DATE '1998-12-01' - INTERVAL '90' DAY
+                               GROUP BY l_returnflag, l_linestatus
+                               ORDER BY l_returnflag, l_linestatus;", "http://localhost:8080/worker");
+----
+A	F	3774200.00	5320753880.69	5054096266.6828	5256751331.449234	25.537587116854997	36002.12382901414	0.05014459706340077	147790
+N	F	95257.00	133737795.84	127132372.6512	132286291.229445	25.30066401062417	35521.32691633466	0.04939442231075697	3765
+N	O	7459297.00	10512270008.90	9986238338.3847	10385578376.585467	25.545537671232875	36000.9246880137	0.05009595890410959	292000
+R	F	3785523.00	5337950526.47	5071818532.9420	5274405503.049367	25.5259438574251	35994.029214030925	0.04998927856184382	148301
+
