@@ -41,6 +41,9 @@ public:
 	//! Set the description of the extension
 	DUCKDB_API void SetDescription(const string &description);
 
+	//! Create separate extension schema
+	DUCKDB_API void CreateExtensionSchema(const string &schema_name);
+
 public:
 	//! Register a new scalar function - merge overloads if the function already exists
 	DUCKDB_API void RegisterFunction(ScalarFunction function);
