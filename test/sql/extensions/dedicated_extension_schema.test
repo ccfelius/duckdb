@@ -4,12 +4,32 @@
 
 require autocomplete
 
-require icu
+require skip_reload
 
-# test this with the peg parser
+require allow_unsigned_extensions
+
 statement ok
 call enable_peg_parser()
 
-# this is not logic, but this extension is included
 statement ok
-LOAD icu AS eyecu
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo
+
+statement ok
+call disable_peg_parser()
+
+# Functions registered via loader.RegisterFunction appear in both the default and alias schema
+query I
+SELECT bounded_max(1::BOUNDED(10))
+----
+10
+
+query I
+SELECT demo.bounded_max(1::BOUNDED(10))
+----
+10
+
+# The alias schema exists in the catalog
+query I
+SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'demo'
+----
+demo

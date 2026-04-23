@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/helper/physical_load.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_manager.hpp"
 
 namespace duckdb {
 
@@ -39,7 +40,8 @@ SourceResultType PhysicalLoad::GetDataInternal(ExecutionContext &context, DataCh
 		}
 
 	} else {
-		ExtensionHelper::LoadExternalExtension(context.client, info->filename);
+		ExtensionLoadOptions options {info->filename, info->alias};
+		ExtensionHelper::LoadExternalExtension(context.client, options);
 	}
 
 	return SourceResultType::FINISHED;

@@ -10,6 +10,7 @@
 #include "duckdb/main/extension_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "mbedtls_wrapper.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
@@ -606,14 +607,14 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options) {
 	auto &manager = ExtensionManager::Get(db);
-	auto info = manager.BeginLoad(extension);
+	auto info = manager.BeginLoad(options.name, options.alias);
 	if (!info) {
 		return;
 	}
 	try {
-		LoadExternalExtensionInternal(db, fs, extension, *info);
+		LoadExternalExtensionInternal(db, fs, options.name, *info);
 	} catch (std::exception &ex) {
 		ErrorData error(ex);
 		info->LoadFail(error);
@@ -699,8 +700,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 #endif
 }
 
-void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension);
+void ExtensionHelper::LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options) {
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), options);
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

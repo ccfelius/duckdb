@@ -21,7 +21,12 @@
 namespace duckdb {
 
 ExtensionLoader::ExtensionLoader(ExtensionActiveLoad &load_info)
-    : db(load_info.db), extension_name(load_info.extension_name), extension_info(load_info.info) {
+    : db(load_info.db), extension_name(load_info.extension_name), extension_alias(load_info.alias),
+      extension_info(load_info.info) {
+}
+
+const string &ExtensionLoader::GetAlias() const {
+	return extension_alias;
 }
 
 ExtensionLoader::ExtensionLoader(DatabaseInstance &db, const string &name) : db(db), extension_name(name) {
@@ -50,15 +55,46 @@ void ExtensionLoader::RegisterFunction(ScalarFunction function) {
 	RegisterFunction(std::move(set));
 }
 
+void ExtensionLoader::RegisterFunction(ScalarFunction function, const string &extension_alias) {
+	ScalarFunctionSet set(function.name);
+	set.AddFunction(std::move(function));
+	RegisterFunction(std::move(set), extension_alias);
+}
+
 void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
+	if (!extension_alias.empty()) {
+		RegisterFunction(std::move(function), extension_alias);
+		return;
+	}
 	CreateScalarFunctionInfo info(std::move(function));
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	RegisterFunction(std::move(info));
 }
 
+void ExtensionLoader::RegisterFunction(ScalarFunctionSet function, const string &extension_alias) {
+	CreateScalarFunctionInfo info(std::move(function));
+	info.on_conflict = OnCreateConflict ::ALTER_ON_CONFLICT;
+	// make a copy of info
+	auto main_schema_info = info;
+	// TODO; simplify: function is now registered twice
+	RegisterFunction(std::move(main_schema_info));
+	if (!extension_alias.empty() && extension_alias != DEFAULT_SCHEMA) {
+		RegisterFunction(std::move(info), extension_alias);
+	}
+}
+
 void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function) {
 	D_ASSERT(!function.functions.name.empty());
 	function.extension_name = extension_name;
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	system_catalog.CreateFunction(data, function);
+}
+
+void ExtensionLoader::RegisterFunction(CreateScalarFunctionInfo function, const string &extension_alias) {
+	D_ASSERT(!function.functions.name.empty());
+	function.extension_name = extension_name;
+	function.schema = extension_alias;
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, function);
@@ -118,6 +154,10 @@ void ExtensionLoader::RegisterFunction(TableFunction function) {
 
 void ExtensionLoader::RegisterFunction(TableFunctionSet function) {
 	D_ASSERT(!function.name.empty());
+	if (!extension_alias.empty()) {
+		RegisterFunction(std::move(function), extension_alias);
+		return;
+	}
 	CreateTableFunctionInfo info(std::move(function));
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	RegisterFunction(std::move(info));
@@ -129,6 +169,20 @@ void ExtensionLoader::RegisterFunction(CreateTableFunctionInfo info) {
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	system_catalog.CreateFunction(data, info);
+}
+
+void ExtensionLoader::RegisterFunction(TableFunctionSet function, const string &alias) {
+	D_ASSERT(!function.name.empty());
+	CreateTableFunctionInfo main_info(function);
+	main_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	RegisterFunction(std::move(main_info));
+	CreateTableFunctionInfo alias_info(std::move(function));
+	alias_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	alias_info.schema = alias;
+	alias_info.extension_name = extension_name;
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	system_catalog.CreateFunction(data, alias_info);
 }
 
 void ExtensionLoader::RegisterFunction(PragmaFunction function) {

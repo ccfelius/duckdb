@@ -77,6 +77,12 @@ struct ExtensionUpdateResult {
 	string installed_version;
 };
 
+struct ExtensionLoadOptions {
+	string name;
+	//! Optional alias from LOAD extension AS alias
+	string alias = "";
+};
+
 struct ExtensionInstallOptions {
 	//! Install from a different repository that the default one
 	optional_ptr<ExtensionRepository> repository;
@@ -103,8 +109,8 @@ public:
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
 	                                                         const string &extension, ExtensionInstallOptions &options);
 	//! Load an extension
-	static void LoadExternalExtension(ClientContext &context, const string &extension);
-	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
+	static void LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options);
+	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const ExtensionLoadOptions &options);
 
 	//! Autoload an extension (depending on config, potentially a nop. Throws when installation fails)
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);

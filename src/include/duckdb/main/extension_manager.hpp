@@ -32,10 +32,11 @@ public:
 	unique_lock<mutex> load_lock;
 	ExtensionInfo &info;
 	string extension_name;
+	string alias;
 
 public:
-	void FinishLoad(ExtensionInstallInfo &install_info);
-	void LoadFail(const ErrorData &error);
+	void FinishLoad(ExtensionInstallInfo &install_info) const;
+	void LoadFail(const ErrorData &error) const;
 };
 
 class ExtensionManager {
@@ -45,7 +46,8 @@ public:
 	DUCKDB_API bool ExtensionIsLoaded(const string &name);
 	DUCKDB_API vector<string> GetExtensions();
 	DUCKDB_API optional_ptr<ExtensionInfo> GetExtensionInfo(const string &name);
-	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const string &extension);
+	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const string &extension, const string &alias = "");
+	DUCKDB_API void CreateExtensionSchema(const string &extension_schema) const;
 
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);

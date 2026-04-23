@@ -37,6 +37,9 @@ public:
 	//! Returns the DatabaseInstance associated with this extension loader
 	DUCKDB_API DatabaseInstance &GetDatabaseInstance();
 
+	//! Returns the alias this extension was loaded with (empty if no AS clause was used)
+	DUCKDB_API const string &GetAlias() const;
+
 public:
 	//! Set the description of the extension
 	DUCKDB_API void SetDescription(const string &description);
@@ -44,8 +47,11 @@ public:
 public:
 	//! Register a new scalar function - merge overloads if the function already exists
 	DUCKDB_API void RegisterFunction(ScalarFunction function);
+	DUCKDB_API void RegisterFunction(ScalarFunction function, const string &extension_alias);
 	DUCKDB_API void RegisterFunction(ScalarFunctionSet function);
+	DUCKDB_API void RegisterFunction(ScalarFunctionSet function, const string &extension_alias);
 	DUCKDB_API void RegisterFunction(CreateScalarFunctionInfo info);
+	DUCKDB_API void RegisterFunction(CreateScalarFunctionInfo info, const string &extension_alias);
 
 	//! Register a new aggregate function - merge overloads if the function already exists
 	DUCKDB_API void RegisterFunction(AggregateFunction function);
@@ -60,6 +66,7 @@ public:
 	//! Register a new table function - merge overloads if the function already exists
 	DUCKDB_API void RegisterFunction(TableFunction function);
 	DUCKDB_API void RegisterFunction(TableFunctionSet function);
+	DUCKDB_API void RegisterFunction(TableFunctionSet function, const string &alias);
 	DUCKDB_API void RegisterFunction(CreateTableFunctionInfo info);
 
 	//! Register a new pragma function - throw an exception if the function already exists
@@ -112,6 +119,7 @@ private:
 private:
 	DatabaseInstance &db;
 	string extension_name;
+	string extension_alias;
 	string extension_description;
 	optional_ptr<ExtensionInfo> extension_info;
 };

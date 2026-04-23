@@ -3,6 +3,7 @@
 #include "duckdb/planner/extension_callback.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 
 namespace duckdb {
 
@@ -13,7 +14,7 @@ ExtensionActiveLoad::ExtensionActiveLoad(DatabaseInstance &db, ExtensionInfo &in
     : db(db), load_lock(info.lock), info(info), extension_name(std::move(extension_name_p)) {
 }
 
-void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
+void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) const {
 	info.is_loaded = true;
 	info.install_info = make_uniq<ExtensionInstallInfo>(install_info);
 
@@ -23,7 +24,7 @@ void ExtensionActiveLoad::FinishLoad(ExtensionInstallInfo &install_info) {
 	DUCKDB_LOG_INFO(db, extension_name);
 }
 
-void ExtensionActiveLoad::LoadFail(const ErrorData &error) {
+void ExtensionActiveLoad::LoadFail(const ErrorData &error) const {
 	for (auto &callback : ExtensionCallback::Iterate(db)) {
 		callback->OnExtensionLoadFail(db, extension_name, error);
 	}
@@ -62,6 +63,17 @@ vector<string> ExtensionManager::GetExtensions() {
 	return result;
 }
 
+void ExtensionManager::CreateExtensionSchema(const string &extension_alias) const {
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+
+	CreateSchemaInfo info;
+	info.schema = extension_alias;
+	info.internal = true;
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	system_catalog.CreateSchema(data, info);
+}
+
 bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	auto info = GetExtensionInfo(name);
 	if (!info) {
@@ -70,7 +82,7 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	return info->is_loaded;
 }
 
-unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) {
+unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name, const string &alias) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 
 	unique_lock<mutex> extension_list_lock(lock);
@@ -96,6 +108,11 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name) 
 	// we have an extension and we want to try to load it - instantiate the load
 	// we instantiate the ExtensionActiveLoad which also grabs the lock for loading the specific extension
 	auto result = make_uniq<ExtensionActiveLoad>(db, *info, extension_name);
+
+	if (!alias.empty()) {
+		result->alias = alias;
+		CreateExtensionSchema(alias);
+	}
 
 	// we now have a lock for loading the extension
 	// HOWEVER - another thread might have finished loading in the meantime - double check to avoid a double load
