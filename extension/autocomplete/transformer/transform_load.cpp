@@ -8,12 +8,21 @@ namespace duckdb {
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransformer &transformer,
                                                                        optional_ptr<ParseResult> parse_result) {
+	// LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
+	// ExtensionAlias <- 'AS' Identifier
 	auto &list_pr = parse_result->Cast<ListParseResult>();
 	auto result = make_uniq<LoadStatement>();
 	auto info = make_uniq<LoadInfo>();
-	info->load_type = LoadType::LOAD;
 	info->repo_is_alias = false;
 	info->filename = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
+	auto &alias_opt = list_pr.Child<OptionalParseResult>(2);
+	if (alias_opt.HasResult()) {
+		auto &alias_list = alias_opt.optional_result->Cast<ListParseResult>();
+		info->alias = alias_list.Child<IdentifierParseResult>(1).identifier;
+		info->load_type = LoadType::LOAD_AS;
+	} else {
+		info->load_type = LoadType::LOAD;
+	}
 	result->info = std::move(info);
 	return std::move(result);
 }

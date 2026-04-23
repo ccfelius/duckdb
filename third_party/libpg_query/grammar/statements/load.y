@@ -11,7 +11,19 @@ LoadStmt:	LOAD file_name
 					n->repository = NULL;
 					n->repo_is_alias = false;
 					n->version = NULL;
+					n->alias = NULL;
 					n->load_type = PG_LOAD_TYPE_LOAD;
+					$$ = (PGNode *)n;
+				} |
+				LOAD file_name AS ColId
+				{
+					PGLoadStmt *n = makeNode(PGLoadStmt);
+					n->filename = $2;
+					n->repository = NULL;
+					n->repo_is_alias = false;
+					n->version = NULL;
+					n->alias = $4;
+					n->load_type = PG_LOAD_TYPE_LOAD_AS;
 					$$ = (PGNode *)n;
 				} |
 				opt_force INSTALL file_name opt_ext_version {

@@ -1908,7 +1908,7 @@ typedef struct PGViewStmt {
  * ----------------------
  */
 
-typedef enum PGLoadInstallType { PG_LOAD_TYPE_LOAD,  PG_LOAD_TYPE_INSTALL, PG_LOAD_TYPE_FORCE_INSTALL } PGLoadInstallType;
+typedef enum PGLoadInstallType { PG_LOAD_TYPE_LOAD,  PG_LOAD_TYPE_INSTALL, PG_LOAD_TYPE_FORCE_INSTALL, PG_LOAD_TYPE_LOAD_AS } PGLoadInstallType;
 
 
 typedef struct PGLoadStmt {
@@ -1917,6 +1917,7 @@ typedef struct PGLoadStmt {
 	const char *repository; /* optionally, the repository to load from */
 	bool repo_is_alias; /* whether the repository was passed as an alias or a raw path */
 	const char *version; /* optionally, the version of the extension to be loaded */
+	const char *alias; /* alias for LOAD extension AS alias */
 	PGLoadInstallType load_type;
 } PGLoadStmt;
 

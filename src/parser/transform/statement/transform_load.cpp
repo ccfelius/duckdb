@@ -12,6 +12,7 @@ unique_ptr<LoadStatement> Transformer::TransformLoad(duckdb_libpgquery::PGLoadSt
 	load_info->repository = stmt.repository ? string(stmt.repository) : "";
 	load_info->repo_is_alias = stmt.repo_is_alias;
 	load_info->version = stmt.version ? string(stmt.version) : "";
+	load_info->alias = stmt.alias ? string(stmt.alias) : "";
 	switch (stmt.load_type) {
 	case duckdb_libpgquery::PG_LOAD_TYPE_LOAD:
 		load_info->load_type = LoadType::LOAD;
@@ -22,6 +23,8 @@ unique_ptr<LoadStatement> Transformer::TransformLoad(duckdb_libpgquery::PGLoadSt
 	case duckdb_libpgquery::PG_LOAD_TYPE_FORCE_INSTALL:
 		load_info->load_type = LoadType::FORCE_INSTALL;
 		break;
+	case duckdb_libpgquery::PG_LOAD_TYPE_LOAD_AS:
+		load_info->load_type = LoadType::LOAD_AS;
 	}
 	load_stmt->info = std::move(load_info);
 	return load_stmt;

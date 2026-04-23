@@ -1,0 +1,15 @@
+# name: test/sql/extensions/dedicated_extension_schema.test
+# description: Aliasing of extensions, and puts it in a separate extension schema
+# group: [extensions]
+
+require autocomplete
+
+require icu
+
+# test this with the peg parser
+statement ok
+call enable_peg_parser()
+
+# this is not logic, but this extension is included
+statement ok
+LOAD icu AS eyecu
