@@ -702,6 +702,11 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options) {
 	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), options);
+
+	if (!options.alias.empty()) {
+		// We need to sync the search path to include the alias
+		context.SyncSearchPath();
+	}
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

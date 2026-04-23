@@ -48,6 +48,9 @@ public:
 	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type);
 	DUCKDB_API void Reset();
 
+	DUCKDB_API void SyncCatalogSearchPath();
+	DUCKDB_API void SyncExtensionPaths();
+
 	DUCKDB_API vector<CatalogSearchEntry> Get() const;
 	const vector<CatalogSearchEntry> &GetSetPaths() const {
 		return set_paths;
@@ -66,7 +69,9 @@ public:
 
 private:
 	//! Set paths without checking if they exist
+	void SetPathsInternal();
 	void SetPathsInternal(vector<CatalogSearchEntry> new_paths);
+
 	string GetSetName(CatalogSetPathType set_type);
 
 private:
@@ -74,6 +79,8 @@ private:
 	vector<CatalogSearchEntry> paths;
 	//! Only the paths that were explicitly set (minus the always included paths)
 	vector<CatalogSearchEntry> set_paths;
+	vector<CatalogSearchEntry> extension_paths;
+	idx_t default_index;
 };
 
 } // namespace duckdb

@@ -56,11 +56,13 @@ public:
 	//! Register a new aggregate function - merge overloads if the function already exists
 	DUCKDB_API void RegisterFunction(AggregateFunction function);
 	DUCKDB_API void RegisterFunction(AggregateFunctionSet function);
+	DUCKDB_API void RegisterFunction(AggregateFunctionSet function, const string &alias);
 	DUCKDB_API void RegisterFunction(CreateAggregateFunctionInfo info);
 
-	//! Register a new aggregate function - merge overloads if the function already exists
+	//! Register a new window function - merge overloads if the function already exists
 	DUCKDB_API void RegisterFunction(WindowFunction function);
 	DUCKDB_API void RegisterFunction(WindowFunctionSet function);
+	DUCKDB_API void RegisterFunction(WindowFunctionSet function, const string &alias);
 	DUCKDB_API void RegisterFunction(CreateWindowFunctionInfo info);
 
 	//! Register a new table function - merge overloads if the function already exists

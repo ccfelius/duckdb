@@ -1,21 +1,14 @@
-# name: test/sql/extensions/dedicated_extension_schema.test
-# description: Aliasing of extensions, and puts it in a separate extension schema
+# name: test/sql/extensions/dedicated_ext_schema_pg_parser.test
+# description: Aliasing of extensions, and puts it in a separate extension schema,
+# for the postgres parser
 # group: [extensions]
-
-require autocomplete
 
 require skip_reload
 
 require allow_unsigned_extensions
 
 statement ok
-call enable_peg_parser()
-
-statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo
-
-statement ok
-call disable_peg_parser()
 
 query I
 SELECT bounded_max(1::BOUNDED(10))

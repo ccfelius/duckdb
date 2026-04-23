@@ -13,9 +13,11 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformLoadStatement(PEGTransf
 	auto info = make_uniq<LoadInfo>();
 	info->repo_is_alias = false;
 	info->filename = transformer.Transform<string>(list_pr.Child<ListParseResult>(1));
-	auto &alias_opt = list_pr.Child<OptionalParseResult>(2);
-	if (alias_opt.HasResult()) {
-		auto &alias_list = alias_opt.optional_result->Cast<ListParseResult>();
+
+	// get the alias if its there
+	auto &optional_alias = list_pr.Child<OptionalParseResult>(2);
+	if (optional_alias.HasResult()) {
+		auto &alias_list = optional_alias.GetResult().Cast<ListParseResult>();
 		info->alias = alias_list.Child<IdentifierParseResult>(1).identifier;
 		info->load_type = LoadType::LOAD_AS;
 	} else {

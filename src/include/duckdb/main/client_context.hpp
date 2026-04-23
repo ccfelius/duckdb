@@ -217,6 +217,8 @@ public:
 
 	//! Whether or not the given result object (streaming query result or pending query result) is active
 	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult &result);
+	//! Sync (aliased) extension search paths
+	DUCKDB_API void SyncSearchPath() const;
 
 	//! Returns the current executor
 	Executor &GetExecutor();

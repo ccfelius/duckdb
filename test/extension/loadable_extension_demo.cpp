@@ -955,10 +955,7 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 	CreateScalarFunctionInfo loaded_extensions_info(loaded_extensions);
 	catalog.CreateFunction(client_context, loaded_extensions_info);
 
-	// Quack function
-	QuackFunction quack_function;
-	CreateTableFunctionInfo quack_info(quack_function);
-	catalog.CreateTableFunction(client_context, quack_info);
+	loader.RegisterFunction(QuackFunction());
 
 	con.Commit();
 
@@ -992,6 +989,8 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 		default_catalog.CreateTable(client_context, std::move(tagged_table_info));
 		con.Commit();
 	}
+
+
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);

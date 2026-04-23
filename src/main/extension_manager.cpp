@@ -82,6 +82,11 @@ bool ExtensionManager::ExtensionIsLoaded(const string &name) {
 	return info->is_loaded;
 }
 
+void ExtensionManager::AddSearchPath(const CatalogSearchEntry &entry) {
+	// extensions that are loaded later have priority
+	this->search_paths.insert(this->search_paths.begin(), entry);
+}
+
 unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name, const string &alias) {
 	auto extension_name = ExtensionHelper::GetExtensionName(name);
 
@@ -112,6 +117,10 @@ unique_ptr<ExtensionActiveLoad> ExtensionManager::BeginLoad(const string &name, 
 	if (!alias.empty()) {
 		result->alias = alias;
 		CreateExtensionSchema(alias);
+
+		// add extension schema to search path
+		CatalogSearchEntry catalog_search_entry(SYSTEM_CATALOG, alias);
+		AddSearchPath(catalog_search_entry);
 	}
 
 	// we now have a lock for loading the extension

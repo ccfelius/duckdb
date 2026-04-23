@@ -107,9 +107,27 @@ void ExtensionLoader::RegisterFunction(AggregateFunction function) {
 }
 
 void ExtensionLoader::RegisterFunction(AggregateFunctionSet function) {
+	if (!extension_alias.empty()) {
+		RegisterFunction(std::move(function), extension_alias);
+		return;
+	}
 	CreateAggregateFunctionInfo info(std::move(function));
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	RegisterFunction(std::move(info));
+}
+
+void ExtensionLoader::RegisterFunction(AggregateFunctionSet function, const string &alias) {
+	CreateAggregateFunctionInfo info(std::move(function));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	auto main_schema_info = info;
+	RegisterFunction(std::move(main_schema_info));
+	if (!alias.empty() && alias != DEFAULT_SCHEMA) {
+		info.schema = alias;
+		info.extension_name = extension_name;
+		auto &system_catalog = Catalog::GetSystemCatalog(db);
+		auto data = CatalogTransaction::GetSystemTransaction(db);
+		system_catalog.CreateFunction(data, info);
+	}
 }
 
 void ExtensionLoader::RegisterFunction(CreateAggregateFunctionInfo function) {
@@ -127,9 +145,27 @@ void ExtensionLoader::RegisterFunction(WindowFunction function) {
 }
 
 void ExtensionLoader::RegisterFunction(WindowFunctionSet function) {
+	if (!extension_alias.empty()) {
+		RegisterFunction(std::move(function), extension_alias);
+		return;
+	}
 	CreateWindowFunctionInfo info(std::move(function));
 	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	RegisterFunction(std::move(info));
+}
+
+void ExtensionLoader::RegisterFunction(WindowFunctionSet function, const string &alias) {
+	CreateWindowFunctionInfo info(std::move(function));
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+	auto main_schema_info = info;
+	RegisterFunction(std::move(main_schema_info));
+	if (!alias.empty() && alias != DEFAULT_SCHEMA) {
+		info.schema = alias;
+		info.extension_name = extension_name;
+		auto &system_catalog = Catalog::GetSystemCatalog(db);
+		auto data = CatalogTransaction::GetSystemTransaction(db);
+		system_catalog.CreateFunction(data, info);
+	}
 }
 
 void ExtensionLoader::RegisterFunction(CreateWindowFunctionInfo function) {
@@ -146,7 +182,7 @@ void ExtensionLoader::RegisterFunction(CreateSecretFunction function) {
 	config.secret_manager->RegisterSecretFunction(std::move(function), OnCreateConflict::ERROR_ON_CONFLICT);
 }
 
-void ExtensionLoader::RegisterFunction(TableFunction function) {
+void ExtensionLoader:: RegisterFunction(TableFunction function) {
 	TableFunctionSet set(function.name);
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));

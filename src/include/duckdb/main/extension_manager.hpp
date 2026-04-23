@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 
 namespace duckdb {
@@ -49,13 +50,19 @@ public:
 	DUCKDB_API unique_ptr<ExtensionActiveLoad> BeginLoad(const string &extension, const string &alias = "");
 	DUCKDB_API void CreateExtensionSchema(const string &extension_schema) const;
 
+	DUCKDB_API vector<CatalogSearchEntry> &GetExtensionSearchPaths() {
+		return search_paths;
+	}
 	DUCKDB_API static ExtensionManager &Get(DatabaseInstance &db);
 	DUCKDB_API static ExtensionManager &Get(ClientContext &context);
+
+	DUCKDB_API void AddSearchPath(const CatalogSearchEntry &entry);
 
 private:
 	DatabaseInstance &db;
 	mutex lock;
 	unordered_map<string, unique_ptr<ExtensionInfo>> loaded_extensions_info;
+	vector<CatalogSearchEntry> search_paths;
 };
 
 } // namespace duckdb

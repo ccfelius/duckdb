@@ -1285,6 +1285,10 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 	});
 }
 
+void ClientContext::SyncSearchPath() const {
+	client_data->catalog_search_path->SyncCatalogSearchPath();
+}
+
 void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
                                                      bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
