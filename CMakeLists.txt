@@ -337,7 +337,6 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 # MAIN_BRANCH_VERSIONING default should be 'FALSE' for release branches
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
-# - scripts/amalgamation.py
 # - scripts/package_build.py
 ######
 option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
@@ -543,6 +542,10 @@ option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 option(OVERRIDE_NEW_DELETE "Override C++ new/delete (only when jemalloc is enabled)" FALSE)
 option(SET_DUCKDB_LIBRARY_VERSION "Whether or not to set the DuckDB Library version and emit versioned shared libraries" FALSE)
 option(PREBUILT_BINARY "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a" "")
+
+if(DISABLE_EXTENSION_LOAD)
+  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -755,7 +758,7 @@ if(NOT DEFINED CMAKE_JOB_POOL_LINK)
   endif()
 endif()
 message(STATUS
-        "Build workers: compile=${CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
+        "Build workers: compile=$ENV{CMAKE_BUILD_PARALLEL_LEVEL} link_release=${DUCKDB_RELEASE_LINK_JOBS} link_non_release=${DUCKDB_DEBUG_LINK_JOBS}")
 
 if(OS_NAME STREQUAL "windows")
   list (FIND DUCKDB_EXTENSION_NAMES jemalloc _index)

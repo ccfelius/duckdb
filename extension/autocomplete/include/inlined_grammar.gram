@@ -1,3 +1,5 @@
+Program <- Statement? (';'+ Statement)* ';'*
+
 Statement <-
 	CreateStatement /
 	SelectStatement /
@@ -34,6 +36,9 @@ Statement <-
 
 ExpressionStatement <- List(ExpressionAlias)
 ExpressionAlias <- ColIdExpression / ExpressionAsCollabel / Expression
+
+SemiList1(D) <- D (';' D)*
+SemiList(D) <- SemiList1(D) ';'?
 
 CatalogName <- Identifier
 SchemaName <- Identifier
@@ -140,7 +145,6 @@ ColIdTypeList <- Parens(List(ColIdType))
 MapType <- 'MAP' Parens(List(Type))
 ColIdType <- ColId Type
 ArrayBounds <- SquareBracketsArray / 'ARRAY'
-ArrayKeyword <- 'ARRAY'
 SquareBracketsArray <- '[' Expression? ']'
 TimeType <- TimeOrTimestamp TypeModifiers? TimeZone?
 TimeOrTimestamp <- TimeTypeId / TimestampTypeId
@@ -788,7 +792,8 @@ MapStructField <- Expression ':' Expression
 
 GroupingExpression <- GroupingOrGroupingId Parens(List(Expression))
 GroupingOrGroupingId <- 'GROUPING' / 'GROUPING_ID'
-Parameter <- AnonymousParameter / NumberedParameter / ColLabelParameter
+Parameter <- QuestionMarkNumberedParameter / AnonymousParameter / NumberedParameter / ColLabelParameter
+QuestionMarkNumberedParameter <- '?' NumberLiteral
 AnonymousParameter <- '?'
 NumberedParameter <- '$' NumberLiteral
 ColLabelParameter <- '$' ColLabel
@@ -825,8 +830,8 @@ SingleExpression <-
 # LEVEL 1 (Lowest)
 Expression <- LambdaArrowExpression
 # LEVEL 1.5
-LambdaArrowExpression <- LogicalOrExpression (LambdaOperator LogicalOrExpression)*
-LambdaOperator <- '->'
+LambdaArrowExpression <- LogicalOrExpression SingleArrowPair*
+SingleArrowPair <- '->' LogicalOrExpression
 LogicalOrExpression <- LogicalAndExpression ('OR' LogicalAndExpression)*
 # LEVEL 2
 LogicalAndExpression <- LogicalNotExpression ('AND' LogicalNotExpression)*
@@ -881,7 +886,8 @@ BetweenClause <- 'BETWEEN' OtherOperatorExpression 'AND' OtherOperatorExpression
 # LEVEL 8
 OtherOperatorExpression <- BitwiseExpression (OtherOperator BitwiseExpression)*
 OtherOperator <-
-    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator
+    QualifiedOperator / AnyAllOperator / InetOperator / JsonOperator / ListOperator / StringOperator / OperatorLiteral
+OperatorLiteral <- Identifier
 AnyAllOperator <- AnyOp AnyOrAll
 AnyOrAll <- SubqueryAny / SubqueryAll
 SubqueryAny <- 'ANY'
@@ -1123,7 +1129,6 @@ RelOption <- RelOptionName RelOptionArgumentOpt?
 RelOptionName <- DottedIdentifier / StringLiteral
 RelOptionArgumentOpt <- '=' DefArg
 DefArg <- NullLiteral / ReservedKeyword / StringLiteral / NumberLiteral / NoneLiteral / Expression
-ReservedKeywordValue <- ReservedKeyword
 NoneLiteral <- 'NONE'
 
 LoadStatement <- 'LOAD' ColIdOrString ExtensionAlias?
@@ -1243,7 +1248,7 @@ FromSelectClause <- FromClause SelectClause?
 WithStatement <- ColIdOrString InsertColumnList? UsingKey? 'AS' Materialized? CTEBody
 CTEBody <- Parens(CTEBodyContent)
 CTEBodyContent <- SelectStatementInternal / Statement
-UsingKey <- 'USING' 'KEY' ColumnIdList
+UsingKey <- 'USING' 'KEY' Parens(TargetList)
 Materialized <- 'NOT'? 'MATERIALIZED'
 WithClause <- 'WITH' Recursive? List(WithStatement)
 Recursive <- 'RECURSIVE'
