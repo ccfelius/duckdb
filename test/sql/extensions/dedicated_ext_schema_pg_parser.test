@@ -1,7 +1,8 @@
 # name: test/sql/extensions/dedicated_ext_schema_pg_parser.test
 # description: Aliasing of extensions, and puts it in a separate extension schema,
-# for the postgres parser
 # group: [extensions]
+
+# for the postgres parser
 
 require skip_reload
 

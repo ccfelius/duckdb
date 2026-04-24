@@ -990,8 +990,6 @@ DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_demo, loader) {
 		con.Commit();
 	}
 
-
-
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
 	ParserExtension::Register(config, QuackExtension());

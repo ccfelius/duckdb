@@ -11,12 +11,29 @@ require allow_unsigned_extensions
 statement ok
 call enable_peg_parser()
 
+# check what happens if we use a reserved keyword
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS table
+----
+Parser Error: syntax error at or near "table"
+
 statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo
 
+# what happens if we load it twice?
+# this does nothing
 statement ok
-call disable_peg_parser()
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS second
 
+# check if importing another extension with the same name errors
+# we should throw an error if you use an alias already in use
+# "Alias already in use for the XXX extension"
+# or should we not throw an error?
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_optimizer_demo.duckdb_extension' AS demo
+
+# we always also register the same functions in the main schema
+# we register them double, so this will also work
 query I
 SELECT bounded_max(1::BOUNDED(10))
 ----
@@ -26,6 +43,22 @@ query I
 SELECT demo.bounded_max(1::BOUNDED(10))
 ----
 10
+
+query I
+SELECT demo.bounded_max(1::BOUNDED(10))
+----
+10
+
+query I
+SELECT demo.waggle();
+----
+waggle!
+
+# do we want this ??
+# query I
+# SELECT second.bounded_max(1::BOUNDED(10))
+# ----
+# 10
 
 query I
 FROM quack(3)
@@ -46,3 +79,11 @@ query I
 SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'demo'
 ----
 demo
+
+# use a reserved keyword as alias
+query I
+SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'demo'
+----
+demo
+
+# schema name same as alias or something

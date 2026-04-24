@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
 
 using namespace duckdb;
 
@@ -146,6 +147,10 @@ public:
 	}
 };
 
+static void WaggleFunc(DataChunk &args, ExpressionState &state, Vector &result) {
+	result.Reference(Value("waggle!"));
+}
+
 //===--------------------------------------------------------------------===//
 // Extension load + setup
 //===--------------------------------------------------------------------===//
@@ -154,6 +159,8 @@ extern "C" {
 DUCKDB_CPP_EXTENSION_ENTRY(loadable_extension_optimizer_demo, loader) {
 	auto &db = loader.GetDatabaseInstance();
 	Connection con(db);
+
+	loader.RegisterFunction(ScalarFunction("waggle", {}, LogicalType::VARCHAR, WaggleFunc));
 
 	// add a parser extension
 	auto &config = DBConfig::GetConfig(db);
