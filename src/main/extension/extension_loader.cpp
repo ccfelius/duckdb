@@ -182,7 +182,7 @@ void ExtensionLoader::RegisterFunction(CreateSecretFunction function) {
 	config.secret_manager->RegisterSecretFunction(std::move(function), OnCreateConflict::ERROR_ON_CONFLICT);
 }
 
-void ExtensionLoader:: RegisterFunction(TableFunction function) {
+void ExtensionLoader::RegisterFunction(TableFunction function) {
 	TableFunctionSet set(function.name);
 	set.AddFunction(std::move(function));
 	RegisterFunction(std::move(set));

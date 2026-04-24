@@ -74,16 +74,51 @@ QUACK
 QUACK
 QUACK
 
-# The alias schema exists in the catalog
+query I
+SELECT schema_name FROM information_schema.schemata
+----
+main
+demo
+information_schema
+main
+pg_catalog
+main
+
 query I
 SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'demo'
 ----
 demo
 
-# use a reserved keyword as alias
+statement ok
+create schema demo;
+
+statement ok
+set schema=demo;
+
+statement ok
+create table a1 (c int);
+
+statement ok
+alter table demo.a1 rename to a2;
+
+statement ok
+alter table a2 rename to a3;
+
+query I
+FROM demo.quack(3)
+----
+QUACK
+QUACK
+QUACK
+
+query I
+FROM a3
+----
+
+# we now have two different schemas with the same name
+# do we want this behavior?
 query I
 SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'demo'
 ----
 demo
-
-# schema name same as alias or something
+demo
