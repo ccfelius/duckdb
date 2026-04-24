@@ -73,7 +73,7 @@ void ExtensionLoader::RegisterFunction(ScalarFunctionSet function) {
 
 void ExtensionLoader::RegisterFunction(ScalarFunctionSet function, const string &extension_alias) {
 	CreateScalarFunctionInfo info(std::move(function));
-	info.on_conflict = OnCreateConflict ::ALTER_ON_CONFLICT;
+	info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
 	// make a copy of info
 	auto main_schema_info = info;
 	// TODO; simplify: function is now registered twice
