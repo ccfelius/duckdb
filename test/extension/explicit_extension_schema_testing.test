@@ -12,11 +12,11 @@ statement ok
 LOAD '{BUILD_DIRECTORY}/test/extension/explicit_extension_schema.duckdb_extension';
 
 query I
-SELECT explicit_schema.dedicated_schema_function();
+SELECT explicit_schema.test_alias_hello();
 ----
 Hello from the explicit_extension_schema schema!
 
 query I
-SELECT dedicated_schema_function();
+SELECT test_alias_hello();
 ----
 Hello from the explicit_extension_schema schema!
