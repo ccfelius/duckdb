@@ -23,7 +23,6 @@ static_assert(VERSION_NUMBER <= VERSION_NUMBER_UPPER, "Check on VERSION_NUMBER u
 // clang-format off
 // START OF STORAGE_ARRAY VERSION INFO
 // START OF STORAGE VERSION INFO
-const uint64_t DEFAULT_STORAGE_VERSION_INFO = 69;
 static const StorageVersionInfo storage_version_info[] = {
 	{"v0.0.4", StorageVersion::V0_0_4},
 	{"v0.1.0", StorageVersion::V0_1_0},
@@ -129,8 +128,7 @@ static const SerializationVersionInfo serialization_version_info[] = {
 // END OF SER_ARRAY VERSION INFO
 // clang-format on
 
-static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V0_10_2;
-static_assert(static_cast<idx_t>(DEFAULT_STORAGE_VERSION_INFO) == VERSION_NUMBER, "Check on VERSION_INFO");
+static constexpr StorageVersion DEFAULT_STORAGE_VERSION_INFO = StorageVersion::V2_0_0;
 
 const StorageVersionInfo *GetStorageVersionInfo() {
 	return storage_version_info;

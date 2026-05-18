@@ -43,3 +43,4 @@ SELECT tags.storage_version FROM duckdb_databases() WHERE database_name LIKE 'v%
 v2.0.0+
 v1.2.0+
 v1.0.0+
+

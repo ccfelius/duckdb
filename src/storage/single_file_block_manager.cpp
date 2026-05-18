@@ -287,7 +287,7 @@ void DatabaseHeader::SetStorageVersionInDatabaseHeader(DatabaseHeader &header, S
 			break;
 			// new versions should be added here
 		default:
-			throw InvalidInputException("Storage Version is not found!");
+			throw InvalidInputException("Main header version is '%d', and 'Storage Version '%d' is not found!", main_version, read_version);
 		}
 	} else {
 		// before V2.0.0
@@ -1324,6 +1324,17 @@ bool SingleFileBlockManager::AddFreeBlock(unique_lock<mutex> &lock, block_id_t b
 	lock.lock();
 	return false;
 }
+
+void SingleFileBlockManager::RewriteMainHeader(QueryContext &context, StorageVersion version_number) {
+	MainHeader main_header = ConstructMainHeader(version_number);
+	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.GetDataMutable());
+	// now write the header to the file
+	ChecksumAndWrite(context, header_buffer, 0);
+	header_buffer.Clear();
+	// avoid having the Sync at the end write two blocks
+	handle->Sync();
+}
+
 void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader header) {
 	auto free_list_blocks = GetFreeListBlocks();
 
@@ -1395,15 +1406,18 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	handle->Sync();
 
 	header_buffer.Clear();
+
 	// if we are upgrading the database from version 64 -> version 65, we need to re-write the main header
+	// options.version_number is version from main header (phased out in V2.0.0)
+	// options.storage_version is the actual storage version
 	if (options.version_number == StorageVersion::V0_10_2 && options.storage_version >= StorageVersion::V1_2_0) {
-		// rewrite the main header
-		options.version_number = StorageVersion::V1_2_0;
-		MainHeader main_header = ConstructMainHeader(options.version_number);
-		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.GetDataMutable());
-		// now write the header to the file
-		ChecksumAndWrite(context, header_buffer, 0);
-		header_buffer.Clear();
+		RewriteMainHeader(context, StorageVersion::V1_2_0);
+	}
+
+	// if we are upgrading the database from v2.0.0 to an earlier version, we also need to re-write the main header
+	if (options.version_number == MainHeader::DEPRECATED_VERSION_NUMBER &&
+	    options.storage_version < StorageVersion::V2_0_0) {
+		RewriteMainHeader(context, options.storage_version);
 	}
 
 	// set the header inside the buffer
