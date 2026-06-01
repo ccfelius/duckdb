@@ -1131,6 +1131,13 @@
         "custom_implementation": true
     },
     {
+        "name": "query_timeout",
+        "description": "Sets the query timeout in milliseconds (0 = disabled). Interrupts the query if it exceeds this duration.",
+        "type": "BIGINT",
+        "scope": "local",
+        "custom_implementation": true
+    },
+    {
         "name": "scalar_subquery_error_on_multiple_rows",
         "description": "When a scalar subquery returns multiple rows - return a random row instead of returning an error.",
         "type": "BOOLEAN",

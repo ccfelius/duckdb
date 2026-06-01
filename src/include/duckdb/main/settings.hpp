@@ -1656,6 +1656,17 @@ struct ProgressBarTimeSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct QueryTimeoutSetting {
+	using RETURN_TYPE = int64_t;
+	static constexpr const char *Name = "query_timeout";
+	static constexpr const char *Description =
+	    "Sets the query timeout in milliseconds (0 = disabled). Interrupts the query if it exceeds this duration.";
+	static constexpr const char *InputType = "BIGINT";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "scalar_subquery_error_on_multiple_rows";

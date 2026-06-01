@@ -1498,6 +1498,26 @@ Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Query Timeout
+//===----------------------------------------------------------------------===//
+void QueryTimeoutSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	auto val = input.GetValue<int64_t>();
+	if (val < 0) {
+		throw InvalidInputException("query_timeout must be >= 0");
+	}
+	config.query_timeout_ms = NumericCast<idx_t>(val);
+}
+
+void QueryTimeoutSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).query_timeout_ms = ClientConfig().query_timeout_ms;
+}
+
+Value QueryTimeoutSetting::GetSetting(const ClientContext &context) {
+	return Value::BIGINT(NumericCast<int64_t>(ClientConfig::GetConfig(context).query_timeout_ms));
+}
+
+//===----------------------------------------------------------------------===//
 // Temp Directory
 //===----------------------------------------------------------------------===//
 void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
