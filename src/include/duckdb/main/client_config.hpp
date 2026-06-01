@@ -64,9 +64,6 @@ struct ClientConfig {
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
 
-	//! Query timeout in milliseconds (0 = disabled)
-	idx_t query_timeout_ms = 0;
-
 	//! The maximum memory for query intermediates (sorts, hash tables) per connection (in bytes). Default: Global
 	//! memory limit.
 	optional_idx operator_memory_limit;

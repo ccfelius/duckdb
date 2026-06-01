@@ -235,9 +235,9 @@ static const ConfigurationAlias setting_aliases[] = {DUCKDB_SETTING_ALIAS("confi
                                                      DUCKDB_SETTING_ALIAS("memory_limit", 117),
                                                      DUCKDB_SETTING_ALIAS("null_order", 52),
                                                      DUCKDB_SETTING_ALIAS("profiling_output", 138),
-                                                     DUCKDB_SETTING_ALIAS("user", 154),
+                                                     DUCKDB_SETTING_ALIAS("user", 155),
                                                      DUCKDB_SETTING_ALIAS("wal_autocheckpoint", 26),
-                                                     DUCKDB_SETTING_ALIAS("worker_threads", 152),
+                                                     DUCKDB_SETTING_ALIAS("worker_threads", 153),
                                                      FINAL_ALIAS};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

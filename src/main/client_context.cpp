@@ -59,6 +59,10 @@
 #include "duckdb/main/result_set_manager.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 
+#include "duckdb/common/thread.hpp"
+#include "duckdb/common/chrono.hpp"
+#include <condition_variable>
+
 #ifdef __APPLE__
 #include <sys/sysctl.h>
 
@@ -77,6 +81,46 @@ static bool OsxRosettaIsActive() {
 
 namespace duckdb {
 
+struct QueryTimeoutContext {
+public:
+	QueryTimeoutContext(idx_t timeout_ms, weak_ptr<ClientContext> context) : timeout_done(false) {
+		timeout_thread = make_uniq<thread>(&QueryTimeoutContext::TimeoutFunction, this, timeout_ms, std::move(context));
+	}
+
+	~QueryTimeoutContext() {
+		if (timeout_thread) {
+			{
+				annotated_lock_guard<annotated_mutex> lk(timeout_mutex);
+				timeout_done = true;
+			}
+			timeout_cv.notify_all();
+			timeout_thread->join();
+		}
+	}
+
+public:
+	void TimeoutFunction(idx_t timeout_ms, const weak_ptr<ClientContext> &context) {
+		annotated_unique_lock<annotated_mutex> lk(timeout_mutex);
+		auto deadline = steady_clock::now() + milliseconds(timeout_ms);
+		while (!timeout_done) {
+			if (timeout_cv.wait_until(lk, deadline) == std::cv_status::timeout) {
+				if (!timeout_done) {
+					if (auto client_context = context.lock()) {
+						client_context->Interrupt();
+					}
+				}
+				return;
+			}
+		}
+	}
+
+private:
+	unique_ptr<std::thread> timeout_thread;
+	annotated_mutex timeout_mutex;
+	std::condition_variable timeout_cv;
+	bool timeout_done = false;
+};
+
 struct ActiveQueryContext {
 public:
 	//! The query that is currently being executed
@@ -87,6 +131,8 @@ public:
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
+	//! Timeout context
+	unique_ptr<QueryTimeoutContext> timeout_context;
 
 public:
 	void SetOpenResult(BaseQueryResult &result) {
@@ -296,6 +342,11 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_inst));
 	}
 	active_query = make_uniq<ActiveQueryContext>();
+	auto timeout_ms = ClientConfig::GetConfig(*this).query_timeout_ms;
+	if (timeout_ms > 0) {
+		active_query->timeout_context = make_uniq<QueryTimeoutContext>(timeout_ms, shared_from_this());
+	}
+
 	if (transaction.IsAutoCommit()) {
 		transaction.BeginTransaction();
 	}
