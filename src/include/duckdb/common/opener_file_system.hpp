@@ -110,6 +110,35 @@ public:
 		return FileSystem::ExpandPath(path, GetOpener());
 	}
 
+	bool DirectoryExists(const string &directory) {
+		return DirectoryExists(directory, nullptr);
+	}
+
+	void CreateDirectory(const string &directory) {
+		CreateDirectory(directory, nullptr);
+	}
+	void RemoveDirectory(const string &directory) {
+		RemoveDirectory(directory, nullptr);
+	}
+	void MoveFile(const string &source, const string &target) {
+		MoveFile(source, target, nullptr);
+	}
+	bool FileExists(const string &filename) {
+		return FileExists(filename, nullptr);
+	}
+	bool IsPipe(const string &filename) {
+		return IsPipe(filename, nullptr);
+	}
+	void RemoveFile(const string &filename) {
+		RemoveFile(filename, nullptr);
+	}
+	bool TryRemoveFile(const string &filename) {
+		return TryRemoveFile(filename, nullptr);
+	}
+	void RemoveFiles(const vector<string> &filenames) {
+		RemoveFiles(filenames, nullptr);
+	}
+
 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(filename);
